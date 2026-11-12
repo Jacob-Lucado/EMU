@@ -1,0 +1,904 @@
+package polaris.hotel.guilds;
+
+import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
+import it.unimi.dsi.fastutil.ints.Int2ObjectMaps;
+import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import polaris.Emulator;
+import polaris.hotel.gameclients.GameClient;
+import polaris.hotel.guilds.forums.ForumThread;
+import polaris.hotel.guilds.forums.ForumView;
+import polaris.hotel.items.interactions.InteractionGuildFurni;
+import polaris.hotel.rooms.Room;
+import polaris.hotel.users.User;
+import polaris.messages.outgoing.guilds.GuildJoinErrorComposer;
+import polaris.messages.outgoing.guilds.forums.GuildForumDataComposer;
+
+public class GuildManager {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(GuildManager.class);
+
+    // The badge parts and the forum views are loaded into new collections and swapped in: a reload used to clear them
+    // while guild creation and the forum read them, and a failed query left them empty.
+    private volatile Map<GuildPartType, Map<Integer, GuildPart>> guildParts;
+
+    private final Int2ObjectMap<Guild> guilds;
+
+    /** Forum views of the last {@link #FORUM_VIEW_WINDOW_SECONDS}: written and read by every client's packets. */
+    private volatile Set<ForumView> views = ConcurrentHashMap.newKeySet();
+
+    private static final int FORUM_VIEW_WINDOW_SECONDS = 7 * 24 * 60 * 60;
+
+    public GuildManager() {
+        long millis = System.currentTimeMillis();
+        this.guildParts = new HashMap<>();
+        this.guilds = Int2ObjectMaps.synchronize(new Int2ObjectOpenHashMap<>());
+
+        this.loadGuildParts();
+        this.loadGuildViews();
+
+        LOGGER.info("Guild Manager -> Loaded! ({} MS)", System.currentTimeMillis() - millis);
+    }
+
+    public void loadGuildParts() {
+        Map<GuildPartType, Map<Integer, GuildPart>> parts = new HashMap<>();
+
+        for (GuildPartType t : GuildPartType.values()) {
+            parts.put(t, new HashMap<>());
+        }
+
+        try (Connection connection = Emulator.getDatabase().getDataSource().getConnection();
+                Statement statement = connection.createStatement();
+                ResultSet set = statement.executeQuery("SELECT * FROM guilds_elements")) {
+            while (set.next()) {
+                parts.get(GuildPartType.valueOf(set.getString("type").toUpperCase()))
+                        .put(set.getInt("id"), new GuildPart(set));
+            }
+        } catch (SQLException e) {
+            LOGGER.error("Caught SQL exception", e);
+            return;
+        }
+
+        this.guildParts = parts;
+    }
+
+    public void loadGuildViews() {
+        Set<ForumView> loaded = ConcurrentHashMap.newKeySet();
+
+        try (Connection connection = Emulator.getDatabase().getDataSource().getConnection();
+                PreparedStatement statement =
+                        connection.prepareStatement("SELECT * FROM guild_forum_views WHERE timestamp > ?")) {
+            statement.setInt(1, forumViewCutoff());
+            try (ResultSet set = statement.executeQuery()) {
+                while (set.next()) {
+                    loaded.add(new ForumView(set));
+                }
+            }
+        } catch (SQLException e) {
+            LOGGER.error("Caught SQL exception", e);
+            return;
+        }
+
+        this.views = loaded;
+    }
+
+    public Guild createGuild(
+            User user,
+            int roomId,
+            String roomName,
+            String name,
+            String description,
+            String badge,
+            int colorOne,
+            int colorTwo) {
+        Guild guild = new Guild(
+                user.getUserInfo().getId(),
+                user.getUserInfo().getUsername(),
+                roomId,
+                roomName,
+                name,
+                description,
+                colorOne,
+                colorTwo,
+                badge);
+
+        // Both rows or neither, and null when they could not be written: a failure used to log and still return the
+        // group with id 0, so the room was tied to a group that did not exist and the price was kept.
+        try (Connection connection = Emulator.getDatabase().getDataSource().getConnection()) {
+            boolean autoCommit = connection.getAutoCommit();
+            connection.setAutoCommit(false);
+            try {
+                this.insertGuild(connection, user, guild, roomId, name, description, badge, colorOne, colorTwo);
+                connection.commit();
+            } catch (SQLException | RuntimeException e) {
+                connection.rollback();
+                throw e;
+            } finally {
+                connection.setAutoCommit(autoCommit);
+            }
+        } catch (SQLException e) {
+            LOGGER.error("Group {} for room {} could not be created", name, roomId, e);
+            return null;
+        }
+
+        if (guild.getId() <= 0) {
+            return null;
+        }
+
+        user.getUserStats().addGuild(guild.getId());
+
+        return guild;
+    }
+
+    private void insertGuild(
+            Connection connection,
+            User user,
+            Guild guild,
+            int roomId,
+            String name,
+            String description,
+            String badge,
+            int colorOne,
+            int colorTwo)
+            throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "INSERT INTO guilds (name, description, room_id, user_id, color_one, color_two, badge, date_created) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                Statement.RETURN_GENERATED_KEYS)) {
+            statement.setString(1, name);
+            statement.setString(2, description);
+            statement.setInt(3, roomId);
+            statement.setInt(4, guild.getOwnerId());
+            statement.setInt(5, colorOne);
+            statement.setInt(6, colorTwo);
+            statement.setString(7, badge);
+            statement.setInt(8, Emulator.getIntUnixTimestamp());
+            statement.execute();
+
+            try (ResultSet set = statement.getGeneratedKeys()) {
+                if (set.next()) {
+                    guild.setId(set.getInt(1));
+                }
+            }
+        }
+
+        if (guild.getId() <= 0) {
+            throw new SQLException("No id was generated for the new group");
+        }
+
+        try (PreparedStatement statement = connection.prepareStatement(
+                "INSERT INTO guilds_members (guild_id, user_id, level_id, member_since) VALUES (?, ?, ?, ?)",
+                Statement.RETURN_GENERATED_KEYS)) {
+            statement.setInt(1, guild.getId());
+            statement.setInt(2, user.getUserInfo().getId());
+            statement.setInt(3, 0);
+            statement.setInt(4, Emulator.getIntUnixTimestamp());
+            statement.execute();
+
+            try (ResultSet set = statement.getGeneratedKeys()) {
+                if (set.next()) {
+                    guild.increaseMemberCount();
+                    // guild.addMember(new GuildMember(user.getUserInfo().getId(),
+                    // user.getUserInfo().getUsername(), user.getUserInfo().getLook(),
+                    // Emulator.getIntUnixTimestamp(), 2));
+                }
+            }
+        }
+    }
+
+    public void deleteGuild(Guild guild) {
+        this.tryDeleteGuild(guild);
+    }
+
+    /**
+     * Deletes a guild, its members, forum and favourites in one transaction, and only then forgets it in memory. The
+     * nine statements ran one by one with errors only logged, and the members' stats, the guild cache and the room
+     * were updated anyway: a failure half way left a guild without members or forum that came back after a restart.
+     *
+     * @return false when the database refused and nothing changed
+     */
+    public boolean tryDeleteGuild(Guild guild) {
+        int guildId = guild.getId();
+        // Read before the rows go: the members are looked up in the database.
+        Set<GuildMember> members = this.getGuildMembers(guild);
+        try (Connection connection = Emulator.getDatabase().getDataSource().getConnection()) {
+            connection.setAutoCommit(false);
+            try {
+                executeForGuild(connection, "UPDATE users_settings SET guild_id = 0 WHERE guild_id = ?", guildId);
+                executeForGuild(connection, "DELETE FROM guild_forum_views WHERE guild_id = ?", guildId);
+                executeForGuild(
+                        connection,
+                        "DELETE c FROM guilds_forums_comments c INNER JOIN guilds_forums_threads t ON c.thread_id = t.id WHERE t.guild_id = ?",
+                        guildId);
+                executeForGuild(connection, "DELETE FROM guilds_forums_threads WHERE guild_id = ?", guildId);
+                executeForGuild(connection, "DELETE FROM guilds_members WHERE guild_id = ?", guildId);
+                executeForGuild(connection, "UPDATE rooms SET guild_id = 0 WHERE guild_id = ?", guildId);
+                executeForGuild(connection, "UPDATE items SET guild_id = 0 WHERE guild_id = ?", guildId);
+                executeForGuild(connection, "DELETE FROM guilds WHERE id = ?", guildId);
+                connection.commit();
+            } catch (SQLException e) {
+                connection.rollback();
+                throw e;
+            } finally {
+                connection.setAutoCommit(true);
+            }
+        } catch (SQLException e) {
+            LOGGER.error("Guild {} could not be deleted; it stays as it was", guildId, e);
+            return false;
+        }
+
+        for (GuildMember member : members) {
+            User user = Emulator.getGameEnvironment().getUserManager().getUser(member.getUserId());
+
+            if (user != null) {
+                user.getUserStats().removeGuild(guildId);
+
+                if (user.getUserStats().guild == guildId) {
+                    user.getUserStats().guild = 0;
+                }
+            }
+        }
+
+        Room room = Emulator.getGameEnvironment().getRoomManager().getRoom(guild.getRoomId());
+
+        if (room != null) {
+            room.setGuild(0);
+        }
+
+        this.guilds.remove(guildId);
+        ForumThread.clearCacheForGuild(guildId);
+        GuildForumDataComposer.invalidateUnreadCache(guildId);
+        return true;
+    }
+
+    private static void executeForGuild(Connection connection, String sql, int guildId) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setInt(1, guildId);
+            statement.execute();
+        }
+    }
+
+    public void clearInactiveGuilds() {
+        List<Integer> toRemove = new ArrayList<Integer>();
+        synchronized (this.guilds) {
+            for (Guild guild : this.guilds.values()) {
+                if (guild.lastRequested < Emulator.getIntUnixTimestamp() - 300) {
+                    toRemove.add(guild.getId());
+                }
+            }
+        }
+
+        for (int i : toRemove) {
+            this.guilds.remove(i);
+        }
+    }
+
+    public void joinGuild(Guild guild, GameClient client, int userId, boolean acceptRequest) {
+        this.tryJoinGuild(guild, client, userId, acceptRequest);
+    }
+
+    /**
+     * Joins the guild, or accepts the request of {@code userId} when it is not 0, and says whether the row was written.
+     * Accepting used to update the counters and the member's guild list even when a limit refused the join or the
+     * request was already gone.
+     */
+    public boolean tryJoinGuild(Guild guild, GameClient client, int userId, boolean acceptRequest) {
+        boolean error = false;
+        if (userId == 0 && this.isBlocked(guild, client.getUser().getUserInfo().getId())) {
+            client.sendResponse(new GuildJoinErrorComposer(GuildJoinErrorComposer.GROUP_CLOSED));
+            return false;
+        }
+        try (Connection connection = Emulator.getDatabase().getDataSource().getConnection()) {
+            // Only real memberships count towards the 100 groups: pending requests and blocks are not groups joined.
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "SELECT COUNT(id) as total FROM guilds_members WHERE user_id = ? AND level_id < ?")) {
+                if (userId == 0)
+                    statement.setInt(1, client.getUser().getUserInfo().getId());
+                else statement.setInt(1, userId);
+                statement.setInt(2, GuildRank.REQUESTED.type);
+
+                try (ResultSet set = statement.executeQuery()) {
+                    if (set.next()) {
+                        if (set.getInt(1) >= 100) {
+                            // TODO Add non acceptRequest errors. See Outgoing.GroupEditFailComposer
+                            if (userId == 0)
+                                client.sendResponse(
+                                        new GuildJoinErrorComposer(GuildJoinErrorComposer.GROUP_LIMIT_EXCEED));
+                            else
+                                client.sendResponse(new GuildJoinErrorComposer(
+                                        GuildJoinErrorComposer.MEMBER_FAIL_JOIN_LIMIT_EXCEED_NON_HC));
+
+                            error = true;
+                        }
+                    }
+                }
+            }
+
+            if (!error) {
+                try (PreparedStatement statement = connection.prepareStatement(
+                        "SELECT COUNT(id) as total FROM guilds_members WHERE guild_id = ? AND level_id < 3")) {
+                    statement.setInt(1, guild.getId());
+                    try (ResultSet set = statement.executeQuery()) {
+                        if (set.next()) {
+                            if (set.getInt(1) >= 50000) {
+                                client.sendResponse(new GuildJoinErrorComposer(GuildJoinErrorComposer.GROUP_FULL));
+                                error = true;
+                            }
+                        }
+                    }
+                }
+
+                if (userId == 0 && !error) {
+                    if (guild.getState() == GuildState.EXCLUSIVE) {
+                        try (PreparedStatement statement = connection.prepareStatement(
+                                "SELECT COUNT(id) as total FROM guilds_members WHERE guild_id = ? AND level_id = 3")) {
+                            statement.setInt(1, guild.getId());
+                            try (ResultSet set = statement.executeQuery()) {
+                                if (set.next()) {
+                                    if (set.getInt(1) >= 100) {
+                                        client.sendResponse(new GuildJoinErrorComposer(
+                                                GuildJoinErrorComposer.GROUP_NOT_ACCEPT_REQUESTS));
+                                        error = true;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Any row of this user in this guild - member, request or block - means there is nothing to
+                    // insert: an open guild used to add a second row next to an existing one.
+                    if (!error) {
+                        try (PreparedStatement statement = connection.prepareStatement(
+                                "SELECT COUNT(id) as total FROM guilds_members WHERE guild_id = ? AND user_id = ? LIMIT 1")) {
+                            statement.setInt(1, guild.getId());
+                            statement.setInt(2, client.getUser().getUserInfo().getId());
+                            try (ResultSet set = statement.executeQuery()) {
+                                if (set.next() && set.getInt(1) >= 1) {
+                                    error = true;
+                                }
+                            }
+                        }
+                    }
+
+                    if (!error) {
+                        try (PreparedStatement statement = connection.prepareStatement(
+                                "INSERT INTO guilds_members (guild_id, user_id, member_since, level_id) VALUES (?, ?, ?, ?)")) {
+                            statement.setInt(1, guild.getId());
+                            statement.setInt(2, client.getUser().getUserInfo().getId());
+                            statement.setInt(3, Emulator.getIntUnixTimestamp());
+                            statement.setInt(
+                                    4,
+                                    guild.getState() == GuildState.EXCLUSIVE
+                                            ? GuildRank.REQUESTED.type
+                                            : GuildRank.MEMBER.type);
+                            statement.execute();
+                        }
+                    }
+                } else if (!error) {
+                    try (PreparedStatement statement = connection.prepareStatement(
+                            "UPDATE guilds_members SET level_id = ?, member_since = ? WHERE user_id = ? AND guild_id = ? AND level_id = ?")) {
+                        statement.setInt(1, GuildRank.MEMBER.type);
+                        statement.setInt(2, Emulator.getIntUnixTimestamp());
+                        statement.setInt(3, userId);
+                        statement.setInt(4, guild.getId());
+                        statement.setInt(5, GuildRank.REQUESTED.type);
+                        if (statement.executeUpdate() != 1) {
+                            error = true;
+                        }
+                    }
+                }
+
+                if (userId == 0 && !error) {
+                    if (guild.getState() == GuildState.EXCLUSIVE) guild.increaseRequestCount();
+                    else {
+                        guild.increaseMemberCount();
+                        client.getUser().getUserStats().addGuild(guild.getId());
+                    }
+                }
+            }
+        } catch (SQLException e) {
+            LOGGER.error("Caught SQL exception", e);
+            return false;
+        }
+        return !error;
+    }
+
+    /** Makes an accepted member an admin; the owner and a user who only asked to join are left as they are. */
+    public void setAdmin(Guild guild, int userId) {
+        if (guild.getOwnerId() == userId) return;
+
+        try (Connection connection = Emulator.getDatabase().getDataSource().getConnection();
+                PreparedStatement statement = connection.prepareStatement(
+                        "UPDATE guilds_members SET level_id = ? WHERE user_id = ? AND guild_id = ? AND level_id = ? LIMIT 1")) {
+            statement.setInt(1, GuildRank.ADMIN.type);
+            statement.setInt(2, userId);
+            statement.setInt(3, guild.getId());
+            statement.setInt(4, GuildRank.MEMBER.type);
+            statement.execute();
+        } catch (SQLException e) {
+            LOGGER.error("Caught SQL exception", e);
+        }
+    }
+
+    public void removeAdmin(Guild guild, int userId) {
+        if (guild.getOwnerId() == userId) return;
+
+        try (Connection connection = Emulator.getDatabase().getDataSource().getConnection();
+                PreparedStatement statement = connection.prepareStatement(
+                        "UPDATE guilds_members SET level_id = ? WHERE user_id = ? AND guild_id = ? AND level_id = ? LIMIT 1")) {
+            // Only an admin row goes back to member: any row used to, so a blocked member was unblocked and a
+            // request accepted without the member count changing.
+            statement.setInt(1, GuildRank.MEMBER.type);
+            statement.setInt(2, userId);
+            statement.setInt(3, guild.getId());
+            statement.setInt(4, GuildRank.ADMIN.type);
+            statement.execute();
+        } catch (SQLException e) {
+            LOGGER.error("Caught SQL exception", e);
+        }
+    }
+
+    public void removeMember(Guild guild, int userId) {
+        if (guild.getOwnerId() == userId) return;
+
+        User user = Emulator.getGameEnvironment().getUserManager().getUser(userId);
+
+        if (user != null && user.getUserStats().guild == guild.getId()) {
+            user.getUserStats().removeGuild(guild.getId());
+            user.getUserStats().guild = 0;
+            user.getUserStats().run();
+        }
+
+        try (Connection connection = Emulator.getDatabase().getDataSource().getConnection();
+                PreparedStatement statement = connection.prepareStatement(
+                        "DELETE FROM guilds_members WHERE user_id = ? AND guild_id = ? LIMIT 1")) {
+            statement.setInt(1, userId);
+            statement.setInt(2, guild.getId());
+            statement.execute();
+        } catch (SQLException e) {
+            LOGGER.error("Caught SQL exception", e);
+        }
+    }
+
+    public void addGuild(Guild guild) {
+        guild.lastRequested = Emulator.getIntUnixTimestamp();
+        this.guilds.put(guild.getId(), guild);
+    }
+
+    /** AIR 13 block: the member leaves the group like a kick but the row stays with the blocked rank. */
+    public void blockMember(Guild guild, int userId) {
+        if (guild.getOwnerId() == userId) return;
+
+        User user = Emulator.getGameEnvironment().getUserManager().getUser(userId);
+
+        if (user != null && user.getUserStats().guild == guild.getId()) {
+            user.getUserStats().removeGuild(guild.getId());
+            user.getUserStats().guild = 0;
+            user.getUserStats().run();
+        }
+
+        try (Connection connection = Emulator.getDatabase().getDataSource().getConnection();
+                PreparedStatement statement = connection.prepareStatement(
+                        "UPDATE guilds_members SET level_id = ? WHERE user_id = ? AND guild_id = ? LIMIT 1")) {
+            statement.setInt(1, GuildRank.DELETED.type);
+            statement.setInt(2, userId);
+            statement.setInt(3, guild.getId());
+            statement.execute();
+        } catch (SQLException e) {
+            LOGGER.error("Caught SQL exception", e);
+        }
+    }
+
+    /** AIR 13 unblock: drops the blocked row so the user can request membership again. */
+    public boolean unblockMember(Guild guild, int userId) {
+        try (Connection connection = Emulator.getDatabase().getDataSource().getConnection();
+                PreparedStatement statement = connection.prepareStatement(
+                        "DELETE FROM guilds_members WHERE user_id = ? AND guild_id = ? AND level_id = ? LIMIT 1")) {
+            statement.setInt(1, userId);
+            statement.setInt(2, guild.getId());
+            statement.setInt(3, GuildRank.DELETED.type);
+            return statement.executeUpdate() > 0;
+        } catch (SQLException e) {
+            LOGGER.error("Caught SQL exception", e);
+        }
+        return false;
+    }
+
+    /** Blocked rows are invisible to {@link #getGuildMember(int, int)} so a blocked user never counts as a member. */
+    public boolean isBlocked(Guild guild, int userId) {
+        try (Connection connection = Emulator.getDatabase().getDataSource().getConnection();
+                PreparedStatement statement = connection.prepareStatement(
+                        "SELECT 1 FROM guilds_members WHERE guild_id = ? AND user_id = ? AND level_id = ? LIMIT 1")) {
+            statement.setInt(1, guild.getId());
+            statement.setInt(2, userId);
+            statement.setInt(3, GuildRank.DELETED.type);
+            try (ResultSet set = statement.executeQuery()) {
+                return set.next();
+            }
+        } catch (SQLException e) {
+            LOGGER.error("Caught SQL exception", e);
+        }
+        return false;
+    }
+
+    public GuildMember getGuildMember(Guild guild, User user) {
+        return getGuildMember(guild.getId(), user.getUserInfo().getId());
+    }
+
+    public GuildMember getGuildMember(int guildId, int userId) {
+        GuildMember member = null;
+        try (Connection connection = Emulator.getDatabase().getDataSource().getConnection();
+                PreparedStatement statement = connection.prepareStatement(
+                        "SELECT users.username, users.look, guilds_members.* FROM guilds_members INNER JOIN users ON guilds_members.user_id = users.id WHERE guilds_members.guild_id = ? AND guilds_members.user_id = ? AND guilds_members.level_id <> "
+                                + GuildRank.DELETED.type + " LIMIT 1")) {
+            statement.setInt(1, guildId);
+            statement.setInt(2, userId);
+            try (ResultSet set = statement.executeQuery()) {
+                if (set.next()) {
+                    member = new GuildMember(set);
+                }
+            }
+        } catch (SQLException e) {
+            LOGGER.error("Caught SQL exception", e);
+        }
+
+        return member;
+    }
+
+    public Set<GuildMember> getGuildMembers(int guildId) {
+        return this.getGuildMembers(this.getGuild(guildId));
+    }
+
+    Set<GuildMember> getGuildMembers(Guild guild) {
+        Set<GuildMember> guildMembers = new HashSet<>();
+
+        try (Connection connection = Emulator.getDatabase().getDataSource().getConnection();
+                PreparedStatement statement = connection.prepareStatement(
+                        "SELECT users.username, users.look, guilds_members.* FROM guilds_members INNER JOIN users ON guilds_members.user_id = users.id WHERE guilds_members.guild_id = ?")) {
+            statement.setInt(1, guild.getId());
+            try (ResultSet set = statement.executeQuery()) {
+                while (set.next()) {
+                    guildMembers.add(new GuildMember(set));
+                }
+            }
+        } catch (SQLException e) {
+            LOGGER.error("Caught SQL exception", e);
+        }
+
+        return guildMembers;
+    }
+
+    public ArrayList<GuildMember> getGuildMembers(Guild guild, int page, int levelId, String query) {
+        ArrayList<GuildMember> guildMembers = new ArrayList<GuildMember>();
+
+        try (Connection connection = Emulator.getDatabase().getDataSource().getConnection();
+                PreparedStatement statement = connection.prepareStatement(
+                        "SELECT users.username, users.look, guilds_members.* FROM guilds_members INNER JOIN users ON guilds_members.user_id = users.id WHERE guilds_members.guild_id = ?  "
+                                + (rankQuery(levelId))
+                                + " AND users.username LIKE ? ORDER BY level_id, member_since ASC LIMIT ?, ?")) {
+            statement.setInt(1, guild.getId());
+            statement.setString(2, "%" + polaris.util.SqlLikeEscaper.escape(query) + "%");
+            statement.setInt(3, page * 14);
+            statement.setInt(4, 14);
+
+            try (ResultSet set = statement.executeQuery()) {
+                while (set.next()) {
+                    guildMembers.add(new GuildMember(set));
+                }
+            }
+        } catch (SQLException e) {
+            LOGGER.error("Caught SQL exception", e);
+        }
+
+        return guildMembers;
+    }
+
+    public int getGuildMembersCount(Guild guild, int page, int levelId, String query) {
+        try (Connection connection = Emulator.getDatabase().getDataSource().getConnection();
+                PreparedStatement statement = connection.prepareStatement(
+                        "SELECT COUNT(*) FROM guilds_members INNER JOIN users ON guilds_members.user_id = users.id WHERE guilds_members.guild_id = ?  "
+                                + (rankQuery(levelId))
+                                + " AND users.username LIKE ? ORDER BY level_id, member_since ASC")) {
+            statement.setInt(1, guild.getId());
+            statement.setString(2, "%" + polaris.util.SqlLikeEscaper.escape(query) + "%");
+
+            try (ResultSet set = statement.executeQuery()) {
+                while (set.next()) {
+                    return set.getInt(1);
+                }
+            }
+        } catch (SQLException e) {
+            LOGGER.error("Caught SQL exception", e);
+        }
+
+        return 0;
+    }
+
+    public Map<Integer, GuildMember> getOnlyAdmins(Guild guild) {
+        Map<Integer, GuildMember> guildAdmins = new HashMap<>();
+
+        try (Connection connection = Emulator.getDatabase().getDataSource().getConnection();
+                PreparedStatement statement = connection.prepareStatement(
+                        "SELECT users.username, users.look, guilds_members.* FROM guilds_members INNER JOIN users ON guilds_members.user_id = users.id WHERE guilds_members.guild_id = ?  "
+                                + (rankQuery(1)))) {
+            statement.setInt(1, guild.getId());
+            try (ResultSet set = statement.executeQuery()) {
+                while (set.next()) {
+                    guildAdmins.put(set.getInt("user_id"), new GuildMember(set));
+                }
+            }
+        } catch (SQLException e) {
+            LOGGER.error("Caught SQL exception", e);
+        }
+
+        return guildAdmins;
+    }
+
+    private String rankQuery(int level) {
+        switch (level) {
+            case 3:
+                return "AND guilds_members.level_id = " + GuildRank.DELETED.type;
+            case 2:
+                return "AND guilds_members.level_id = 3";
+            case 1:
+                return "AND (guilds_members.level_id = 0 OR guilds_members.level_id = 1)";
+            default:
+                return "AND guilds_members.level_id >= 0 AND guilds_members.level_id <= 2";
+        }
+    }
+
+    public Guild getGuild(int guildId) {
+        Guild g = this.guilds.get(guildId);
+
+        if (g == null) {
+            try (Connection connection = Emulator.getDatabase().getDataSource().getConnection();
+                    PreparedStatement statement = connection.prepareStatement(
+                            "SELECT users.username, rooms.name as room_name, guilds.* FROM guilds INNER JOIN users ON guilds.user_id = users.id INNER JOIN rooms ON rooms.id = guilds.room_id WHERE guilds.id = ? LIMIT 1")) {
+                statement.setInt(1, guildId);
+                try (ResultSet set = statement.executeQuery()) {
+                    if (set.next()) {
+                        g = new Guild(set);
+                    }
+                }
+                if (g != null) g.loadMemberCount();
+            } catch (SQLException e) {
+                LOGGER.error("Caught SQL exception", e);
+            }
+        }
+
+        if (g != null) {
+            g.lastRequested = Emulator.getIntUnixTimestamp();
+            if (!this.guilds.containsKey(guildId)) this.guilds.put(guildId, g);
+        }
+
+        return g;
+    }
+
+    public List<Guild> getGuilds(int userId) {
+        List<Guild> guilds = new ArrayList<Guild>();
+
+        try (Connection connection = Emulator.getDatabase().getDataSource().getConnection();
+                PreparedStatement statement = connection.prepareStatement(
+                        "SELECT guild_id FROM guilds_members WHERE user_id = ? AND level_id <= 2 ORDER BY member_since ASC")) {
+            statement.setInt(1, userId);
+            try (ResultSet set = statement.executeQuery()) {
+                while (set.next()) {
+                    Guild guild = getGuild(set.getInt("guild_id"));
+
+                    if (guild != null) {
+                        guilds.add(guild);
+                    }
+                }
+            }
+        } catch (SQLException e) {
+            LOGGER.error("Caught SQL exception", e);
+        }
+
+        return guilds;
+    }
+
+    public List<Guild> getOwnedGuilds(int userId) {
+        List<Guild> guilds = new ArrayList<Guild>();
+
+        try (Connection connection = Emulator.getDatabase().getDataSource().getConnection();
+                PreparedStatement statement = connection.prepareStatement("SELECT id FROM guilds WHERE user_id = ?")) {
+            statement.setInt(1, userId);
+            try (ResultSet set = statement.executeQuery()) {
+                while (set.next()) {
+                    Guild guild = getGuild(set.getInt("id"));
+
+                    if (guild != null) {
+                        guilds.add(guild);
+                    }
+                }
+            }
+        } catch (SQLException e) {
+            LOGGER.error("Caught SQL exception", e);
+        }
+
+        return guilds;
+    }
+
+    public List<Guild> getAllGuilds() {
+        List<Guild> guilds = new ArrayList<Guild>();
+
+        try (Connection connection = Emulator.getDatabase().getDataSource().getConnection();
+                PreparedStatement statement =
+                        connection.prepareStatement("SELECT id FROM guilds ORDER BY id DESC LIMIT 20")) {
+            try (ResultSet set = statement.executeQuery()) {
+                while (set.next()) {
+                    Guild guild = getGuild(set.getInt("id"));
+
+                    if (guild != null) {
+                        guilds.add(guild);
+                    }
+                }
+            }
+        } catch (SQLException e) {
+            LOGGER.error("Caught SQL exception", e);
+        }
+
+        return guilds;
+    }
+
+    public boolean symbolColor(int colorId) {
+        for (GuildPart part : this.getSymbolColors()) {
+            if (part.id == colorId) return true;
+        }
+
+        return false;
+    }
+
+    public boolean backgroundColor(int colorId) {
+        for (GuildPart part : this.getBackgroundColors()) {
+            if (part.id == colorId) return true;
+        }
+        return false;
+    }
+
+    public Map<GuildPartType, Map<Integer, GuildPart>> getGuildParts() {
+        return this.guildParts;
+    }
+
+    public Collection<GuildPart> getBases() {
+        return this.guildParts.get(GuildPartType.BASE).values();
+    }
+
+    public GuildPart getBase(int id) {
+        return this.guildParts.get(GuildPartType.BASE).get(id);
+    }
+
+    public Collection<GuildPart> getSymbols() {
+        return this.guildParts.get(GuildPartType.SYMBOL).values();
+    }
+
+    public GuildPart getSymbol(int id) {
+        return this.guildParts.get(GuildPartType.SYMBOL).get(id);
+    }
+
+    public Collection<GuildPart> getBaseColors() {
+        return this.guildParts.get(GuildPartType.BASE_COLOR).values();
+    }
+
+    public GuildPart getBaseColor(int id) {
+        return this.guildParts.get(GuildPartType.BASE_COLOR).get(id);
+    }
+
+    public Collection<GuildPart> getSymbolColors() {
+        return this.guildParts.get(GuildPartType.SYMBOL_COLOR).values();
+    }
+
+    public GuildPart getSymbolColor(int id) {
+        return this.guildParts.get(GuildPartType.SYMBOL_COLOR).get(id);
+    }
+
+    public Collection<GuildPart> getBackgroundColors() {
+        return this.guildParts.get(GuildPartType.BACKGROUND_COLOR).values();
+    }
+
+    public GuildPart getBackgroundColor(int id) {
+        return this.guildParts.get(GuildPartType.BACKGROUND_COLOR).get(id);
+    }
+
+    public GuildPart getPart(GuildPartType type, int id) {
+        return this.guildParts.get(type).get(id);
+    }
+
+    public void setGuild(InteractionGuildFurni furni, int guildId) {
+        try (Connection connection = Emulator.getDatabase().getDataSource().getConnection()) {
+            this.persistGuild(connection, furni.getId(), guildId);
+            furni.setGuildId(guildId);
+        } catch (SQLException e) {
+            LOGGER.error("Caught SQL exception", e);
+        }
+    }
+
+    public void persistGuild(Connection connection, int furniId, int guildId) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement("UPDATE items SET guild_id = ? WHERE id = ?")) {
+            statement.setInt(1, guildId);
+            statement.setInt(2, furniId);
+            if (statement.executeUpdate() != 1) throw new SQLException("Unable to assign guild furniture " + furniId);
+        }
+    }
+
+    public void dispose() {
+        synchronized (this.guilds) {
+            Iterator<Guild> guildIterator = this.guilds.values().iterator();
+            while (guildIterator.hasNext()) {
+                Guild guild = guildIterator.next();
+                if (guild.needsUpdate) {
+                    guild.run();
+                }
+
+                guildIterator.remove();
+            }
+        }
+        LOGGER.info("Guild Manager -> Disposed!");
+    }
+
+    public boolean hasViewedForum(int userId, int guildId) {
+        int cutoff = forumViewCutoff();
+        return this.views.stream()
+                .anyMatch(v -> v.getUserId() == userId && v.getGuildId() == guildId && v.getTimestamp() > cutoff);
+    }
+
+    public void addView(int userId, int guildId) {
+        // Only the last week counts anywhere, so older views leave memory instead of growing forever.
+        ForumView view = new ForumView(userId, guildId, Emulator.getIntUnixTimestamp());
+        int cutoff = view.getTimestamp() - FORUM_VIEW_WINDOW_SECONDS;
+
+        this.views.removeIf(v -> v.getTimestamp() <= cutoff);
+        this.views.add(view);
+
+        try (Connection connection = Emulator.getDatabase().getDataSource().getConnection();
+                PreparedStatement statement = connection.prepareStatement(
+                        "INSERT INTO `guild_forum_views`(`user_id`, `guild_id`, `timestamp`) VALUES (?, ?, ?)")) {
+            statement.setInt(1, view.getUserId());
+            statement.setInt(2, view.getGuildId());
+            statement.setInt(3, view.getTimestamp());
+
+            statement.execute();
+        } catch (SQLException e) {
+            LOGGER.error("Caught SQL exception", e);
+        }
+    }
+
+    /** The forums anyone can read, most viewed in the last week first (the set keeps that order). */
+    public Set<Guild> getMostViewed() {
+        int cutoff = forumViewCutoff();
+        return this.views.stream()
+                .filter(v -> v.getTimestamp() > cutoff)
+                .collect(Collectors.groupingBy(ForumView::getGuildId))
+                .entrySet()
+                .stream()
+                .sorted(Comparator.comparingInt((Map.Entry<Integer, List<ForumView>> a) ->
+                                a.getValue().size())
+                        .reversed())
+                .map(k -> this.getGuild(k.getKey()))
+                .filter(g -> g != null && g.canReadForum() == SettingsState.EVERYONE)
+                .limit(100)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+    }
+
+    /** Views at or before this second are older than the week that counts. */
+    private static int forumViewCutoff() {
+        return Emulator.getIntUnixTimestamp() - FORUM_VIEW_WINDOW_SECONDS;
+    }
+}

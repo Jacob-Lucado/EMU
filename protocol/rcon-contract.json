@@ -1,0 +1,94 @@
+{
+  "version": 1,
+  "transport": "tcp-json",
+  "request": {
+    "key": "string",
+    "data": "object"
+  },
+  "response": {
+    "status": "integer",
+    "message": "string"
+  },
+  "statuses": {
+    "ok": 0,
+    "error": 1,
+    "systemError": 2
+  },
+  "stressCommands": {
+    "enabledBy": "stress.enabled",
+    "start": {
+      "key": "stressstart",
+      "data": [
+        "room_id",
+        "bots",
+        "items",
+        "rollers",
+        "wired_stacks",
+        "wired_events_per_second",
+        "item_id",
+        "chat_per_second",
+        "duration_seconds",
+        "seed",
+        "movement"
+      ]
+    },
+    "status": {
+      "key": "stressstatus",
+      "data": [
+        "room_id"
+      ]
+    },
+    "stop": {
+      "key": "stressstop",
+      "data": [
+        "room_id"
+      ]
+    },
+    "successMessage": "JSON-encoded StressRunSnapshot"
+  },
+  "commandNormalization": "remove underscores and lowercase",
+  "commands": [
+    "alertuser",
+    "disconnect",
+    "forwarduser",
+    "givebadge",
+    "givecredits",
+    "givepixels",
+    "givepoints",
+    "hotelalert",
+    "sendgift",
+    "sendroombundle",
+    "setrank",
+    "updatewordfilter",
+    "updatewheel",
+    "updatesoundboard",
+    "updatecatalog",
+    "executecommand",
+    "progressachievement",
+    "updateuser",
+    "friendrequest",
+    "imagehotelalert",
+    "imagealertuser",
+    "epicpopup",
+    "stalkuser",
+    "staffalert",
+    "modticket",
+    "talkuser",
+    "changeroomowner",
+    "muteuser",
+    "giverespect",
+    "ignoreuser",
+    "setmotto",
+    "giveuserclothing",
+    "modifysubscription",
+    "changeusername",
+    "updateitems",
+    "housekeeping",
+    "banuser",
+    "unbanuser",
+    "reloadcontent",
+    "stressstart",
+    "stressstatus",
+    "stressstop"
+  ]
+}

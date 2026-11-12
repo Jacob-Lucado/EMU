@@ -1,0 +1,26 @@
+using System.Globalization;
+using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Items;
+
+namespace Plus.Communication.Packets.Outgoing.Rooms.Engine;
+
+public class ItemRemoveComposer : IServerPacket
+{
+    private readonly string _itemId;
+    private readonly int _userId;
+
+    public uint MessageId => ServerPacketHeader.ItemRemoveComposer;
+
+    public ItemRemoveComposer(uint itemId, int userId)
+    {
+        _itemId = BuildersClubItemIds.ToWire(itemId).ToString(CultureInfo.InvariantCulture);
+        _userId = userId;
+    }
+
+    public void Compose(IOutgoingPacket packet)
+    {
+        packet.WriteString(_itemId);
+        packet.WriteInteger(_userId);
+        packet.WriteBoolean(false);
+    }
+}

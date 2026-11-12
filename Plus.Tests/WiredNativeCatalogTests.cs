@@ -1,0 +1,1011 @@
+using Plus.HabboHotel.Rooms;
+using Plus.HabboHotel.Users.Inventory.Furniture;
+using System.Collections.Concurrent;
+using System.Collections.Immutable;
+using System.Buffers.Binary;
+using Plus.Communication.Flash;
+using Plus.HabboHotel.Items;
+using Plus.HabboHotel.Items.Wired.Configuration;
+using Plus.HabboHotel.Users;
+using System.Reflection;
+using Microsoft.Extensions.Logging.Abstractions;
+using Plus.Communication.Packets;
+using Plus.Communication.Packets.Incoming;
+using Plus.Communication.Packets.Incoming.WiredVariables;
+using Plus.Communication.Packets.Outgoing;
+using Plus.Communication.Packets.Outgoing.WiredVariables;
+using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Items.Wired.Variables;
+using Xunit;
+
+namespace Plus.Tests;
+
+public sealed class WiredNativeCatalogTests(Xunit.Abstractions.ITestOutputHelper output)
+{
+    [Fact]
+    public void NativeRequestsDispatchAtTheirDirectCanonicalIds()
+    {
+        var hash = new WiredAllVariablesRequestEvent(new WiredVariableMenuService());
+        var diff = new WiredVariableHashesEvent(new WiredVariableMenuService());
+        using var manager = new PacketManager([hash, diff], NullLogger<PacketManager>.Instance);
+        var registered = (Dictionary<uint, IPacketEvent>)typeof(PacketManager).GetField("_incomingPackets", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(manager)!;
+        Assert.Same(hash, registered[859]);
+        Assert.Same(diff, registered[2650]);
+        Assert.Equal(2007u, ServerPacketHeader.WiredAllVariablesHashComposer);
+        Assert.Equal(517u, ServerPacketHeader.WiredAllVariablesDiffComposer);
+    }
+
+    [Fact]
+    public void NativeOwningUserTypeIsIndependentOfItsTarget()
+    {
+        var variable = new WiredVariableDescription(new(10, 1, 5, "score", WiredVariableTarget.User, WiredVariableAvailability.Persistent, true), true, false);
+        var packet = new Packet();
+        var endpoint = new WiredNativeEndpoint(variable, variable.Definition, null, true, false);
+        var native = WiredNativeCatalogProjection.Project(endpoint, null);
+        new WiredNativeCatalogDiffComposer(new(42, true, [], [native])).Compose(packet);
+        Assert.Equal(0, packet.Values[6]);
+        Assert.Equal(1, packet.Values[9]);
+    }
+
+    [Fact]
+    public void HashBodyIsExactlyOneSignedInteger()
+    {
+        var packet = new Packet();
+        new WiredAllVariablesHashComposer(int.MinValue).Compose(packet);
+        Assert.Equal(new object[] { int.MinValue }, packet.Values);
+    }
+
+    [Theory]
+    [InlineData(WiredVariableTarget.Furni, 0, WiredVariableAvailability.RoomActive, false)]
+    [InlineData(WiredVariableTarget.User, 1, WiredVariableAvailability.UserActive, false)]
+    [InlineData(WiredVariableTarget.User, 1, WiredVariableAvailability.Shared, false)]
+    [InlineData(WiredVariableTarget.Global, -10, WiredVariableAvailability.Persistent, true)]
+    [InlineData(WiredVariableTarget.Context, -20, WiredVariableAvailability.RoomActive, false)]
+    public void OrdinaryCapabilitiesFollowActualMutationAndLifetimeDomains(WiredVariableTarget target, int wireTarget,
+        WiredVariableAvailability availability, bool always)
+    {
+        var definition = new WiredVariableDefinition(10, 42, 1, "score", target, availability, true);
+        var directory = new Directory();
+        directory.Rows[10] = definition;
+        var module = Module(directory);
+        var endpoint = Assert.Single(module.DescribeNativeDefinitions([definition], new Dictionary<WiredVariableReference, WiredVariableDerivation>(), [])!);
+        var variable = WiredNativeCatalogProjection.Project(endpoint, null);
+        Assert.Equal(0, variable.Type);
+        Assert.Equal(wireTarget, variable.Target);
+        Assert.Equal(always, variable.AlwaysAvailable);
+        Assert.Equal(target != WiredVariableTarget.Global, variable.CanCreateAndDelete);
+        Assert.True(variable.CanWriteValue);
+        // A context variable's changes are never interceptable.
+        Assert.Equal(target != WiredVariableTarget.Context, variable.CanInterceptChanges);
+        // A global lists no creation time but does list its last update time.
+        Assert.Equal(target != WiredVariableTarget.Global, variable.CanReadCreationTime);
+        Assert.True(variable.CanReadLastUpdateTime);
+        Assert.Equal(target == WiredVariableTarget.Context ? 999 : (int)availability, variable.Availability);
+        Assert.Empty(module.DrainChanges());
+    }
+
+    [Theory]
+    [InlineData(WiredVariableTarget.Furni, "~area_hide.hiding_wallitems", false, true)]
+    [InlineData(WiredVariableTarget.Furni, "@altitude", true, false)]
+    [InlineData(WiredVariableTarget.Furni, "@id", false, false)]
+    // @handitem can be given and removed (CarryObject), as well as written.
+    [InlineData(WiredVariableTarget.User, "@handitem", true, true)]
+    [InlineData(WiredVariableTarget.User, "@achievement_score", false, false)]
+    [InlineData(WiredVariableTarget.Global, "@teams.red.score", true, false)]
+    [InlineData(WiredVariableTarget.Context, "@event.chat.style", false, false)]
+    [InlineData(WiredVariableTarget.User, "@not_implemented", false, false)]
+    public void AuthorizedBuiltinAliasesRetainTruthfulFiniteCapabilities(WiredVariableTarget target, string token, bool write, bool presence)
+    {
+        var definition = new WiredVariableDefinition(10, 42, 1, "alias", target, WiredVariableAvailability.RoomActive, true,
+            Link: new(42, new(target, "internal:" + token), false));
+        var directory = new Directory();
+        directory.Rows[10] = definition;
+        var endpoint = Assert.Single(Module(directory).DescribeNativeDefinitions([definition], new Dictionary<WiredVariableReference, WiredVariableDerivation>(), [])!);
+        var variable = WiredNativeCatalogProjection.Project(endpoint, null);
+        Assert.Equal(2, variable.Type);
+        Assert.Equal(write, variable.CanWriteValue);
+        Assert.Equal(presence, variable.CanCreateAndDelete);
+        Assert.False(variable.CanInterceptChanges);
+        Assert.False(variable.CanReadCreationTime);
+        Assert.False(variable.CanReadLastUpdateTime);
+        Assert.False(variable.AlwaysAvailable);
+        Assert.Equal(21, variable.Availability);
+        Assert.Equal(RoomWiredBuiltinVariables.HasNumericValue(new(target, token)), variable.HasValue);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void LinkedCustomUsesOneDirectoryAndTerminalFacts(bool readOnly)
+    {
+        var directory = new Directory();
+        var terminal = new WiredVariableDefinition(20, 42, 1, "source", WiredVariableTarget.User, WiredVariableAvailability.Persistent, false);
+        var owning = terminal with { ItemId = 10, Name = "alias", HasValue = true, Link = new(42, new(terminal.Target, terminal.Token), readOnly) };
+        directory.Rows[10] = owning;
+        directory.Rows[20] = terminal;
+        var endpoint = Assert.Single(Module(directory).DescribeNativeDefinitions([owning], new Dictionary<WiredVariableReference, WiredVariableDerivation>(), [])!);
+        var variable = WiredNativeCatalogProjection.Project(endpoint, null);
+        Assert.Equal(readOnly ? 2 : 0, variable.Type);
+        Assert.False(variable.HasValue);
+        Assert.False(variable.CanWriteValue);
+        Assert.Equal(!readOnly, variable.CanCreateAndDelete);
+        Assert.True(variable.CanReadCreationTime);
+        Assert.Equal(!readOnly, variable.CanInterceptChanges);
+        Assert.Equal(1, directory.Reads[10]);
+        Assert.Equal(1, directory.Reads[20]);
+    }
+
+    [Fact]
+    public void HashesIncludeRenameCapabilitiesAndAbsentVersusEmptyConnector()
+    {
+        var variable = Native();
+        Assert.NotEqual(variable.Hash, (variable with { Name = "renamed" }).Hash);
+        Assert.NotEqual(variable.Hash, (variable with { CanWriteValue = false }).Hash);
+        Assert.NotEqual(variable.Hash, (variable with { RequiresExecutionContext = true }).Hash);
+        Assert.NotEqual(variable.Hash, (variable with { Connector = [] }).Hash);
+        Assert.NotEqual((variable with { Connector = [] }).Hash, (variable with { Connector = [], TextConnectorFallback = "" }).Hash);
+        Assert.NotEqual((variable with { Connector = [], TextConnectorFallback = "one" }).Hash,
+            (variable with { Connector = [], TextConnectorFallback = "two" }).Hash);
+        Assert.NotEqual((variable with { Connector = [] }).Hash, (variable with { Connector = [new(1, "one")] }).Hash);
+    }
+
+    [Fact]
+    public void LargeCatalogDiffSendsAllRowsInOneChunkWithRemovalOnlyAndEmptyFinal()
+    {
+        var variables = Enumerable.Range(0, 205).Select(index => Native() with { Id = "user:" + index }).ToImmutableArray();
+        var catalog = new WiredNativeCatalog(variables);
+        var chunks = catalog.Diff(new Dictionary<string, int> { ["gone"] = int.MinValue });
+        var only = Assert.Single(chunks);
+        Assert.Equal(205, only.Changed.Length);
+        Assert.Equal(catalog.Hash, only.Hash);
+        Assert.Equal(new[] { "gone" }, only.Removed);
+        Assert.True(only.LastChunk);
+        var known = variables.ToDictionary(variable => variable.Id, variable => variable.Hash);
+        var equal = Assert.Single(catalog.Diff(known));
+        Assert.Empty(equal.Changed);
+        Assert.True(equal.LastChunk);
+        known["gone"] = int.MaxValue;
+        var removal = Assert.Single(catalog.Diff(known));
+        Assert.Equal(new[] { "gone" }, removal.Removed);
+        Assert.Empty(removal.Changed);
+    }
+
+    [Fact]
+    public void RealRoomCaptureUsesCapturedConfigurationNotConnectorCacheAndFreezesItsPairs()
+    {
+        var fixture = new Fixture();
+        fixture.AddDefinition(10);
+        var connector = fixture.AddMetadata(20, "wf_xtra_var_text_connector", new() { Text = "2=old" });
+        Assert.True(WiredNativeEditorProjection.TryCompile(20, connector.Descriptor, WiredNativeTestSupport.FromLegacyVariableDraft(connector.Descriptor, new() { Text = "1=new" }), out var capturedConfiguration));
+        var field = connector.GetType().BaseType!.GetField("<Configuration>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        field.SetValue(connector, capturedConfiguration);
+        Assert.Equal("old", connector.TextConnector[2]);
+        Assert.True(fixture.Variables.TryCaptureNativeCatalog(out var catalog));
+        var native = Assert.Single(Own(catalog!));
+        Assert.Equal(new KeyValuePair<int, string>(1, "new"), Assert.Single(native.Connector!.Value));
+        WiredNativeTestSupport.InstallLegacyVariableDraft(connector, new() { Text = "1=after" });
+        Assert.Equal("new", Assert.Single(native.Connector.Value).Value);
+        Assert.Equal(native.Hash, catalog.Diff(new Dictionary<string, int>()).SelectMany(diff => diff.Changed).Single(row => row.Id == native.Id).Hash);
+    }
+
+    // The catalog entry of a variable with a "_=text" connector line carries the fallback, also when the connector has no number
+    // lines, and a changed fallback changes the row hash.
+    [Theory]
+    [InlineData("7=seven\n_=other", "other", 1)]
+    [InlineData("_=other", "other", 0)]
+    [InlineData("_=", "", 0)]
+    [InlineData("7=seven", null, 1)]
+    public void TheNativeCatalogRowCarriesTheConnectorFallback(string text, string? fallback, int labels)
+    {
+        var fixture = new Fixture();
+        fixture.AddDefinition(10);
+        fixture.AddMetadata(20, "wf_xtra_var_text_connector", new() { Text = text });
+        Assert.True(fixture.Variables.TryCaptureNativeCatalog(out var catalog));
+        var native = Assert.Single(Own(catalog!));
+        Assert.Equal(fallback, native.TextConnectorFallback);
+        Assert.Equal(labels, native.Connector!.Value.Length);
+        Assert.NotEqual(native.Hash, (native with { TextConnectorFallback = "changed" }).Hash);
+    }
+
+    [Theory]
+    [InlineData("save")]
+    [InlineData("load")]
+    [InlineData("detach")]
+    [InlineData("configuration")]
+    [InlineData("unselected_pose")]
+    [InlineData("replacement")]
+    [InlineData("definition")]
+    [InlineData("owner")]
+    [InlineData("collision")]
+    public void ObservedCandidateChangesRefuseEntireCaptureRatherThanReturnEmpty(string change)
+    {
+        var fixture = new Fixture();
+        var definition = fixture.AddDefinition(10);
+        fixture.AddMetadata(20, "wf_xtra_var_text_connector", new() { Text = "1=selected" });
+        var unselected = fixture.AddMetadata(21, "wf_xtra_var_text_connector", new() { Text = "1=unselected" });
+        fixture.AddDefinition(22, "wf_var_quest", new() { Text = "quest22\tchat" });
+        fixture.Directory.OnRead = () =>
+        {
+            fixture.Directory.OnRead = null;
+            Task.Run(() =>
+            {
+                switch (change) {
+                    case "save":
+                        fixture.Variables.ConfigurationSaved(definition);
+                        break;
+                    case "load":
+                        fixture.Variables.ConfigurationLoaded(definition);
+                        break;
+                    case "detach":
+                        fixture.Variables.ItemDetached(definition.Item);
+                        break;
+                    case "configuration":
+                        WiredNativeTestSupport.InstallLegacyVariableDraft(definition, new() { IntParams = [1, 10], Text = "changed" });
+                        break;
+                    case "unselected_pose":
+                        unselected.Item.SetState(1, 0, 0);
+                        break;
+                    case "replacement":
+                        fixture.Floor[10] = new() { Id = 10, RoomId = 42 };
+                        break;
+                    case "definition":
+                        definition.Item.Definition.Id++;
+                        break;
+                    case "owner":
+                        fixture.World.Room.OwnerId = 2;
+                        break;
+                    case "collision":
+                        var id = WiredRoomVariables.SyntheticId(WiredVariableTarget.User, 22, 0, false)!.Value;
+                        fixture.Floor[id] = new() { Id = id, RoomId = 42 };
+                        break;
+                }
+            }).GetAwaiter().GetResult();
+        };
+        Assert.False(fixture.Variables.TryCaptureNativeCatalog(out var catalog));
+        Assert.Null(catalog);
+    }
+
+    [Fact]
+    public void DerivedRowsAreActualEntryPointsAndAliasToSyntheticDoesNotInventMembership()
+    {
+        var fixture = new Fixture();
+        fixture.AddDefinition(10);
+        fixture.AddDefinition(20, "wf_var_quest", new() { Text = "quest20\tchat" });
+        var id = WiredRoomVariables.SyntheticId(WiredVariableTarget.User, 10, 0, false)!.Value;
+        fixture.AddDefinition(11, "wf_var_echo", new() { Text = "{\"variableName\":\"unreachable\",\"sourceTargetType\":0,\"sourceVariableToken\":\"custom:" + id + "\"}" });
+        Assert.True(fixture.Variables.TryCaptureNativeCatalog(out var catalog));
+        Assert.Equal(7, Own(catalog!).Length); // the user definition, the quest definition and its five derived keys
+        Assert.DoesNotContain(catalog.Variables, variable => variable.Id == "user:11");
+        var derived = Own(catalog).Where(variable => variable.Name.Contains('.')).ToArray();
+        Assert.Equal(5, derived.Length);
+        Assert.All(derived, variable =>
+        {
+            Assert.Equal(2, variable.Type);
+            Assert.Equal(999, variable.Availability);
+            Assert.True(variable.HasValue);
+            Assert.False(variable.CanWriteValue);
+            Assert.False(variable.CanCreateAndDelete);
+            Assert.False(variable.CanReadCreationTime);
+            Assert.False(variable.AlwaysAvailable);
+        });
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void CurrentRoomAndPermissionAreRecheckedBetweenActualChunks(bool loseRights)
+    {
+        var fixture = new Fixture();
+
+        for (uint id = 1000; id < 1105; id++) {
+            fixture.AddDefinition(id);
+        }
+
+        fixture.World.Client.SendCallback = args =>
+        {
+            var bytes = args.MemoryBuffer.ToArray();
+            fixture.World.Packets.Add((BinaryPrimitives.ReadUInt16BigEndian(bytes.AsSpan(4, 2)), bytes[6..]));
+
+            if (loseRights) {
+                fixture.World.Habbo.Username = "visitor";
+                fixture.World.Room.Type = "public";
+                var settings = fixture.World.Room.GetWired().Settings;
+                typeof(Plus.HabboHotel.Items.Wired.Settings.WiredRoomSettings).GetField("_saved", BindingFlags.Instance | BindingFlags.NonPublic)!
+                    .SetValue(settings, new Plus.HabboHotel.Items.Wired.Settings.WiredRoomSettingsSnapshot(0, 0));
+                typeof(Plus.HabboHotel.Items.Wired.Settings.WiredRoomSettings).GetField("_loaded", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(settings, true);
+            }
+            else {
+                fixture.World.Habbo.CurrentRoom = null;
+            }
+
+            return true;
+        };
+        new WiredVariableMenuService().ShowCatalogDiff(fixture.World.Room, fixture.World.Client, new Dictionary<string, int>());
+        Assert.Single(fixture.World.Packets);
+        Assert.Equal(517u, fixture.World.Packets[0].Header);
+    }
+
+    [Fact]
+    public void CaptureFailureAndAbsentPermissionNeverEmitAuthoritativeEmptyDiff()
+    {
+        var fixture = new Fixture();
+        var definition = fixture.AddDefinition(10);
+        fixture.Floor[10] = new() { Id = 10 };
+        var service = new WiredVariableMenuService();
+        service.ShowCatalogDiff(fixture.World.Room, fixture.World.Client, new Dictionary<string, int> { ["user:10"] = 1 });
+        service.ShowCatalogHash(fixture.World.Room, fixture.World.Client);
+        Assert.Empty(fixture.World.Packets);
+        fixture.Floor[10] = definition.Item;
+        fixture.World.Habbo.CurrentRoom = null;
+        service.ShowCatalogDiff(fixture.World.Room, fixture.World.Client, new Dictionary<string, int>());
+        Assert.Empty(fixture.World.Packets);
+    }
+
+    [Theory]
+    [InlineData(int.MinValue, false, false)]
+    [InlineData(int.MaxValue, true, true)]
+    public void ActualNativeByteFixturesPreserveSignedHashesAndConnectorPresence(int hash, bool present, bool context)
+    {
+        var row = Native() with
+        {
+            Target = -20,
+            Availability = 999,
+            Connector = present ? [] : null,
+            RequiresExecutionContext = context
+        };
+        var (client, sent) = HabbiconTestSupport.Client(new Habbo());
+        client.Send(new WiredNativeCatalogDiffComposer(new(hash, true, ["removed:opaque"], [row])));
+        var frame = Assert.Single(sent);
+        Assert.Equal(517u, frame.Header);
+        var packet = new FlashIncomingPacket { Buffer = frame.Payload };
+        Assert.Equal(hash, packet.ReadInt());
+        Assert.True(packet.ReadBool());
+        Assert.Equal(1, packet.ReadInt());
+        Assert.Equal("removed:opaque", packet.ReadString());
+        Assert.Equal(1, packet.ReadInt());
+        Assert.Equal(row.Hash, packet.ReadInt());
+        Assert.Equal(row.Id, packet.ReadString());
+        Assert.Equal(0, packet.ReadInt());
+        Assert.Equal("score", packet.ReadString());
+        Assert.Equal(999, packet.ReadInt());
+        Assert.Equal(-20, packet.ReadInt());
+
+        Assert.Equal(new[] { row.AlwaysAvailable, row.CanCreateAndDelete, row.HasValue, row.CanWriteValue,
+            row.CanInterceptChanges, row.IsInvisible }, Enumerable.Range(0, 6).Select(_ => packet.ReadBool()));
+        Assert.Equal(context, packet.ReadBool());
+        Assert.Equal(row.CanReadCreationTime, packet.ReadBool());
+        Assert.Equal(row.CanReadLastUpdateTime, packet.ReadBool());
+        Assert.Equal(present, packet.ReadBool());
+
+        if (present) {
+            Assert.Equal(0, packet.ReadInt());
+            Assert.False(packet.ReadBool());
+        }
+
+        Assert.False(packet.HasDataRemaining());
+        output.WriteLine("NATIVE_CATALOG_BYTES:" + System.Text.Json.JsonSerializer.Serialize(new { hash, present, base64 = Convert.ToBase64String(frame.Payload) }));
+    }
+
+    [Fact]
+    public void NativeResolutionNeverCallsLiveDerivationProviderAndCapsBeforeSorting()
+    {
+        var directory = new Directory();
+        var definitions = Enumerable.Range(1, 4097).Select(id => new WiredVariableDefinition((uint)id, 42, 1,
+            id == 4097 ? "aaa" : "z" + id, WiredVariableTarget.User, WiredVariableAvailability.Persistent, true)).ToArray();
+
+        foreach (var definition in definitions) {
+            directory.Rows[definition.ItemId] = definition;
+        }
+
+        var module = new WiredVariableModule(42, directory, new MemoryWiredVariableStore(), TimeProvider.System,
+            derive: _ => throw new InvalidOperationException("Live derived resolver must not reopen the maps"));
+        var rows = module.DescribeNativeDefinitions(definitions, new Dictionary<WiredVariableReference, WiredVariableDerivation>(), []);
+        Assert.Equal(4096, rows!.Count);
+        Assert.DoesNotContain(rows, row => row.Description.Definition.ItemId == 4097);
+    }
+
+    [Fact]
+    public void FailedDirectoryDecodeAndDetachedDefinitionRefuseInsteadOfRemovingKnownRows()
+    {
+        var fixture = new Fixture();
+        var owning = fixture.AddDefinition(10);
+        fixture.Directory.OnRead = () => throw new InvalidOperationException("Directory read failure");
+        Assert.False(fixture.Variables.TryCaptureNativeCatalog(out var catalog));
+        Assert.Null(catalog);
+        fixture.Directory.OnRead = null;
+        fixture.Directory.Rows[10] = fixture.Directory.Rows[10] with { Name = "different" };
+        Assert.False(fixture.Variables.TryCaptureNativeCatalog(out catalog));
+        fixture.Directory.Rows[10] = fixture.Directory.Rows[10] with { Name = owning.Configuration.Text };
+        fixture.Floor.TryRemove(10, out _);
+        Assert.False(fixture.Variables.TryCaptureNativeCatalog(out catalog));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    public void CapturedTimeMetadataPreservesSourceValueVersusTimestampEligibility(int mode)
+    {
+        var fixture = new Fixture();
+        fixture.AddDefinition(10);
+        fixture.AddMetadata(20, "wf_xtra_var_time_util", new() { IntParams = [1 << 21, mode] });
+        Assert.True(fixture.Variables.TryCaptureNativeCatalog(out var catalog));
+        // Parts are "<parent>.<mode>.<part>", type 2, availability 999; the timestamp modes add the base row "<parent>.<mode>";
+        // only Value parts are writable and interceptable.
+        var rows = Own(catalog!).Where(variable => variable.Name.Contains('.')).ToArray();
+        var names = mode switch
+        {
+            1 => new[] { "score10.creation_time", "score10.creation_time.second" },
+            2 => ["score10.last_update_time", "score10.last_update_time.second"],
+            _ => ["score10.value.second"]
+        };
+        Assert.Equal(names, rows.Select(row => row.Name));
+        Assert.All(rows, row =>
+        {
+            Assert.Equal((2, 999, true), (row.Type, row.Availability, row.HasValue));
+            Assert.False(row.AlwaysAvailable || row.CanCreateAndDelete || row.IsInvisible || row.CanReadCreationTime || row.CanReadLastUpdateTime);
+            Assert.Equal(mode == 0, row.CanWriteValue);
+            Assert.Equal(mode == 0, row.CanInterceptChanges);
+            Assert.Null(row.Connector);
+        });
+    }
+
+    // These built-ins are listed as creatable and deletable.
+    [Theory]
+    [InlineData("@handitem", 1)]
+    [InlineData("@can_move_freely", 0)]
+    [InlineData("~walk_helper.is_multi_walk", 0)]
+    public void PresenceBuiltinsAreListedCreatable(string name, int target)
+    {
+        Assert.True(Assert.Single(WiredNativeCatalogProjection.Builtins, row => row.Name == name && row.Target == target).CanCreateAndDelete);
+    }
+
+    [Theory]
+    [InlineData("~chest.available_amount")]
+    [InlineData("~chest.capacity")]
+    [InlineData("~chest.is_auto_lock")]
+    [InlineData("~chest.is_donatable")]
+    [InlineData("~chest.is_open")]
+    [InlineData("~chest.locked")]
+    [InlineData("~clock.is_game_aware")]
+    [InlineData("~clock.pulse_count")]
+    [InlineData("~clock.state")]
+    [InlineData("~recolorable_furni.color.rgb")]
+    [InlineData("~recolorable_furni.color.rgb.red")]
+    [InlineData("~recolorable_furni.color.rgb.green")]
+    [InlineData("~recolorable_furni.color.rgb.blue")]
+    public void FurniBuiltinsOfSpecialFurnitureAreListedInvisible(string name)
+    {
+        Assert.True(Assert.Single(WiredNativeCatalogProjection.Builtins, row => row.Name == name && row.Target == 0).IsInvisible);
+    }
+
+    [Theory]
+    [InlineData("counter", "~clock")]
+    [InlineData("chest", "~chest")]
+    [InlineData("areahide", "~area_hide")]
+    [InlineData("recolorable", "~recolorable_furni")]
+    [InlineData("teleport", "~teleport")]
+    [InlineData("roomlinker", "~teleport")]
+    public void ARoomListsASpecialFurniGroupOnlyWhileItHoldsSuchAFurni(string kind, string group)
+    {
+        var fixture = new Fixture();
+        fixture.Floor.Clear();
+        Assert.True(fixture.Variables.TryCaptureNativeCatalog(out var empty));
+        Assert.All(GroupRows(empty!, group), row => Assert.True(row.IsInvisible));
+        var item = new Item { Id = 77, RoomId = 42, OwnerId = 1, Definition = new() { Id = 77, ItemName = kind } };
+
+        switch (kind) {
+            case "counter":
+                item.Definition.InteractionName = "wf_upcounter1";
+                break;
+            case "chest":
+                item.Definition.InteractionType = InteractionType.WiredChestFurni;
+                break;
+            case "areahide":
+                item.Definition.InteractionType = InteractionType.AreaHide;
+                break;
+            case "teleport":
+                item.Definition.InteractionType = InteractionType.Teleport;
+                break;
+            case "roomlinker":
+                item.Definition.InteractionType = InteractionType.WiredRoomLinker;
+                break;
+            default:
+                item.ExtraData = new Plus.HabboHotel.Items.DataFormat.RecolorableDataFormat();
+                break;
+        }
+
+        fixture.Floor[77] = item;
+        Assert.True(fixture.Variables.TryCaptureNativeCatalog(out var with));
+        Assert.All(GroupRows(with!, group), row => Assert.False(row.IsInvisible));
+        Assert.NotEqual(empty!.Hash, with!.Hash);
+        fixture.Floor.TryRemove(77, out _);
+        Assert.True(fixture.Variables.TryCaptureNativeCatalog(out var after));
+        Assert.Equal(empty.Hash, after!.Hash);
+    }
+
+    [Fact]
+    public void AFurniOfOneGroupLeavesTheOtherGroupsHidden()
+    {
+        var fixture = new Fixture();
+        fixture.Floor.Clear();
+        fixture.Floor[78] = new Item { Id = 78, RoomId = 42, OwnerId = 1, Definition = new() { Id = 78, InteractionName = "wf_upcounter1" } };
+        Assert.True(fixture.Variables.TryCaptureNativeCatalog(out var catalog));
+        Assert.All(new[] { "~chest", "~area_hide", "~recolorable_furni", "~teleport", "~background_color", "~walk_helper", "~pet", "~plant", "~horse" },
+            group => Assert.All(GroupRows(catalog!, group), row => Assert.True(row.IsInvisible)));
+    }
+
+    private static WiredNativeVariable[] GroupRows(WiredNativeCatalog catalog, string group) =>
+        catalog.Variables.Where(row => row.Name.StartsWith(group + ".", StringComparison.Ordinal)).ToArray();
+
+    [Fact]
+    public void HabbiconIsListedWithAValueAndTimesAndCanMoveFreelyWithoutAValue()
+    {
+        var habbicon = Assert.Single(WiredNativeCatalogProjection.Builtins, row => row.Name == "@habbicon" && row.Target == 1);
+        Assert.Equal(new[] { true, true, true, true, true }, new[] { habbicon.CanCreateAndDelete, habbicon.HasValue, habbicon.CanWriteValue,
+            habbicon.CanReadCreationTime, habbicon.CanReadLastUpdateTime });
+        Assert.False(Assert.Single(WiredNativeCatalogProjection.Builtins, row => row.Name == "@can_move_freely" && row.Target == 0).HasValue);
+    }
+
+    // Every level-up part is interceptable, current_xp is writable and is_maxed has no value.
+    [Fact]
+    public void LevelPartsAreInterceptableWithAWritableXpAndAPresenceMaxed()
+    {
+        var fixture = new Fixture();
+        fixture.AddDefinition(10);
+        fixture.AddMetadata(20, "wf_xtra_var_lvlup_system", new() { Text = "{\"mode\":1,\"stepSize\":100,\"maxLevel\":3,\"subvariables\":[0,1,6]}" });
+        Assert.True(fixture.Variables.TryCaptureNativeCatalog(out var catalog));
+        var rows = Own(catalog!).Where(variable => variable.Name.Contains('.')).ToDictionary(row => row.Name);
+
+        Assert.Equal(["score10.current_level", "score10.current_xp", "score10.is_maxed"], rows.Keys.Order());
+        Assert.All(rows.Values, row => Assert.True(row.CanInterceptChanges));
+        Assert.Equal((true, false, false), (rows["score10.current_xp"].CanWriteValue, rows["score10.current_level"].CanWriteValue,
+            rows["score10.is_maxed"].CanWriteValue));
+        Assert.Equal((true, true, false), (rows["score10.current_level"].HasValue, rows["score10.current_xp"].HasValue,
+            rows["score10.is_maxed"].HasValue));
+    }
+
+    [Fact]
+    public void TimeModesFollowTheParentsOwnCapabilities()
+    {
+        // A global has no creation time, so the creation-time mode lists nothing while the last-update mode lists the base row
+        // and its parts; the Value mode needs the parent to hold a value.
+        var fixture = new Fixture();
+        fixture.AddDefinition(10, "wf_var_room", new() { IntParams = [1, 0], Text = "glob" });
+        var metadata = fixture.AddMetadata(20, "wf_xtra_var_time_util", new() { IntParams = [1 << 10, 1] });
+        Assert.Equal([], Parts(fixture));
+        WiredNativeTestSupport.InstallLegacyVariableDraft(metadata, new() { IntParams = [1 << 10, 2] });
+        Assert.Equal(["glob.last_update_time", "glob.last_update_time.year"], Parts(fixture));
+        WiredNativeTestSupport.InstallLegacyVariableDraft(metadata, new() { IntParams = [1 << 10, 0] });
+        Assert.Equal(["glob.value.year"], Parts(fixture));
+
+        var presence = new Fixture();
+        presence.AddDefinition(10, "wf_var_user", new() { IntParams = [0, 10], Text = "flag" });
+        var time = presence.AddMetadata(20, "wf_xtra_var_time_util", new() { IntParams = [1 << 10, 0] });
+        Assert.Equal([], Parts(presence));
+        WiredNativeTestSupport.InstallLegacyVariableDraft(time, new() { IntParams = [1 << 10, 1] });
+        Assert.Equal(["flag.creation_time", "flag.creation_time.year"], Parts(presence));
+    }
+
+    [Fact]
+    public void ContextTimePartsAreListedWithoutLevelParts()
+    {
+        var fixture = new Fixture();
+        fixture.AddDefinition(10, "wf_var_context", new() { IntParams = [1], Text = "stamp" });
+        fixture.AddMetadata(20, "wf_xtra_var_time_util", new() { IntParams = [1 << 10, 0] });
+        fixture.AddMetadata(21, "wf_xtra_var_lvlup_system", new() { Text = "{\"mode\":1,\"stepSize\":100,\"maxLevel\":3,\"subvariables\":[0,1,6]}" });
+        Assert.True(fixture.Variables.TryCaptureNativeCatalog(out var catalog));
+        var part = Assert.Single(Own(catalog!).Where(row => row.Name.Contains('.')));
+
+        Assert.Equal("stamp.value.year", part.Name);
+        Assert.Equal(-20, part.Target);
+        Assert.False(part.RequiresExecutionContext);
+        Assert.Equal($"ctx:{WiredRoomVariables.SyntheticId(WiredVariableTarget.Context, 10, 10, true)}", part.Id);
+        Assert.Null(WiredRoomVariables.SyntheticId(WiredVariableTarget.Context, 10, 0, false));
+    }
+
+    // In WiredAllVariablesDiffs a context variable box is listed as type 0, availability 999, target -20, creatable and
+    // deletable, with a creation time and never interceptable. With a value it is writable and has a last update time; without a
+    // value it has neither.
+    [Theory]
+    [InlineData(1)]
+    [InlineData(0)]
+    public void AContextVariableIsListedWithoutInterceptionAndALastUpdateTimeOnlyWithAValue(int withValue)
+    {
+        var fixture = new Fixture();
+        fixture.AddDefinition(10, "wf_var_context", new() { IntParams = [withValue], Text = "pctx" });
+
+        new WiredVariableMenuService().ShowCatalogDiff(fixture.World.Room, fixture.World.Client, new Dictionary<string, int>());
+
+        var row = Assert.Single(CatalogRows(fixture), row => row.Name == "pctx");
+        var hasValue = withValue == 1;
+        Assert.Equal((0, 999, -20), (row.Type, row.Availability, row.Target));
+        Assert.Equal([false, true, hasValue, hasValue, false, false, false, true, hasValue], row.Flags);
+    }
+
+    // An Echo variable is listed with availability 21 whatever the variable it echoes has; the echoed variable keeps its own.
+    [Theory]
+    [InlineData("wf_var_user", 0, 0, 0)]
+    [InlineData("wf_var_user", 10, 0, 10)]
+    [InlineData("wf_var_user", 11, 0, 11)]
+    [InlineData("wf_var_furni", 1, 1, 1)]
+    [InlineData("wf_var_furni", 10, 1, 10)]
+    public async Task AnEchoVariableIsListedWithAvailabilityTwentyOne(string sourceBox, int sourceAvailability, int sourceTarget, int expectedSource)
+    {
+        var fixture = new Fixture();
+        fixture.AddDefinition(10, sourceBox, new() { IntParams = [1, sourceAvailability], Text = "source" });
+        fixture.AddDefinition(11, "wf_var_echo", new() { Text = "{\"variableName\":\"echo\",\"sourceTargetType\":" + sourceTarget + ",\"sourceVariableToken\":\"custom:10\"}" });
+
+        await new WiredVariableHashesEvent(new WiredVariableMenuService()).Parse(fixture.World.Room, fixture.World.Client, RawInts(0));
+
+        var rows = CatalogRows(fixture);
+        Assert.Equal(21, Assert.Single(rows, row => row.Name == "echo").Availability);
+        Assert.Equal(expectedSource, Assert.Single(rows, row => row.Name == "source").Availability);
+    }
+
+    // An Echo of a custom variable is listed like a normal interceptable variable (type 0), and the variable it echoes is unchanged.
+    [Theory]
+    [InlineData("wf_var_user", 10, 0)]
+    [InlineData("wf_var_furni", 1, 1)]
+    public async Task AnEchoVariableIsListedAsAnInterceptableVariableOfTypeZero(string sourceBox, int sourceAvailability, int sourceTarget)
+    {
+        var fixture = new Fixture();
+        fixture.AddDefinition(10, sourceBox, new() { IntParams = [1, sourceAvailability], Text = "source" });
+        fixture.AddDefinition(11, "wf_var_echo", new() { Text = "{\"variableName\":\"echo\",\"sourceTargetType\":" + sourceTarget + ",\"sourceVariableToken\":\"custom:10\"}" });
+
+        await new WiredVariableHashesEvent(new WiredVariableMenuService()).Parse(fixture.World.Room, fixture.World.Client, RawInts(0));
+
+        var rows = CatalogRows(fixture);
+        var echo = Assert.Single(rows, row => row.Name == "echo");
+        var source = Assert.Single(rows, row => row.Name == "source");
+        Assert.Equal((0, 21), (echo.Type, echo.Availability));
+        Assert.Equal([false, true, true, true, true, false, false, true, true], echo.Flags);
+        Assert.Equal((0, sourceAvailability), (source.Type, source.Availability));
+        Assert.Equal(echo.Flags, source.Flags);
+    }
+
+    private static FlashIncomingPacket RawInts(params int[] values)
+    {
+        var bytes = new byte[values.Length * 4];
+
+        for (var i = 0; i < values.Length; i++) {
+            BinaryPrimitives.WriteInt32BigEndian(bytes.AsSpan(i * 4), values[i]);
+        }
+
+        return new() { Buffer = bytes };
+    }
+
+    // A user or furni variable without a value is listed with a creation time and no last update time, as a context variable box is.
+    [Theory]
+    [InlineData("wf_var_user", 0, 10)]
+    [InlineData("wf_var_user", 0, 0)]
+    [InlineData("wf_var_furni", 0, 1)]
+    public void AVariableWithoutAValueIsListedWithoutALastUpdateTime(string box, int withValue, int availability)
+    {
+        var fixture = new Fixture();
+        fixture.AddDefinition(10, box, new() { IntParams = [withValue, availability], Text = "flagged" });
+
+        new WiredVariableMenuService().ShowCatalogDiff(fixture.World.Room, fixture.World.Client, new Dictionary<string, int>());
+
+        var row = Assert.Single(CatalogRows(fixture), row => row.Name == "flagged");
+        Assert.Equal([false, true, false, false, true, false, false, true, false], row.Flags);
+    }
+
+    // The catalog sends each connector key as a 32 bit int saturated to int.MinValue or int.MaxValue, in the order of the real key, and keeps the duplicates.
+    [Fact]
+    public void ACatalogConnectorKeyOutside32BitIsSentSaturated()
+    {
+        var fixture = new Fixture();
+        fixture.AddDefinition(10);
+        fixture.AddMetadata(20, "wf_xtra_var_text_connector", new() { Text = "2147483647=max\n2147483648=big\n-2147483648=min\n-2147483649=small\n1099511627776=terabig" });
+
+        new WiredVariableMenuService().ShowCatalogDiff(fixture.World.Room, fixture.World.Client, new Dictionary<string, int>());
+
+        Assert.Equal(["-2147483648 small", "-2147483648 min", "2147483647 max", "2147483647 big", "2147483647 terabig"], ConnectorPairs(fixture, "score10"));
+    }
+
+    private static List<string> ConnectorPairs(Fixture fixture, string name)
+    {
+        var pairs = new List<string>();
+
+        foreach (var frame in fixture.World.Packets.Where(frame => frame.Header == ServerPacketHeader.WiredAllVariablesDiffComposer)) {
+            var packet = new FlashIncomingPacket { Buffer = frame.Payload };
+            packet.ReadInt();
+            packet.ReadBool();
+
+            for (var removed = packet.ReadInt(); removed > 0; removed--) {
+                packet.ReadString();
+            }
+
+            for (var count = packet.ReadInt(); count > 0; count--) {
+                packet.ReadInt();
+                packet.ReadString();
+                packet.ReadInt();
+                var own = packet.ReadString() == name;
+                packet.ReadInt();
+                packet.ReadInt();
+
+                for (var flag = 0; flag < 9; flag++) {
+                    packet.ReadBool();
+                }
+
+                if (!packet.ReadBool()) {
+                    continue;
+                }
+
+                for (var length = packet.ReadInt(); length > 0; length--) {
+                    var pair = packet.ReadInt() + " " + packet.ReadString();
+
+                    if (own) {
+                        pairs.Add(pair);
+                    }
+                }
+
+                if (packet.ReadBool()) {
+                    packet.ReadString();
+                }
+            }
+        }
+
+        return pairs;
+    }
+
+    // The rows of every catalog diff the client received: type, name, availability, target, then the flags in wire order (always
+    // available, create and delete, has value, write, intercept, invisible, execution context, creation time, last update time).
+    private static List<(int Type, string Name, int Availability, int Target, bool[] Flags)> CatalogRows(Fixture fixture)
+    {
+        var rows = new List<(int, string, int, int, bool[])>();
+
+        foreach (var frame in fixture.World.Packets.Where(frame => frame.Header == ServerPacketHeader.WiredAllVariablesDiffComposer)) {
+            var packet = new FlashIncomingPacket { Buffer = frame.Payload };
+            packet.ReadInt();
+            packet.ReadBool();
+
+            for (var removed = packet.ReadInt(); removed > 0; removed--) {
+                packet.ReadString();
+            }
+
+            for (var count = packet.ReadInt(); count > 0; count--) {
+                packet.ReadInt();
+                packet.ReadString();
+                var type = packet.ReadInt();
+                var name = packet.ReadString();
+                var availability = packet.ReadInt();
+                var target = packet.ReadInt();
+                var flags = Enumerable.Range(0, 9).Select(_ => packet.ReadBool()).ToArray();
+
+                if (packet.ReadBool()) {
+                    for (var pairs = packet.ReadInt(); pairs > 0; pairs--) {
+                        packet.ReadInt();
+                        packet.ReadString();
+                    }
+
+                    if (packet.ReadBool()) {
+                        packet.ReadString();
+                    }
+                }
+
+                rows.Add((type, name, availability, target, flags));
+            }
+        }
+
+        return rows;
+    }
+
+    private static string[] Parts(Fixture fixture)
+    {
+        Assert.True(fixture.Variables.TryCaptureNativeCatalog(out var catalog));
+
+        return [.. Own(catalog!).Where(row => row.Name.Contains('.')).Select(row => row.Name)];
+    }
+
+    [Fact]
+    public void EveryTickedPartIsListedWithHabbosNamesAndTextConnectors()
+    {
+        var fixture = new Fixture();
+        fixture.AddDefinition(10);
+        fixture.AddMetadata(20, "wf_xtra_var_time_util", new() { IntParams = [WiredVariableTimeUtilities.ValidMask, 1] });
+        Assert.True(fixture.Variables.TryCaptureNativeCatalog(out var catalog));
+        var rows = Own(catalog!).Where(row => row.Name.Contains('.')).ToDictionary(row => row.Name);
+
+        // The base row and 17 parts: 18 rows. The month part has a trailing space.
+        Assert.Equal(18, rows.Count);
+        Assert.Contains("score10.creation_time", rows.Keys);
+        Assert.Contains("score10.creation_time.milliseconds_of_seconds", rows.Keys);
+        Assert.Contains("score10.creation_time.month_of_year ", rows.Keys);
+        Assert.Contains("score10.creation_time.month", rows.Keys);
+        Assert.Equal([KeyValuePair.Create(1, "Monday"), KeyValuePair.Create(7, "Sunday")],
+            new[] { rows["score10.creation_time.day_of_week"].Connector!.Value.First(), rows["score10.creation_time.day_of_week"].Connector!.Value.Last() });
+        Assert.Equal(7, rows["score10.creation_time.day_of_week"].Connector!.Value.Length);
+        Assert.Equal(Enumerable.Range(1, 12), rows["score10.creation_time.month_of_year "].Connector!.Value.Select(pair => pair.Key));
+        Assert.Equal(["January", "December"], new[] { rows["score10.creation_time.month_of_year "].Connector!.Value[0].Value,
+            rows["score10.creation_time.month_of_year "].Connector!.Value[11].Value });
+        Assert.Equal(2, rows.Values.Count(row => row.Connector is not null));
+        Assert.All(rows.Values, row => Assert.False(row.HasTextConnectorFallback));
+    }
+
+    [Fact]
+    public void ARoomWithoutOwnVariablesStillListsTheBuiltinsUnderHabbosIds()
+    {
+        // NewVariablePicker lists only the room catalogue (Echo, Give, Change pickers alike), so the built-ins are sent there
+        // too (163 rows besides the room's own). Without them an empty room's pickers were empty.
+        var fixture = new Fixture();
+        Assert.True(fixture.Variables.TryCaptureNativeCatalog(out var catalog));
+        Assert.Empty(Own(catalog!));
+        Assert.Equal(WiredHabboVariableIds.Count, catalog!.Variables.Length);
+        Assert.All(catalog.Variables, variable =>
+        {
+            Assert.Equal(variable.Name.StartsWith('~') ? 3 : 1, variable.Type);
+            Assert.Equal(variable.Id, WiredHabboVariableIds.IdOf(variable.Target switch
+            {
+                0 => WiredVariableTarget.Furni,
+                1 => WiredVariableTarget.User,
+                -10 => WiredVariableTarget.Global,
+                _ => WiredVariableTarget.Context
+            }, variable.Name));
+            Assert.False(variable.RequiresExecutionContext);
+            Assert.Equal(variable.Name == "@habbicon", variable.CanReadCreationTime);
+        });
+        var direction = Assert.Single(catalog.Variables, variable => variable.Id == "-232");
+        Assert.Equal(("@direction", 1, true, true), (direction.Name, direction.Target, direction.HasValue, direction.CanWriteValue));
+        var index = Assert.Single(catalog.Variables, variable => variable.Id == "-200");
+        Assert.Equal(("@index", true, false), (index.Name, index.HasValue, index.CanWriteValue));
+        Assert.Contains(catalog.Variables, variable => variable.Id == "-420" && variable.Target == -20);
+        Assert.Single(catalog.Diff(new Dictionary<string, int>()));
+    }
+
+    [Fact]
+    public void BuiltinRowsCarryHabbosTypeFlagsAndTextConnectors()
+    {
+        // ~ rows are type 3, @direction names its eight directions, and @position carries an empty connector, which the client
+        // renders as "x: 8, y: 8".
+        var rows = WiredNativeCatalogProjection.Builtins.ToDictionary(variable => variable.Id);
+        Assert.Equal(WiredHabboVariableIds.Count, rows.Count);
+
+        var direction = rows["-232"];
+        Assert.Equal((1, true, false), (direction.Type, direction.AlwaysAvailable, direction.IsInvisible));
+        Assert.Equal(new[] { "N", "NE", "E", "SE", "S", "SW", "W", "NW" }, direction.Connector!.Value.Select(pair => pair.Value));
+        Assert.Equal(Enumerable.Range(0, 8), direction.Connector.Value.Select(pair => pair.Key));
+
+        Assert.All(new[] { "-125", "-234" }, id => Assert.Empty(rows[id].Connector!.Value));
+        Assert.Null(rows["-100"].Connector);
+
+        var clock = rows["~120"];
+        Assert.Equal(3, clock.Type);
+        Assert.Equal(new KeyValuePair<int, string>(1, "Running"), clock.Connector!.Value[1]);
+        Assert.Equal(299, rows["-240"].Connector!.Value.Length);
+        Assert.NotEqual(clock.Hash, (clock with { Connector = null }).Hash);
+    }
+
+    [Fact]
+    public void OnlyTheFourProjectileCountsAreListedInterceptable()
+    {
+        // -2100, -2101, -2102 and -2106 are the only interceptable built-ins.
+        var rows = WiredNativeCatalogProjection.Builtins.Where(variable => variable.CanInterceptChanges).Select(variable => variable.Id);
+        Assert.Equal(new[] { "-2100", "-2101", "-2102", "-2106" }, rows.Order());
+    }
+
+    [Fact]
+    public void PlantRowsCarryAValueExceptTheirFlags()
+    {
+        // ~600, ~601, ~602 and ~615 to ~617 have a value; ~610 to ~614 do not.
+        var rows = WiredNativeCatalogProjection.Builtins.Where(variable => variable.Name.StartsWith("~plant.", StringComparison.Ordinal));
+        Assert.Equal(new[] { "~600", "~601", "~602", "~615", "~616", "~617" }, rows.Where(row => row.HasValue).Select(row => row.Id).Order());
+        Assert.All(rows, row => Assert.False(row.CanWriteValue || row.CanCreateAndDelete || row.CanInterceptChanges));
+    }
+
+    [Fact]
+    public void UnauthorizedMembershipOmissionIsDistinctFromDecodeInconsistency()
+    {
+        var fixture = new Fixture();
+        fixture.AddDefinition(10);
+        fixture.Directory.Rows[10] = fixture.Directory.Rows[10] with { OwnerId = 2 };
+        Assert.True(fixture.Variables.TryCaptureNativeCatalog(out var omitted));
+        Assert.Empty(Own(omitted!));
+        fixture.Directory.Rows[10] = fixture.Directory.Rows[10] with { OwnerId = 1, Name = "inconsistent" };
+        Assert.False(fixture.Variables.TryCaptureNativeCatalog(out var refused));
+        Assert.Null(refused);
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(3)]
+    public void CorruptedCapturedTimeMetadataRefusesTheWholeCatalog(int mode)
+    {
+        var fixture = new Fixture();
+        fixture.AddDefinition(10);
+        var metadata = fixture.AddMetadata(20, "wf_xtra_var_time_util", new() { IntParams = [1 << 21, 0] });
+        // A corrupted captured configuration can only appear by bypassing the bound publication path.
+        typeof(Plus.HabboHotel.Items.Wired.Modern.Addons.WiredConfiguredBehaviorBox).GetField("<Configuration>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .SetValue(metadata, new WiredConfiguration { IntParams = [1 << 21, mode] });
+        Assert.False(fixture.Variables.TryCaptureNativeCatalog(out var catalog));
+        Assert.Null(catalog);
+    }
+
+    /// <summary>The room's own rows, without the fixed built-in rows every catalogue carries.</summary>
+    private static WiredNativeVariable[] Own(WiredNativeCatalog catalog) =>
+        catalog.Variables.Where(variable => !WiredHabboVariableIds.TryResolve(variable.Id, out _, out _)).ToArray();
+
+    private static WiredNativeVariable Native() => new("user:10", 0, "score", 10, 1, false, true, true, true, true, false, true, true, null);
+    private static WiredVariableModule Module(Directory directory) => new(42, directory, new MemoryWiredVariableStore(), TimeProvider.System,
+        new RoomWiredBuiltinVariables(new WiredChestProtocolTests.World().Room));
+
+    private sealed class Directory : IWiredVariableDirectory
+    {
+        public Dictionary<uint, WiredVariableDefinition> Rows { get; } = [];
+        public Dictionary<uint, int> Reads { get; } = [];
+        public Action? OnRead;
+        public uint? GetRoomOwner(uint id) => id == 42 ? 1u : null;
+        public WiredVariableDefinition? Find(uint id)
+        {
+            Reads[id] = Reads.GetValueOrDefault(id) + 1;
+            OnRead?.Invoke();
+
+            return Rows.GetValueOrDefault(id);
+        }
+    }
+
+    private sealed class Fixture
+    {
+        public WiredChestProtocolTests.World World { get; } = new();
+        public Directory Directory { get; } = new();
+        public WiredRoomVariables Variables => World.Room.GetWired().Variables;
+        public ConcurrentDictionary<uint, Item> Floor => (ConcurrentDictionary<uint, Item>)typeof(RoomItemHandling)
+            .GetField("_floorItems", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(World.Room.GetRoomItemHandler())!;
+        public Fixture()
+        {
+            World.Habbo.Access = EditorTestSupport.Access([]);
+            World.Habbo.Username = "owner";
+            World.Room.Type = "private";
+            typeof(Plus.HabboHotel.Rooms.Room).GetProperty("OwnerName")!.SetValue(World.Room, "owner");
+            var module = new WiredVariableModule(42, Directory, new MemoryWiredVariableStore(), World.Clock, new RoomWiredBuiltinVariables(World.Room));
+            typeof(WiredRoomVariables).GetField("<Module>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(Variables, module);
+            typeof(WiredRoomVariables).GetField("_quests", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(Variables,
+                new WiredQuestVariableTests.Quests([new Plus.HabboHotel.Quests.Quest(1, "social", 1, Plus.HabboHotel.Quests.QuestType.SocialChat, 5, "chat", 0, "", 0, null, null)]));
+        }
+
+        public WiredVariableDefinitionBox AddDefinition(uint id, string name = "wf_var_user", WiredConfiguration? proposed = null)
+        {
+            Assert.True(WiredBoxRegistry.TryGet(name, out var descriptor));
+            var item = new Item { Id = id, RoomId = 42, OwnerId = 1, Definition = new() { Id = id, InteractionName = name } };
+            Floor[id] = item;
+            var box = new WiredVariableDefinitionBox(World.Room, item, descriptor);
+            WiredNativeTestSupport.InstallLegacyVariableDraft(box, proposed ?? new() { IntParams = [1, 10], Text = "score" + id });
+            var configuration = box.Configuration;
+            Assert.True(WiredVariableDefinitions.TryDecode(name, id, 42, 1, configuration, out var definition, out _));
+            Directory.Rows[id] = definition!;
+            Variables.ConfigurationLoaded(box);
+
+            return box;
+        }
+
+        public WiredVariableMetadataBox AddMetadata(uint id, string name, WiredConfiguration proposed)
+        {
+            Assert.True(WiredBoxRegistry.TryGet(name, out var descriptor));
+            var item = new Item { Id = id, RoomId = 42, OwnerId = 1, Definition = new() { Id = id, InteractionName = name } };
+            Floor[id] = item;
+            var box = new WiredVariableMetadataBox(World.Room, item, descriptor);
+            WiredNativeTestSupport.InstallLegacyVariableDraft(box, proposed);
+            Variables.ConfigurationLoaded(box);
+
+            return box;
+        }
+    }
+
+    private sealed class Packet : IOutgoingPacket
+    {
+        public List<object> Values { get; } = [];
+        public int MessageId { get; set; }
+        public ReadOnlyMemory<byte> Buffer => default;
+        public void WriteByte(byte value) => Values.Add(value);
+        public void WriteShort(short value) => Values.Add(value);
+        public void WriteInt(int value) => Values.Add(value);
+        public void WriteInteger(int value) => Values.Add(value);
+        public void WriteUInt(uint value) => Values.Add(value);
+        public void WriteUInteger(uint value) => Values.Add(value);
+        public void WriteBool(bool value) => Values.Add(value);
+        public void WriteBoolean(bool value) => Values.Add(value);
+        public void WriteString(string value) => Values.Add(value);
+        public void WriteDouble(double value) => Values.Add(value);
+    }
+}

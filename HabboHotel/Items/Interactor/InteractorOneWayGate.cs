@@ -1,0 +1,118 @@
+using Plus.HabboHotel.Rooms.PathFinding;
+using Plus.HabboHotel.GameClients;
+
+namespace Plus.HabboHotel.Items.Interactor;
+
+public class InteractorOneWayGate(TimeProvider clock) : IFurniInteractor
+{
+    public void OnPlace(GameClient? session, Item item)
+    {
+        var itemRoom = item.GetRoom();
+
+        if (itemRoom == null) {
+            return;
+        }
+
+        item.LegacyDataString = "0";
+
+        if (item.InteractingUser != 0) {
+            var user = itemRoom.GetRoomUserManager().GetRoomUserByHabbo(item.InteractingUser);
+
+            if (user != null) {
+                user.ClearMovement(true);
+                user.UnlockWalking();
+            }
+
+            item.InteractingUser = 0;
+        }
+    }
+
+    public void OnRemove(GameClient? session, Item item)
+    {
+        var itemRoom = item.GetRoom();
+
+        if (itemRoom == null) {
+            return;
+        }
+
+        item.LegacyDataString = "0";
+
+        if (item.InteractingUser != 0) {
+            var user = itemRoom.GetRoomUserManager().GetRoomUserByHabbo(item.InteractingUser);
+
+            if (user != null) {
+                user.ClearMovement(true);
+                user.UnlockWalking();
+            }
+
+            item.InteractingUser = 0;
+        }
+    }
+
+    public void OnTrigger(GameClient? session, Item item, int request, bool hasRights)
+    {
+        var itemRoom = item.GetRoom();
+
+        if (itemRoom == null) {
+            return;
+        }
+
+        if (session == null) {
+            return;
+        }
+
+        var user = itemRoom.GetRoomUserManager().GetRoomUserByHabbo(session.GetHabbo().Id);
+
+        if (user == null) {
+            return;
+        }
+
+        if (item.InteractingUser2 != user.UserId) {
+            item.InteractingUser2 = user.UserId;
+        }
+
+        if (item.Definition.InteractionType == InteractionType.OneWayGate) {
+            if (user.Coordinate != item.SquareInFront && user.CanWalk) {
+                user.MoveTo(item.SquareInFront);
+
+                return;
+            }
+
+            if (!itemRoom.GetGameMap().ValidTile(item.SquareBehind.X, item.SquareBehind.Y) ||
+                !itemRoom.GetGameMap().CanWalk(item.SquareBehind.X, item.SquareBehind.Y, false)
+                || !itemRoom.GetGameMap().SquareIsOpen(item.SquareBehind.X, item.SquareBehind.Y, false)) {
+                return;
+            }
+
+            var now = clock.GetUtcNow();
+
+            if ((user.LastInteractionAt is not { } interactionAt || interactionAt < now) && user.InteractingGate &&
+                user.GateId == item.Id) {
+                user.InteractingGate = false;
+                user.GateId = 0;
+            }
+
+            if (!itemRoom.GetGameMap().CanWalk(item.SquareBehind.X, item.SquareBehind.Y, user.AllowOverride)) {
+                return;
+            }
+
+            if (item.InteractingUser == 0) {
+                user.InteractingGate = true;
+                user.GateId = item.Id;
+                item.InteractingUser = user.HabboId;
+                user.CanWalk = false;
+
+                if (user.IsWalking && (user.GoalX != item.SquareInFront.X || user.GoalY != item.SquareInFront.Y)) {
+                    user.ClearMovement(true);
+                }
+
+                user.AllowOverride = false;
+                user.RequestInteractionStep(itemRoom, item.Coordinate);
+
+                item.RequestUpdate(4, true);
+            }
+        }
+    }
+
+    public void OnWiredTrigger(Item item) { }
+}

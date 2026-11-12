@@ -1,0 +1,151 @@
+using Plus.HabboHotel.Campaigns;
+using Plus.HabboHotel.Catalog.BuildersClub;
+using Plus.HabboHotel.Subscriptions;
+using Plus.Communication.Packets;
+using Plus.Communication.Packets.Outgoing.Handshake;
+using Plus.Communication.Packets.Outgoing.Inventory.Achievements;
+using Plus.Communication.Packets.Outgoing.Inventory.AvatarEffect;
+using Plus.Communication.Packets.Outgoing.Inventory.AvatarEffects;
+using Plus.Communication.Packets.Outgoing.Moderation;
+using Plus.Communication.Packets.Outgoing.Navigator;
+using Plus.Communication.Packets.Outgoing.Notifications;
+using Plus.Communication.Packets.Outgoing.Sound;
+using Plus.Core;
+using Plus.Core.Language;
+using Plus.Core.Settings;
+using Plus.HabboHotel.Achievements;
+using Plus.HabboHotel.Badges;
+using Plus.HabboHotel.Cache;
+using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Moderation;
+using Plus.HabboHotel.Navigator;
+using Plus.HabboHotel.Permissions;
+using Plus.HabboHotel.Quests;
+using Plus.HabboHotel.Quests.DailyTasks;
+using Plus.HabboHotel.Rewards;
+using Plus.HabboHotel.Users.Effects;
+using Plus.HabboHotel.Users.Process;
+
+namespace Plus.HabboHotel.Users.Authentication;
+
+public interface ISsoLoginService
+{
+    Task Login(GameClient session, string sso);
+}
+
+public sealed class SsoLoginService : ISsoLoginService
+{
+    private readonly ClientAccessLists _clientAccessLists;
+    private readonly IAuthenticator _authenticate;
+    private readonly IPlannedShutdown? _plannedShutdown;
+    private readonly IBadgeManager _badgeManager;
+    private readonly IModerationManager _moderationManager;
+    private readonly IModeratorTicketService _tickets;
+    private readonly IAchievementShowcaseService _achievementShowcase;
+    private readonly ICacheManager _cacheManager;
+    private readonly ILanguageManager _languageManager;
+    private readonly ISettingsManager _settingsManager;
+    private readonly IRewardManager _rewardManager;
+    private readonly IRewardTrackManager _rewardTracks;
+    private readonly ClubLifecycle _clubLifecycle;
+    private readonly IUserProcessFactory _processFactory;
+    private readonly IAvatarEffectService _avatarEffects;
+    private readonly ICampaignCalendarService _calendars;
+    private readonly IBuildersClubService? _buildersClub;
+    private readonly IDailyTaskManager? _dailyTasks;
+
+    public SsoLoginService(IAuthenticator authenticate,
+        IBadgeManager badgeManager,
+        IModerationManager moderationManager,
+        IAchievementShowcaseService achievementShowcase,
+        ICacheManager cacheManager,
+        ILanguageManager languageManager,
+        ISettingsManager settingsManager,
+        IRewardManager rewardManager, ClubLifecycle clubLifecycle, ClientAccessLists clientAccessLists,
+        IUserProcessFactory processFactory, IModeratorTicketService tickets, IAvatarEffectService avatarEffects, IRewardTrackManager rewardTracks, ICampaignCalendarService calendars,
+        IBuildersClubService? buildersClub = null, IDailyTaskManager? dailyTasks = null,
+        IPlannedShutdown? plannedShutdown = null)
+    {
+        _plannedShutdown = plannedShutdown;
+        _buildersClub = buildersClub;
+        _dailyTasks = dailyTasks;
+        _authenticate = authenticate;
+        _calendars = calendars;
+        _rewardTracks = rewardTracks;
+        _avatarEffects = avatarEffects;
+        _badgeManager = badgeManager;
+        _moderationManager = moderationManager;
+        _tickets = tickets;
+        _achievementShowcase = achievementShowcase;
+        _cacheManager = cacheManager;
+        _languageManager = languageManager;
+        _settingsManager = settingsManager;
+        _rewardManager = rewardManager;
+        _clubLifecycle = clubLifecycle;
+        _clientAccessLists = clientAccessLists;
+        _processFactory = processFactory;
+    }
+
+    public async Task Login(GameClient session, string sso)
+    {
+        var error = await _authenticate.AuthenticateUsingSSO(session, sso);
+
+        if (error == null) {
+            session.Send(new AuthenticationOkComposer(session.GetHabbo().Id));
+
+            // TODO @80O: Move to individual incoming message handlers.
+            session.Send(new AvatarEffectsComposer(_avatarEffects.Capture(session.GetHabbo())));
+            session.Send(new NavigatorSettingsComposer(GlobalHomeRoom.For(session.GetHabbo().HomeRoom, _settingsManager)));
+            session.Send(new FavouritesComposer(session.GetHabbo().FavoriteRooms));
+            session.Send(new FigureSetIdsComposer(session.GetHabbo().Clothing?.GetClothingParts ?? []));
+            session.Send(new UserRightsComposer(UserRightsSnapshot.Capture(session.GetHabbo().Access)));
+            _clientAccessLists.Send(session.GetHabbo());
+            session.Send(new AvailabilityStatusComposer(_plannedShutdown?.IsPending == true));
+            session.Send(new AchievementScoreComposer(session.GetHabbo().HabboStats?.AchievementPoints ?? 0));
+            session.Send(new CfhTopicsInitComposer(CfhTopicCategorySnapshot.Capture(_moderationManager.UserActionPresets)));
+            _achievementShowcase.ShowDefinitions(session);
+            session.Send(SoundSettingsComposer.For(session.GetHabbo()));
+            //SendMessage(new TalentTrackLevelComposer());
+            // The Builders Club status follows the login unasked.
+            _buildersClub?.SendStatus(session);
+
+
+            foreach (var role in session.GetHabbo().Access.Roles) {
+                if (!string.IsNullOrEmpty(role.BadgeCode) && session.GetHabbo().Inventory?.Badges.HasBadge(role.BadgeCode) == false) {
+                    await _badgeManager.GiveBadge(session.GetHabbo(), role.BadgeCode);
+                }
+            }
+
+            if (!_cacheManager.ContainsUser(session.GetHabbo().Id)) {
+                _cacheManager.GenerateUser(session.GetHabbo().Id);
+            }
+
+            _clubLifecycle.Normalize(session.GetHabbo());
+            session.GetHabbo().InitProcess(_processFactory);
+
+            if (session.GetHabbo().Access.Can(PermissionKeys.ModerationTickets)) {
+                _tickets.SendInitialization(session);
+            }
+
+            if (_settingsManager.TryGetValue("user.login.message.enabled") == "1") {
+                session.Send(new MOTDNotificationComposer(_languageManager.TryGetValue("user.login.message")));
+            }
+
+            await _rewardManager.CheckRewards(session);
+            _rewardTracks.SendTracks(session);
+            // The client never asks for its daily tasks at login, yet the toolbar counts the claimable ones (DailyTasksController.updateUnseenTasks).
+            _dailyTasks?.SendActive(session);
+            _calendars.Present(session);
+        }
+        else {
+            // An unanswered login leaves the client waiting forever, and a bare close makes it reconnect
+            // with the same spent ticket; the reason tells it to stop.
+            if (error != AuthenticationError.SessionClosed) {
+                session.Send(new GenericErrorComposer(GenericError.AuthenticationFailed));
+                session.Send(new DisconnectReasonComposer(DisconnectReason.InvalidLoginTicket));
+            }
+
+            session.Disconnect();
+        }
+    }
+}

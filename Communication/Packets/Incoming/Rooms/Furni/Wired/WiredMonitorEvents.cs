@@ -1,0 +1,102 @@
+using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Items.Wired.Modern.Actions;
+using Plus.HabboHotel.Items.Wired.Variables;
+using Plus.HabboHotel.Rooms;
+
+namespace Plus.Communication.Packets.Incoming.Rooms.Furni.Wired;
+
+/// <summary>Monitor snapshot (action 0) or clear the room log first (action 1, managers only).</summary>
+public sealed class WiredMonitorRequestEvent(IWiredMonitorService monitor) : RoomPacketEvent
+{
+    public override Task Parse(Room room, GameClient session, IIncomingPacket packet)
+    {
+        int action;
+
+        try {
+            action = packet.HasDataRemaining() ? packet.ReadInt() : WiredMonitorActions.Fetch;
+        }
+        catch (ArgumentException) {
+            return Task.CompletedTask;
+        }
+
+        if (action is not (WiredMonitorActions.Fetch or WiredMonitorActions.Clear) || packet.HasDataRemaining()) {
+            return Task.CompletedTask;
+        }
+
+        monitor.ShowMonitor(room, session, action);
+
+        return Task.CompletedTask;
+    }
+}
+
+/// <summary>Official AIR monitor statistics request. It has no body; a frame with one is ignored.</summary>
+public sealed class GetWiredRoomStatsEvent(IWiredMonitorService monitor) : RoomPacketEvent
+{
+    public override Task Parse(Room room, GameClient session, IIncomingPacket packet)
+    {
+        if (!packet.HasDataRemaining()) {
+            monitor.ShowRoomStats(room, session);
+        }
+
+        return Task.CompletedTask;
+    }
+}
+
+/// <summary>Official AIR monitor error rows request. It has no body; a frame with one is ignored.</summary>
+public sealed class GetWiredErrorLogsEvent(IWiredMonitorService monitor) : RoomPacketEvent
+{
+    public override Task Parse(Room room, GameClient session, IIncomingPacket packet)
+    {
+        if (!packet.HasDataRemaining()) {
+            monitor.ShowErrorLogs(room, session);
+        }
+
+        return Task.CompletedTask;
+    }
+}
+
+/// <summary>Official AIR monitor clear button. It has no body; a frame with one is ignored.</summary>
+public sealed class ClearWiredErrorLogsEvent(IWiredMonitorService monitor) : RoomPacketEvent
+{
+    public override Task Parse(Room room, GameClient session, IIncomingPacket packet)
+    {
+        if (!packet.HasDataRemaining()) {
+            monitor.ClearErrorLogs(room, session);
+        }
+
+        return Task.CompletedTask;
+    }
+}
+
+/// <summary>Official AIR room log page request: 1-based page, page size, level and source filters (-1 for none) and text.</summary>
+public sealed class WiredRoomLogsPageEvent(IWiredMonitorService monitor) : RoomPacketEvent
+{
+    // The client's filter box holds at most this many characters.
+    private const int MaxQuery = 400;
+
+    public override Task Parse(Room room, GameClient session, IIncomingPacket packet)
+    {
+        int page, size, level, source;
+        string query;
+
+        try {
+            page = packet.ReadInt();
+            size = packet.ReadInt();
+            level = packet.ReadInt();
+            source = packet.ReadInt();
+            query = packet.ReadString();
+        }
+        catch (ArgumentException) {
+            return Task.CompletedTask;
+        }
+
+        // Every source the client can filter by is accepted: 0 System, 1 Wired.
+        if (packet.HasDataRemaining() || level is < -1 or > 3 || source is < -1 or > WiredRoomLogEntry.WiredSource || query.Length > MaxQuery) {
+            return Task.CompletedTask;
+        }
+
+        monitor.ShowLogs(room, session, page, size, level, source, query);
+
+        return Task.CompletedTask;
+    }
+}

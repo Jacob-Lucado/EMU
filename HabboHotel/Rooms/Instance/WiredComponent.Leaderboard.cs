@@ -1,0 +1,384 @@
+using Plus.Communication.Packets.Outgoing.Rooms.Furni.Wired;
+using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Items;
+using Plus.HabboHotel.Items.Wired.Configuration;
+using Plus.HabboHotel.Items.Wired.Leaderboard;
+using Plus.HabboHotel.Items.Wired.Variables;
+
+namespace Plus.HabboHotel.Rooms.Instance;
+
+/// <summary>
+/// Variable Leaderboard overlays. On room entry the client asks with [0, 0, "0", no chunks] and gets the snapshot of published boards (at most four);
+/// it then subscribes to at most two 50-row chunks of the selected variable and gets them now and again when the variable changes. A save of a board republishes the snapshot.
+/// Every room entry carries the snapshot, a save republishes it at once, a pickup republishes it without the board at the next tick, and row updates after value writes arrive later, not in the write's tick:
+/// changed variables go out on a fixed <see cref="LeaderboardPushPeriod"/> grid.
+/// </summary>
+public partial class WiredComponent
+{
+    public const int MaxLeaderboards = 4;
+    public const int MaxLeaderboardChoices = 10;
+    public static readonly TimeSpan LeaderboardPushPeriod = TimeSpan.FromSeconds(10);
+    private DateTimeOffset? _leaderboardPushDue;
+
+    private readonly object _leaderboardGate = new();
+    private readonly Dictionary<uint, int> _leaderboardRevisions = [];
+    private readonly Dictionary<(int HabboId, int OverlayId), LeaderboardSubscription> _leaderboardSubscriptions = [];
+    private readonly HashSet<uint> _dirtyLeaderboardVariables = [];
+    private readonly HashSet<uint> _republishedLeaderboards = [];
+    private DateTimeOffset? _leaderboardRepublishDue;
+    private IWiredLeaderboardProfiles? _leaderboardProfiles;
+
+    private sealed record LeaderboardSubscription(GameClient Session, int Revision, string VariableId, int[] Chunks);
+
+    public IWiredLeaderboardProfiles LeaderboardProfiles
+    {
+        get => _leaderboardProfiles ??= new DatabaseWiredLeaderboardProfiles(_database);
+        internal set => _leaderboardProfiles = value;
+    }
+
+    // A board's QueryRevision comes from one counter for the whole room, and the room's boards are numbered from 1 as overlays. The counter starts at 0, so the first save of a board shows revision 1.
+    private int _leaderboardRoomRevision;
+    private readonly Dictionary<int, uint> _leaderboardOverlayItems = [];
+    private readonly Dictionary<uint, int> _leaderboardAnnounced = [];
+
+    private int LeaderboardRevision(uint itemId)
+    {
+        lock (_leaderboardGate) {
+            return _leaderboardRevisions.TryGetValue(itemId, out var revision) ? revision : _leaderboardRevisions[itemId] = ++_leaderboardRoomRevision;
+        }
+    }
+
+    private int LeaderboardOverlay(uint itemId)
+    {
+        LeaderboardDescriptors();
+
+        lock (_leaderboardGate) {
+            if (_leaderboardOverlayItems.FirstOrDefault(pair => pair.Value == itemId) is { Key: > 0 } found) {
+                return found.Key;
+            }
+        }
+
+        // A published board is overlay 1 in its own editor even when its stack has no user variable yet. Published boards are numbered in furni id order.
+        var published = ConfiguredBoxes("wf_xtra_var_leaderboard")
+            .Where(box => WiredLeaderboardConfig.Decode(box.Configuration.IntParams, box.Configuration.VariableIds, box.Configuration.Text)?.Published == true)
+            .Select(box => box.Item.Id);
+
+        return published.Count(id => id < itemId) + 1;
+    }
+
+    // A "while in room" user variable is offered too, but ranks nobody.
+    private IReadOnlyList<WiredLeaderboardChoice> BoardChoices(IWiredConfiguredItem box) =>
+        [.. Variables.LeaderboardChoices(box.Item.GetX, box.Item.GetY).TakeLast(MaxLeaderboardChoices)];
+
+    /// <summary>Section 8 of the add-on's editor: the stack's user variables, the bottom ten offered (Addon.updateCapabilities).</summary>
+    public WiredLeaderboardContext LeaderboardContext(IWiredConfiguredItem box)
+    {
+        var candidates = Variables.LeaderboardChoices(box.Item.GetX, box.Item.GetY);
+        var published = WiredLeaderboardConfig.Decode(box.Configuration.IntParams, box.Configuration.VariableIds, box.Configuration.Text)?.Published == true;
+
+        return new(published ? LeaderboardOverlay(box.Item.Id) : 0, box.Item.GetX, box.Item.GetY, candidates.Count, [.. candidates.Take(MaxLeaderboardChoices)]);
+    }
+
+    /// <summary>The room's leaderboard snapshot for one user, as on room entry.</summary>
+    public void SendLeaderboardSnapshot(GameClient session) => session.Send(new WiredVariableLeaderboardSnapshotComposer(Announce(LeaderboardDescriptors())));
+
+    /// <summary>The published boards of the room, lowest furni id first, each with its stack's user variables to choose from.</summary>
+    public IReadOnlyList<WiredLeaderboardDescriptor> LeaderboardDescriptors()
+    {
+        var descriptors = new List<WiredLeaderboardDescriptor>();
+        var overlays = new Dictionary<int, uint>();
+
+        foreach (var box in ConfiguredBoxes("wf_xtra_var_leaderboard").OrderBy(box => box.Item.Id)) {
+            if (WiredLeaderboardConfig.Decode(box.Configuration.IntParams, box.Configuration.VariableIds, box.Configuration.Text) is not { Published: true } config) {
+                continue;
+            }
+
+            var choices = BoardChoices(box).Select(choice => new WiredLeaderboardOverride(choice.VariableId,
+                config.Overrides.FirstOrDefault(entry => entry.VariableId == choice.VariableId)?.Name
+                ?? WiredLeaderboardConfig.SuggestName(choice.Description.Definition.Name))).ToArray();
+
+            // A published board whose stack has no user variable is still sent, with no choices and the default variable "0" (the client accepts exactly that).
+            descriptors.Add(new(descriptors.Count + 1, LeaderboardRevision(box.Item.Id), config, choices, choices.Length == 0 ? "0" : choices[0].VariableId));
+            overlays[descriptors.Count] = box.Item.Id;
+
+            if (descriptors.Count == MaxLeaderboards) {
+                break;
+            }
+        }
+
+        lock (_leaderboardGate) {
+            _leaderboardOverlayItems.Clear();
+
+            foreach (var (overlay, item) in overlays) {
+                _leaderboardOverlayItems[overlay] = item;
+            }
+        }
+
+        return descriptors;
+    }
+
+    /// <summary>The subscription packet: room-open, or the chunks of a selected variable.</summary>
+    public void SubscribeLeaderboard(GameClient session, int overlayId, int revision, string variableId, int[] chunks)
+    {
+        if (session.GetHabbo() is not { } habbo || !ReferenceEquals(habbo.CurrentRoom, _room)) {
+            return;
+        }
+
+        if (overlayId == 0) {
+            if (revision == 0 && variableId == "0" && chunks.Length == 0) {
+                session.Send(new WiredVariableLeaderboardSnapshotComposer(Announce(LeaderboardDescriptors())));
+            }
+
+            return;
+        }
+
+        var descriptor = LeaderboardDescriptors().FirstOrDefault(entry => entry.OverlayInstanceId == overlayId);
+
+        lock (_leaderboardGate) {
+            _leaderboardSubscriptions.Remove((habbo.Id, overlayId));
+        }
+
+        if (descriptor == null || descriptor.QueryRevision != revision) {
+            // The client holds a board that changed or went away: it re-bootstraps from a fresh snapshot.
+            session.Send(new WiredVariableLeaderboardSnapshotComposer(LeaderboardDescriptors()));
+
+            return;
+        }
+
+        if (descriptor.Choices.All(choice => choice.VariableId != variableId)) {
+            return;
+        }
+
+        lock (_leaderboardGate) {
+            _leaderboardSubscriptions[(habbo.Id, overlayId)] = new(session, revision, variableId, chunks);
+        }
+
+        foreach (var chunk in chunks) {
+            if (LeaderboardChunk(descriptor, variableId, chunk) is { } rows) {
+                session.Send(new WiredVariableLeaderboardChunkComposer(rows));
+            }
+        }
+    }
+
+    private WiredLeaderboardChunk? LeaderboardChunk(WiredLeaderboardDescriptor descriptor, string variableId, int index)
+    {
+        uint boardId;
+
+        lock (_leaderboardGate) {
+            boardId = _leaderboardOverlayItems.GetValueOrDefault(descriptor.OverlayInstanceId);
+        }
+
+        if (boardId == 0 || !TryGet(boardId, out var found) || found is not IWiredConfiguredItem box
+            || BoardChoices(box).FirstOrDefault(choice => choice.VariableId == variableId) is not { } choice) {
+            return null;
+        }
+
+        var config = descriptor.Config;
+        var module = Variables.Module;
+        var filter = config.Filter && DefinitionOf(config.FilterVariableId) is { } filterId ? module.GetStoredHolders(filterId) : null;
+        long? operand = config.Comparison ? config.OperandKind == 0 ? config.Literal
+            : DefinitionOf(config.GlobalOperandVariableId) is { } globalId ? module.GetStoredHolders(globalId).Values.FirstOrDefault()?.Value : null : null;
+        var ranked = choice.Persistent ? WiredLeaderboardRanking.Rank(config, module.GetStoredHolders(choice.Description.Definition.ItemId), filter, operand)
+            : WiredLeaderboardRanking.Rank(config, new Dictionary<WiredVariableKey, WiredVariableValue>(), filter, operand);
+
+        return new(descriptor.OverlayInstanceId, descriptor.QueryRevision, variableId, index, ranked.Count,
+            WiredLeaderboardRanking.Chunk(ranked, index, choice, LeaderboardProfiles, config));
+    }
+
+    private static uint? DefinitionOf(string variableId) => WiredVariableDescription.TryParseCatalogId(variableId, out _, out var token)
+        && WiredVariableModule.TryDefinitionId(token, out var id) ? id : null;
+
+    /// <summary>A board was saved: its revision moves on and everyone in the room gets the new snapshot.</summary>
+    private void LeaderboardSaved(IWiredConfiguredItem box)
+    {
+        lock (_leaderboardGate) {
+            _leaderboardRevisions[box.Item.Id] = ++_leaderboardRoomRevision;
+        }
+
+        BroadcastLeaderboards([box.Item.Id]);
+    }
+
+    /// <summary>
+    /// A Text Connector was saved or picked up: the published boards on its tile get one snapshot with their revision one higher at the next tick of the push grid, however many saves came before it,
+    /// and an unchanged text counts as a save. The client then subscribes to the new revision and gets the rows with the new text. A connector on another tile sends nothing.
+    /// </summary>
+    private void LeaderboardConnectorChanged(int x, int y)
+    {
+        var boards = ConfiguredBoxes("wf_xtra_var_leaderboard")
+            .Where(box => box.Item.GetX == x && box.Item.GetY == y
+                && WiredLeaderboardConfig.Decode(box.Configuration.IntParams, box.Configuration.VariableIds, box.Configuration.Text)?.Published == true)
+            .Select(box => box.Item.Id).ToArray();
+
+        if (boards.Length == 0) {
+            return;
+        }
+
+        lock (_leaderboardGate) {
+            _republishedLeaderboards.UnionWith(boards);
+            _leaderboardRepublishDue ??= NextLeaderboardPush(_clock.GetUtcNow());
+        }
+    }
+
+    /// <summary>A configured Text Connector in this room, so that its pickup can republish the boards on its tile.</summary>
+    internal bool IsTextConnector(Item item) => DescriptorOf(item)?.CanonicalName == "wf_xtra_var_text_connector" && TryGet(item.Id, out _);
+
+    /// <summary>
+    /// A user picked up a Text Connector. Only a user's pickup counts: Habbo was not seen republishing when furniture is reloaded or reset.
+    /// </summary>
+    internal void TextConnectorPickedUp(Item connector) => _engine.Mutate(() =>
+    {
+        LeaderboardConnectorChanged(connector.GetX, connector.GetY);
+
+        return true;
+    });
+
+    /// <summary>A user placed a Text Connector, or moved one to another tile: the boards on the tiles it left and reached are republished.</summary>
+    internal void TextConnectorMoved(Item connector, int? fromX, int? fromY) => _engine.Mutate(() =>
+    {
+        if (DescriptorOf(connector)?.CanonicalName != "wf_xtra_var_text_connector") {
+            return false;
+        }
+
+        if (fromX is { } x && fromY is { } y) {
+            LeaderboardConnectorChanged(x, y);
+        }
+
+        LeaderboardConnectorChanged(connector.GetX, connector.GetY);
+
+        return true;
+    });
+
+    /// <summary>The boards a connector changed move to a new revision, and everyone in the room gets the snapshot, also after a board left.</summary>
+    private void FlushLeaderboardRepublish()
+    {
+        uint[] bumped;
+
+        lock (_leaderboardGate) {
+            if (_leaderboardRepublishDue is not { } republishAt || _clock.GetUtcNow() < republishAt) {
+                return;
+            }
+
+            _leaderboardRepublishDue = null;
+
+            foreach (var board in _republishedLeaderboards) {
+                _leaderboardRevisions[board] = ++_leaderboardRoomRevision;
+            }
+
+            bumped = [.. _republishedLeaderboards];
+            _republishedLeaderboards.Clear();
+        }
+
+        BroadcastLeaderboards(bumped);
+    }
+
+    /// <summary>A board left the room: everyone gets the snapshot without it at the next tick of the push grid.</summary>
+    private void LeaderboardRemoved()
+    {
+        lock (_leaderboardGate) {
+            _leaderboardRepublishDue ??= NextLeaderboardPush(_clock.GetUtcNow());
+        }
+    }
+
+    /// <summary>
+    /// The snapshot goes out after a board was saved or left. A board whose overlay number moved since the last snapshot gets the next revisions in overlay order,
+    /// after the revisions of the boards the event itself bumped.
+    /// </summary>
+    private void BroadcastLeaderboards(IReadOnlyCollection<uint> bumped)
+    {
+        // An unloading room has dropped its users before its furniture; with nobody to tell, the boxes are not read.
+        var clients = _room.GetRoomUserManager()?.GetRoomUsers().Select(user => user.GetClient()).OfType<GameClient>().ToList() ?? [];
+
+        if (clients.Count == 0) {
+            return;
+        }
+
+        _ = LeaderboardDescriptors();
+
+        lock (_leaderboardGate) {
+            foreach (var (overlay, item) in _leaderboardOverlayItems.OrderBy(pair => pair.Key)) {
+                if (!bumped.Contains(item) && _leaderboardAnnounced.TryGetValue(item, out var announced) && announced != overlay) {
+                    _leaderboardRevisions[item] = ++_leaderboardRoomRevision;
+                }
+            }
+        }
+
+        var snapshot = new WiredVariableLeaderboardSnapshotComposer(Announce(LeaderboardDescriptors()));
+
+        foreach (var client in clients) {
+            client.Send(snapshot);
+        }
+    }
+
+    /// <summary>Remembers the overlay number every board has in the snapshot that goes out now.</summary>
+    private IReadOnlyList<WiredLeaderboardDescriptor> Announce(IReadOnlyList<WiredLeaderboardDescriptor> descriptors)
+    {
+        lock (_leaderboardGate) {
+            _leaderboardAnnounced.Clear();
+
+            foreach (var (overlay, item) in _leaderboardOverlayItems) {
+                _leaderboardAnnounced[item] = overlay;
+            }
+        }
+
+        return descriptors;
+    }
+
+
+    private void LeaderboardValuesChanged(IReadOnlyList<WiredVariableChange> changes)
+    {
+        lock (_leaderboardGate) {
+            if (_leaderboardSubscriptions.Count == 0) {
+                return;
+            }
+
+            foreach (var change in changes) {
+                _dirtyLeaderboardVariables.Add(change.Key.DefinitionId);
+            }
+
+            _leaderboardPushDue ??= NextLeaderboardPush(_clock.GetUtcNow());
+        }
+    }
+
+    internal static DateTimeOffset NextLeaderboardPush(DateTimeOffset now) =>
+        DateTimeOffset.FromUnixTimeMilliseconds((now.ToUnixTimeMilliseconds() / (long)LeaderboardPushPeriod.TotalMilliseconds + 1)
+            * (long)LeaderboardPushPeriod.TotalMilliseconds);
+
+    /// <summary>Subscribers whose selected variable changed get their chunks again; users who left the room are dropped.</summary>
+    private void FlushLeaderboards()
+    {
+        KeyValuePair<(int HabboId, int OverlayId), LeaderboardSubscription>[] due;
+
+        lock (_leaderboardGate) {
+            if (_dirtyLeaderboardVariables.Count == 0 || _leaderboardPushDue is not { } pushAt || _clock.GetUtcNow() < pushAt) {
+                return;
+            }
+
+            _leaderboardPushDue = null;
+
+            due = [.. _leaderboardSubscriptions.Where(pair => DefinitionOf(pair.Value.VariableId) is { } id && _dirtyLeaderboardVariables.Contains(id))];
+            _dirtyLeaderboardVariables.Clear();
+        }
+
+        var descriptors = LeaderboardDescriptors();
+
+        foreach (var (key, subscription) in due) {
+            if (!ReferenceEquals(subscription.Session.GetHabbo()?.CurrentRoom, _room)) {
+                lock (_leaderboardGate) {
+                    _leaderboardSubscriptions.Remove(key);
+                }
+
+                continue;
+            }
+
+            if (descriptors.FirstOrDefault(entry => entry.OverlayInstanceId == key.OverlayId && entry.QueryRevision == subscription.Revision) is not { } descriptor) {
+                continue;
+            }
+
+            foreach (var chunk in subscription.Chunks) {
+                if (LeaderboardChunk(descriptor, subscription.VariableId, chunk) is { } rows) {
+                    subscription.Session.Send(new WiredVariableLeaderboardChunkComposer(rows));
+                }
+            }
+        }
+    }
+}

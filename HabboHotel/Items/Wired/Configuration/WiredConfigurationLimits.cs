@@ -1,0 +1,32 @@
+namespace Plus.HabboHotel.Items.Wired.Configuration;
+
+/// <summary>Outer payload bounds; concrete boxes impose their own smaller field and selection limits.</summary>
+public static class WiredConfigurationLimits
+{
+    // Neighborhood selectors save six fields followed by all 81 editor tile pairs.
+    public const int NeighborhoodTiles = 81;
+    public const int IntParams = 6 + NeighborhoodTiles * 2;
+    // The server keeps reading up to 100 picks so boxes stored with more than the editor's limit still load; an editor save over the limit is dropped.
+    public const int SelectedItems = 100;
+    // The pick limit the editor frame advertises: every box sends 20.
+    public const int EditorFurniLimit = 20;
+    public const int TextCharacters = 32768;
+    // Rows stored with a longer delay still load. The editor offers 0 to 120 pulses.
+    public const int DelayPulses = 3600;
+    public const int EditorDelayPulses = 120;
+    public const string DelayKey = "wiredfurni.error.invalid_delay";
+    // The October action delay section's precise mode: 0 to 1200 steps of 50 ms, saved as minus the milliseconds.
+    public const int PreciseDelayStepMilliseconds = 50;
+    public const int PreciseDelaySteps = 1200;
+
+    /// <summary>A saved action delay: pulses (0 or more) or a precise delay as minus whole 50 ms steps.</summary>
+    public static bool IsDelay(int delay) => delay is >= 0 and <= DelayPulses
+        || delay < 0 && delay >= -PreciseDelaySteps * PreciseDelayStepMilliseconds && delay % PreciseDelayStepMilliseconds == 0;
+
+    /// <summary>A delay a save is accepted with: 0 to 120 pulses, or a precise delay of -50 to -60000 ms in steps of 50.</summary>
+    public static bool IsEditorDelay(int delay) => delay is >= 0 and <= EditorDelayPulses || delay < 0 && IsDelay(delay);
+
+    /// <summary>How long a saved action delay waits.</summary>
+    public static long DelayMilliseconds(int delay) => delay < 0 ? -(long)delay : delay * 500L;
+    public const int SelectionCode = 2;
+}

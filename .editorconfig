@@ -2,17 +2,33 @@ root = true
 
 [*]
 charset = utf-8
-end_of_line = lf
 insert_final_newline = true
 trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
 
-[*.{md,yml,yaml}]
+[*.cs]
+csharp_new_line_before_open_brace = types, methods, properties, accessors, anonymous_methods, anonymous_types, object_collection_array_initializers, lambdas
+csharp_new_line_before_else = true
+csharp_new_line_before_catch = true
+csharp_new_line_before_finally = true
+csharp_indent_case_contents = true
+csharp_indent_switch_labels = true
+csharp_indent_labels = one_less_than_current
+csharp_space_after_keywords_in_control_flow_statements = true
+csharp_space_around_binary_operators = before_and_after
+csharp_preserve_single_line_blocks = true
+csharp_preserve_single_line_statements = false
+csharp_prefer_braces = true:warning
+dotnet_diagnostic.IDE0011.severity = warning
+dotnet_diagnostic.IDE0055.severity = warning
+csharp_using_directive_placement = outside_namespace:silent
+csharp_style_namespace_declarations = block_scoped:silent
+
+[*.{json,yml,yaml}]
+indent_size = 2
+
+# Vendored swagger-ui-dist files and habbo.com's docs page, kept byte for byte.
+[Communication/Http/ApiDocs/{index.html,swagger-ui-init.js,swagger-ui-dist/**}]
 trim_trailing_whitespace = false
-
-[*.ps1]
-indent_style = space
-indent_size = 4
-
-[*.{java,xml,json}]
-indent_style = space
-indent_size = 4
+insert_final_newline = false

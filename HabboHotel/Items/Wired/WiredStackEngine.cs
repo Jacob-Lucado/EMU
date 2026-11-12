@@ -1,0 +1,1187 @@
+using System.Diagnostics.CodeAnalysis;
+using System.Diagnostics;
+using Plus.HabboHotel.Items.Wired.Configuration;
+using Plus.HabboHotel.Items.Wired.Runtime;
+
+namespace Plus.HabboHotel.Items.Wired;
+
+// Room-owned dispatch, evaluation and scheduling. The lock also serializes legacy synchronous
+// callbacks: context is scoped to a call, including events raised recursively by an action.
+internal sealed partial class WiredStackEngine
+{
+    private readonly object _sync = new();
+    internal bool CurrentThreadOwnsPass => Monitor.IsEntered(_sync);
+    private readonly Dictionary<uint, IWiredItem> _items = new();
+    private readonly Dictionary<(int X, int Y), IWiredItem[]> _stacks = new();
+    private (IWiredItem Box, int X, int Y, double Z)[] _stackSnapshot = [];
+    private bool _stacksDirty = true;
+    private readonly PriorityQueue<ScheduledAction, (long Due, double Height, uint Id, long Firing, int Order)> _schedule = new();
+    private readonly HashSet<ActionChain> _pending = new();
+    private readonly Func<long> _now;
+    internal long Now => _now();
+
+    /// <summary>Told the engine time a delayed effect falls due, so the room can run a pass right then instead of on its next 50 ms step.</summary>
+    internal Action<long>? ActionDue { get; set; }
+    private readonly Random _effectOrderRandom;
+    private readonly Func<IWiredItem, bool> _attached;
+    private readonly Func<object[], bool> _actorPresent;
+    private readonly Func<object[], object?>? _actorVisit;
+    private readonly Action<Item> _flash;
+    private readonly Action<Exception> _error;
+    private readonly WiredEngineLimits _limits;
+    private readonly WiredEngineStats _stats = new();
+    private readonly WiredExecutionCost _cost = new();
+    private WiredExecutionContext? _context;
+    private int _passDepth;
+    private int _remaining;
+    private int _passPeakDepth;
+    private bool _budgetDenied;
+    private long _passStarted;
+    private long _sequence;
+    private long _cycle;
+    private bool _draining;
+    private static long _nextChainId;
+    private ScheduledAction? _executingAction;
+    private ActionChain? _flushingChain;
+    internal object? ExecutingFiring => _executingAction?.Chain ?? _flushingChain;
+    internal (long Firing, long At)? ExecutingMoment => _executingAction is { } step ? step.Chain.FirstResumeAt + step.DelayMilliseconds is { } at ? (step.Chain.Id, at) : null
+        : _flushingChain is { LastMoment: { } last } chain ? (chain.Id, last) : null;
+
+    public WiredStackEngine(Func<long> now, Func<IWiredItem, bool> attached,
+        Func<object[], bool> actorPresent, Action<Item> flash, Action<Exception> error,
+        WiredEngineLimits? limits = null, Func<object[], object?>? actorVisit = null, Random? effectOrderRandom = null)
+    {
+        _now = now;
+        _effectOrderRandom = effectOrderRandom ?? Random.Shared;
+        _attached = attached;
+        _actorPresent = actorPresent;
+        _actorVisit = actorVisit;
+        _flash = flash;
+        _error = error;
+        _limits = limits ?? new();
+    }
+
+    internal WiredEngineLimits Limits => _limits;
+    // Raised under the engine lock; the handler must not call back into the engine.
+    internal Action<WiredEngineLimit, string>? LimitReached { get; set; }
+    // The queue is read live: removal, cancellation and Clear change it without ending a pass.
+    internal WiredEngineWindow ReadStats()
+    {
+        lock (_sync) {
+            return _stats.Read(_now(), PendingCount);
+        }
+    }
+
+    internal double ReadExecutionCost()
+    {
+        lock (_sync) {
+            return _cost.Read(_now());
+        }
+    }
+
+    public bool Add(IWiredItem box)
+    {
+        lock (_sync) {
+            if (!_items.TryAdd(box.Item.Id, box)) {
+                return false;
+            }
+
+            _stacksDirty = true;
+
+            if (box is IWiredTimedTrigger timer) {
+                timer.Reset(_now());
+            }
+
+            UpdateRuntimeItems();
+
+            return true;
+        }
+    }
+
+    public bool Remove(uint id)
+    {
+        lock (_sync) {
+            if (!_items.Remove(id, out var removed)) {
+                return false;
+            }
+
+            _stacksDirty = true;
+            CancelPending(removed);
+            ResetRuntimeTile(removed.Item.GetX, removed.Item.GetY);
+            UpdateRuntimeItems();
+
+            return true;
+        }
+    }
+
+    public bool TryGet(uint id, [NotNullWhen(true)] out IWiredItem? box)
+    {
+        lock (_sync) {
+            return _items.TryGetValue(id, out box);
+        }
+    }
+
+    public void Clear()
+    {
+        lock (_sync) {
+            _items.Clear();
+            _stacks.Clear();
+            _stackSnapshot = [];
+            _stacksDirty = true;
+
+            foreach (var entry in _schedule.UnorderedItems.ToArray()) {
+                CancelAuxiliary(entry.Element);
+            }
+
+            _schedule.Clear();
+            _pending.Clear();
+
+            foreach (var dispatch in _dispatches) {
+                dispatch.Current?.Dispose();
+            }
+
+            _leaverWindows.Clear();
+
+            foreach (var dispatch in _dispatches) {
+                dispatch.IsQueued = false;
+            }
+
+            _dispatches.Clear();
+            _queuedSlots = 0;
+            _runtimePositions.Clear();
+            UpdateFastWork();
+        }
+    }
+
+    // A successful publication cancels all firings that captured this stack.
+    public void CancelPending(IWiredItem box)
+    {
+        lock (_sync) {
+            if (_activeFiring?.Stack.Contains(box) == true) {
+                _activeFiring.Cancelled = true;
+            }
+
+            _pending.RemoveWhere(chain => chain.Contains(box));
+            PruneSchedule();
+            var kept = _dispatches.Where(pending =>
+            {
+                if (pending.Signal is not { } signal) {
+                    return pending.Current?.Stack.Contains(box) != true && pending.Triggers?.Contains(box) != true
+                        && !pending.CapturedBoxes.Contains(box);
+                }
+
+                // A receiving stack owns its snapshot; changing it cannot veto another recipient.
+                foreach (var recipient in pending.RecipientStacks.Where(pair => pair.Value.Any(position => ReferenceEquals(position.Box, box)))) {
+                    pending.CancelledRecipients.Add(recipient.Key);
+                }
+
+                if (pending.Current?.Stack.Contains(box) == true) {
+                    pending.Current.Cancelled = true;
+                }
+
+                return !signal.Receivers.Any(antenna => ReferenceEquals(antenna.Receiver, box.Item));
+            }).ToArray();
+
+            foreach (var pending in _dispatches.Except(kept)) {
+                pending.Current?.Dispose();
+                pending.LeaverWindow?.Dispatched = true;
+            }
+
+            foreach (var pending in _dispatches) {
+                pending.IsQueued = false;
+            }
+
+            _dispatches.Clear();
+            _queuedSlots = 0;
+
+            foreach (var pending in kept) {
+                QueueDispatch(pending);
+            }
+
+            SettleLeavers();
+            UpdateFastWork();
+        }
+    }
+
+    public ICollection<IWiredItem> GetBoxes(IWiredItem source, InteractionType kind) => Pass(() =>
+        GetStack(source).Where(x => IsKind(x, kind)).ToList());
+
+    public bool Dispatch(WiredBoxType type, params object[] arguments) => Pass(() =>
+    {
+        if (Disabled) {
+            return false;
+        }
+
+        RefreshStacks();
+        var context = CreateContext((arguments ?? []).ToArray(), _queuedDepth ?? (_runtimeContext?.Depth ?? _context?.Depth ?? -1) + 1);
+        _queuedDepth = null;
+
+        if (TooDeep(context.Depth)) {
+            return false;
+        }
+
+        var matched = false;
+
+        // Each registered trigger is visited once, even when a tile has several of the same type.
+        foreach (var trigger in _stacks.Values.SelectMany(x => x)
+                     .Where(x => x is not IWiredContextualTrigger && x.Type == type && IsKind(x, InteractionType.WiredTrigger))
+                     .OrderBy(x => x.Item.GetZ).ThenBy(x => x.Item.Id).ToArray()) {
+            if (OutOfBudget()) {
+                break;
+            }
+
+            var previousOrigin = _legacySpeechOrigin;
+            _legacySpeechOrigin = _legacySpeechAdmission ? trigger : null;
+
+            try {
+                matched |= Execute(trigger, context);
+            }
+            finally {
+                _legacySpeechOrigin = previousOrigin;
+            }
+        }
+
+        return matched;
+    });
+
+    public bool RunStack(IWiredItem source, object[] arguments, Action? onAccepted = null) => Pass(() =>
+        !Disabled && RunStackCore(source, CreateContext(arguments.ToArray(), _context?.Depth ?? 0), null, onAccepted));
+
+    // Legacy repeaters gate each condition on any room actor independently, then run actorless
+    // room actions once. This quantifier is intentional and covered separately from actor events.
+    public bool RunPeriodicStack(IWiredItem source, object[][] actors) => Pass(() =>
+        !Disabled && RunStackCore(source, CreateContext([], 0), actors, null));
+
+    public bool CallStacks(IEnumerable<Item> targets, object[] arguments) => Pass(() =>
+    {
+        if (Disabled) {
+            return false;
+        }
+
+        var depth = (_context?.Depth ?? 0) + 1;
+
+        if (TooDeep(depth)) {
+            return false;
+        }
+
+        var matched = false;
+        var visited = new HashSet<(int, int)>();
+
+        foreach (var target in targets.OrderBy(x => x.GetZ).ThenBy(x => x.Id).ToArray()) {
+            if (!_items.TryGetValue(target.Id, out var box) || !IsAttached(box)) {
+                continue;
+            }
+
+            if (!visited.Add((target.GetX, target.GetY))) {
+                continue;
+            }
+
+            matched |= RunStackCore(box, CreateContext(arguments.ToArray(), depth), null, null);
+        }
+
+        return matched;
+    });
+
+    public void OnCycle() => Pass(() =>
+    {
+        if (Disabled) {
+            return false;
+        }
+
+        _cycle++;
+        ReleaseHeldFlashes();
+        RefreshStacks();
+        DrainDueActions();
+
+        foreach (var box in _items.Values.ToArray()) {
+            // IWiredCycle remains the saved-delay contract; only periodic triggers tick.
+            if (!IsAttached(box) || !IsKind(box, InteractionType.WiredTrigger) || box is not IWiredCycle cycle) {
+                continue;
+            }
+
+            if (OutOfBudget()) {
+                break;
+            }
+
+            if (cycle.TickCount > 0) {
+                cycle.TickCount--;
+            }
+            else {
+                _remaining--;
+
+                try {
+                    cycle.OnCycle();
+                }
+                catch (Exception e) {
+                    _error(e);
+                }
+            }
+        }
+
+        if (_runtimeRoom != null) {
+            RunRuntimeTimersAndSignals();
+        }
+
+        DrainDueActions();
+        _roomTickOpen = false;
+        UpdateFastWork();
+
+        return true;
+    });
+
+    private bool RunStackCore(IWiredItem source, WiredExecutionContext context,
+        object[][]? conditionActors, Action? onAccepted)
+    {
+        var firedAt = _now();
+
+        if (TooDeep(context.Depth) || !IsActorPresent(context)) {
+            return false;
+        }
+
+        var stack = GetStack(source);
+
+        if (stack.Length == 0) {
+            return false;
+        }
+
+        if (_runtimeRoom != null && stack.Any(x => x is IWiredConfiguredItem)) {
+            var typed = _runtimeContext?.Fork(_runtimeContext.Event, context.Depth)
+                ?? CreateContext((_legacyRuntimeEvent ?? new(WiredEventKind.Periodic)) with
+                { Actor = context.ActorVisit as Plus.HabboHotel.Rooms.RoomUser ?? context.Arguments.FirstOrDefault() as Plus.HabboHotel.Rooms.RoomUser ?? _legacyRuntimeEvent?.Actor }, context.Depth);
+            typed.Trigger = source;
+
+            if (_runtimeContext == null && ReferenceEquals(source, _legacySpeechOrigin)) {
+                typed.ResumeImmediately = true;
+                // Only the originating legacy trigger may grant the synchronous speech response.
+                _legacySpeechOrigin = null;
+            }
+
+            if (_runtimeContext == null) {
+                SeedEvent(typed);
+            }
+
+            var accepted = RunRuntimeStack(source, typed, null, conditionActors, defer: onAccepted == null);
+
+            if (accepted) {
+                onAccepted?.Invoke();
+            }
+
+            return accepted;
+        }
+
+        var conditions = stack.Where(x => IsKind(x, InteractionType.WiredCondition)).ToArray();
+
+        foreach (var condition in conditions) {
+            if (OutOfBudget()) {
+                return false;
+            }
+
+            var passed = conditionActors == null
+                ? Execute(condition, context)
+                : conditionActors.Any(actor => Execute(condition, CreateContext(actor, context.Depth)));
+
+            if (!passed) {
+                return false;
+            }
+
+            Flash(condition);
+        }
+
+        var addons = stack.Where(x => x.Type == WiredBoxType.AddonRandomEffect).ToArray();
+        var actions = stack.Where(x => IsKind(x, InteractionType.WiredEffect)
+                                      && x.Type != WiredBoxType.AddonRandomEffect).ToArray();
+
+        if (addons.Length > 0) {
+            foreach (var addon in addons) {
+                Flash(addon);
+            }
+
+            actions = actions.Length == 0 ? [] : [actions[Random.Shared.Next(actions.Length)]];
+        }
+
+        if (!CanSchedule(actions)) {
+            return false;
+        }
+
+        onAccepted?.Invoke();
+        Flash(source);
+
+        // This is synchronous stack acceptance (including chat consumption), not action success.
+        return ScheduleActions(source, stack, actions, context, firedAt: firedAt);
+    }
+
+    private bool CanSchedule(IWiredItem[] actions, bool prepared = false)
+    {
+        if (actions.Length > 0 && PendingCount >= _limits.MaxPendingStacks
+            && _pending.RemoveWhere(chain => !IsChainValid(chain)) > 0) {
+            PruneSchedule();
+        }
+
+        if (actions.Length > 0 && QueueFull(1)) {
+            return false;
+        }
+
+        // Preparation must happen synchronously; reject before acceptance if its calls cannot fit.
+        if (prepared) {
+            return true;
+        }
+
+        var preparations = actions.Count(action => action is IWiredFiringPreparation);
+
+        if (preparations <= _remaining) {
+            return true;
+        }
+
+        LimitReached?.Invoke(WiredEngineLimit.ExecutionBudget,
+            $"A stack needed {preparations} executions to prepare but only {_remaining} were left in this pass, so it did not fire.");
+
+        return false;
+    }
+
+    private bool IsChainValid(ActionChain chain) => IsAttached(chain.Source)
+        && chain.Source.Item.MovementGeneration == chain.MovementGeneration
+        && (chain.Source.Item.GetX, chain.Source.Item.GetY) == chain.Tile
+        && IsActorPresent(chain.Context);
+
+    // Shared by stack pipelines inside a room-engine pass. Delay is captured per firing. `accepted` runs once the firing is accepted,
+    // before any of its actions run.
+    internal bool ScheduleActions(IWiredItem source, IWiredItem[] capturedStack, IWiredItem[] actions,
+        WiredExecutionContext context, Func<IWiredItem, long>? delayMilliseconds = null, long? firedAt = null, bool prepared = false,
+        Action? accepted = null)
+    {
+        if (!CanSchedule(actions, prepared)) {
+            return false;
+        }
+
+        accepted?.Invoke();
+
+        if (actions.Length == 0) {
+            return true;
+        }
+
+        if (context.Runtime == null) {
+            return ScheduleLegacyActions(source, capturedStack, actions, context, delayMilliseconds, firedAt, prepared);
+        }
+
+        var steps = new List<(IWiredItem Box, long Delay)>();
+
+        foreach (var action in actions) {
+            if (!prepared && action is IWiredFiringPreparation preparation
+                && !Invoke(action, context, () => preparation.Prepare(context.Arguments))) {
+                continue;
+            }
+
+            steps.Add((action, Math.Max(0, (delayMilliseconds ?? GetDelay)(action))));
+        }
+
+        if (steps.Count == 0) {
+            return true;
+        }
+
+        var chain = new ActionChain(source, capturedStack, context, steps.Count)
+        {
+            ReadyAtCycle = context.Runtime.ResumeImmediately ? _cycle : _cycle + 1,
+            FirstResumeAt = context.Runtime.ResumeImmediately ? firedAt ?? _now() : null
+        };
+        _pending.Add(chain);
+        var due = firedAt ?? _now();
+        var firing = ++_sequence;
+
+        // Official captures show independent delays in both modes. Default equal-delay order varies;
+        // a per-firing permutation models that observation without claiming Habbo's random algorithm.
+        foreach (var group in steps.GroupBy(step => step.Delay)) {
+            var effects = group.ToArray();
+            var ranks = Enumerable.Range(0, effects.Length).ToArray();
+            var ordered = context.Runtime.Policy.Addons.ExecuteInOrder;
+
+            if (!ordered) {
+                for (var index = ranks.Length - 1; index > 0; index--) {
+                    var other = _effectOrderRandom.Next(index + 1);
+                    (ranks[index], ranks[other]) = (ranks[other], ranks[index]);
+                }
+
+                ApplyDefaultPrecedence(effects, ranks);
+            }
+
+            // Without exec_in_order, stacks fired by one event run in their (random) firing order, not by height or id.
+            var height = 0.0;
+            var id = 0u;
+
+            for (var index = 0; index < effects.Length; index++) {
+                var step = effects[index];
+                var delay = step.Delay + Math.Max(0, context.Runtime.Policy.DelayMilliseconds);
+                var scheduled = new ScheduledAction(chain, step.Box)
+                {
+                    DelayMilliseconds = delay,
+                    PriorityHeight = ordered ? step.Box.Item.GetZ : height,
+                    PriorityId = ordered ? step.Box.Item.Id : id,
+                    PriorityFiring = firing,
+                    PriorityOrder = ranks[index]
+                };
+                _schedule.Enqueue(scheduled, (due, scheduled.PriorityHeight, scheduled.PriorityId,
+                    scheduled.PriorityFiring, scheduled.PriorityOrder));
+
+                // A queued firing's delays are counted from the pass it first runs in; that wake-up is armed when the delay starts.
+                if (delay > 0 && chain.FirstResumeAt != null) {
+                    ActionDue?.Invoke(due + delay);
+                }
+
+                // A scheduled action flashes with its stack's firing, also when it runs later.
+                Flash(step.Box);
+            }
+        }
+
+        DrainDueActions();
+
+        return true;
+    }
+
+    // Without Execute in Order, effects of one firing run neither by height nor by placement or box code. With both heights, toggle_state and rel_mov run before match_to_sshot,
+    // and change_var_val and toggle_state run before show_message. Every other pair keeps the per-firing order.
+    private static readonly Dictionary<string, string[]> DefaultRunsAfter = new()
+    {
+        ["wf_act_match_to_sshot"] = ["wf_act_toggle_state", "wf_act_rel_mov"],
+        ["wf_act_show_message"] = ["wf_act_change_var_val", "wf_act_toggle_state"],
+        // Control Clock (Start) and Give Score To Team in one stack give the score in the game they start, with the give above or below the clock; a score given with no game running is lost.
+        ["wf_act_give_score"] = ["wf_act_control_clock"],
+        ["wf_act_give_score_tm"] = ["wf_act_control_clock"],
+        // An Adjust Clock Decrease runs after the Increase, and a Set after both, of the same firing, whatever the box order. Two Sets still run in a random order.
+        [AdjustClockDecrease] = ["wf_act_adjust_clock"],
+        [AdjustClockSet] = ["wf_act_adjust_clock", AdjustClockDecrease],
+        // A Remove Variable runs after a Give Variable of the same variable, whatever the box order.
+        ["wf_act_remove_var"] = ["wf_act_give_var"],
+        // A Give Variable or Change Variable Value that reads the state or the rotation of a furni reads the new value when a Toggle State or Move and Rotate of the same firing changes it,
+        // whatever the box order. The same holds for the x of a user moved by User To Furni and the x of a furni moved by Furni To User.
+        ["wf_act_give_var"] = ["wf_act_toggle_state", "wf_act_move_rotate", "wf_act_user_to_furni", "wf_act_furni_to_user"],
+        ["wf_act_change_var_val"] = ["wf_act_toggle_state", "wf_act_move_rotate", "wf_act_user_to_furni", "wf_act_furni_to_user"],
+        // A User To Furni sends its WiredMovements after the state update of a Toggle State and the ObjectUpdate of a Move and Rotate of the same firing, whatever the box order.
+        ["wf_act_user_to_furni"] = ["wf_act_toggle_state", "wf_act_move_rotate"]
+    };
+
+    private const string AdjustClockDecrease = "wf_act_adjust_clock:decrease";
+    private const string AdjustClockSet = "wf_act_adjust_clock:set";
+
+    // Moves each constrained effect just behind the last effect it must follow; all other effects keep their relative order.
+    private static void ApplyDefaultPrecedence((IWiredItem Box, long Delay)[] effects, int[] ranks)
+    {
+        var order = Enumerable.Range(0, effects.Length).OrderBy(index => ranks[index]).ToList();
+
+        // A move can break a pair settled before it (Remove after Give, then Give after Toggle State), so the pass repeats until nothing moves.
+        for (var pass = 0; pass < effects.Length; pass++) {
+            var moved = false;
+
+            foreach (var later in order.ToArray()) {
+                if (!DefaultRunsAfter.TryGetValue(PrecedenceKey(effects[later].Box), out var earlier)) {
+                    continue;
+                }
+
+                var last = order.FindLastIndex(index => earlier.Contains(PrecedenceKey(effects[index].Box)));
+                var at = order.IndexOf(later);
+
+                if (last > at) {
+                    order.RemoveAt(at);
+                    order.Insert(last, later);
+                    moved = true;
+                }
+            }
+
+            if (!moved) {
+                break;
+            }
+        }
+
+        for (var position = 0; position < order.Count; position++) {
+            ranks[order[position]] = position;
+        }
+    }
+
+    private static string PrecedenceKey(IWiredItem box) => box is IWiredConfiguredItem configured
+        ? configured.Descriptor.CanonicalName == "wf_act_adjust_clock" && configured.Configuration.IntParams is [var operation, ..] && operation is 1 or 2
+            ? operation == 1 ? AdjustClockDecrease : AdjustClockSet
+            : configured.Descriptor.CanonicalName
+        : WiredBoxRegistry.TryGetByLegacyType(box.Type, out var descriptor) ? descriptor.CanonicalName : "";
+
+    // Legacy-only extensions retain their existing synchronous/parallel delay contract.
+    // Promoted boxes and mixed modern stacks use the runtime chain scheduler above.
+    private bool ScheduleLegacyActions(IWiredItem source, IWiredItem[] stack, IWiredItem[] actions,
+        WiredExecutionContext context, Func<IWiredItem, long>? delayMilliseconds, long? firedAt, bool prepared)
+    {
+        var chain = new ActionChain(source, stack, context, actions.Length);
+        _pending.Add(chain);
+        var startedAt = firedAt ?? _now();
+        var firing = ++_sequence;
+
+        foreach (var action in actions) {
+            if (!_pending.Contains(chain)) {
+                break;
+            }
+
+            if (!prepared && action is IWiredFiringPreparation preparation
+                && !Invoke(action, context, () => preparation.Prepare(context.Arguments))) {
+                if (--chain.Remaining == 0) {
+                    _pending.Remove(chain);
+                }
+
+                continue;
+            }
+
+            var due = startedAt + Math.Max(0, (delayMilliseconds ?? GetDelay)(action));
+            _schedule.Enqueue(new(chain, action), (due, action.Item.GetZ, action.Item.Id, firing, 0));
+        }
+
+        DrainDueActions();
+
+        return true;
+    }
+
+    private void PruneSchedule()
+    {
+        var entries = _schedule.UnorderedItems.ToArray();
+        var kept = entries.Where(x => _pending.Contains(x.Element.Chain)).ToArray();
+        _schedule.Clear();
+
+        foreach (var entry in kept) {
+            _schedule.Enqueue(entry.Element, entry.Priority);
+        }
+
+        foreach (var entry in entries.Where(x => !_pending.Contains(x.Element.Chain))) {
+            if (entry.Element.Callback == null) {
+                entry.Element.Chain.Context.Runtime?.VariableChanges?.Clear();
+            }
+
+            CancelAuxiliary(entry.Element);
+        }
+    }
+
+    private void DrainDueActions()
+    {
+        // Nested callbacks use the active drain; effect delays retain a common resume time.
+        if (_draining) {
+            return;
+        }
+
+        _draining = true;
+        var resumeAt = _now();
+        var prune = false;
+        var batches = new HashSet<ActionChain>();
+        var deferred = new List<(ScheduledAction Action, (long Due, double Height, uint Id, long Firing, int Order) Priority)>();
+        var readers = new List<(ScheduledAction Action, (long Due, double Height, uint Id, long Firing, int Order) Priority)>();
+
+        try {
+            do {
+                // Readers released below re-enter this loop after the wave's variable batch has flushed.
+                foreach (var reader in readers) {
+                    _schedule.Enqueue(reader.Action, reader.Priority);
+                }
+
+                readers.Clear();
+
+                while (_schedule.TryPeek(out _, out var priority) && priority.Due <= resumeAt && !OutOfBudget()) {
+                    var scheduled = _schedule.Dequeue();
+                    var chain = scheduled.Chain;
+
+                    if (!_pending.Contains(chain)) {
+                        CancelAuxiliary(scheduled);
+                        continue;
+                    }
+
+                    if (!IsChainValid(chain)) {
+                        _pending.Remove(chain);
+
+                        if (scheduled.Callback == null) {
+                            chain.Context.Runtime?.VariableChanges?.Clear();
+                        }
+
+                        CancelAuxiliary(scheduled);
+                        prune = true;
+                        continue;
+                    }
+
+                    if (chain.ReadyAtCycle > _cycle) {
+                        deferred.Add((scheduled, priority));
+                        continue;
+                    }
+
+                    // A room tick's pass runs only the steps scheduled for room ticks, and other passes leave those for it.
+                    if (scheduled.OnRoomTick != _roomTickDrain) {
+                        deferred.Add((scheduled, priority));
+                        continue;
+                    }
+
+                    // With the end split off, steps that go after the status updates wait for the end of the tick, and only they run then.
+                    if (_roomTickDrain && (scheduled.AfterAvatarUpdates ? _splitEnd && !_endPhase : _endPhase)) {
+                        deferred.Add((scheduled, priority));
+                        continue;
+                    }
+
+                    chain.FirstResumeAt ??= resumeAt;
+
+                    if (scheduled.Callback == null && !scheduled.DelayElapsed && scheduled.DelayMilliseconds > 0) {
+                        scheduled.DelayElapsed = true;
+                        _schedule.Enqueue(scheduled, (chain.FirstResumeAt.Value + scheduled.DelayMilliseconds,
+                            scheduled.PriorityHeight, scheduled.PriorityId, scheduled.PriorityFiring, scheduled.PriorityOrder));
+                        // A queued firing's delays count from the pass its stack first ran in, not from when it was queued, so the
+                        // wake-up is armed for that time.
+                        ActionDue?.Invoke(chain.FirstResumeAt.Value + scheduled.DelayMilliseconds);
+                        continue;
+                    }
+
+                    // Default-mode Show Message with a variable placeholder reads the state after the wave's changes apply.
+                    if (!scheduled.ReadReleased && ReadsVariableText(scheduled, chain)) {
+                        scheduled.ReadReleased = true;
+                        readers.Add((scheduled, priority));
+                        batches.Add(chain);
+                        continue;
+                    }
+
+                    var action = scheduled.Box;
+
+                    try {
+                        if (!IsAttached(action) || (action.Item.GetX, action.Item.GetY) != chain.Tile) {
+                            CancelAuxiliary(scheduled);
+                            continue;
+                        }
+
+                        scheduled.Finished = true;
+
+                        if (scheduled.Callback == null) {
+                            batches.Add(chain);
+                        }
+
+                        var previousAction = _executingAction;
+                        _executingAction = scheduled;
+                        chain.LastMoment = chain.FirstResumeAt + scheduled.DelayMilliseconds;
+
+                        try {
+                            if (scheduled.Callback != null) {
+                                SealPublication();
+                            }
+
+                            var leave = chain.Context.Runtime?.Event;
+                            var readable = scheduled.DelayMilliseconds == 0 && leave != null && LeaverReadable(leave, true);
+                            bool succeeded;
+
+                            try {
+                                succeeded = scheduled.Callback == null ? Execute(action, chain.Context)
+                                    : Invoke(action, chain.Context, () => { scheduled.Callback(); return true; });
+                            }
+                            finally {
+                                EndLeaverRead(leave!, readable);
+                            }
+
+                            if (succeeded && chain.Context.Runtime?.Policy.StopOnSuccess == true) {
+                                FlushVariableChanges(chain);
+                                _pending.Remove(chain);
+                                prune = true;
+                            }
+                        }
+                        finally {
+                            _executingAction = previousAction;
+                        }
+
+                        // A later step of an action that already ran (a teleport's republish, landing and effect end) does not flash the box again. Teleport To flashes once, with its stack's firing.
+                    }
+                    finally {
+                        if (--chain.Remaining == 0) {
+                            if (scheduled.Callback == null) {
+                                FlushVariableChanges(chain);
+                            }
+
+                            _pending.Remove(chain);
+                        }
+                    }
+                }
+
+                foreach (var batch in batches.Where(_pending.Contains)) {
+                    FlushVariableChanges(batch);
+                }
+
+                batches.Clear();
+            } while (readers.Count > 0 && !OutOfBudget());
+        }
+        finally {
+            foreach (var reader in readers) {
+                _schedule.Enqueue(reader.Action, reader.Priority);
+            }
+
+            foreach (var batch in batches.Where(_pending.Contains)) {
+                FlushVariableChanges(batch);
+            }
+
+            foreach (var entry in deferred) {
+                _schedule.Enqueue(entry.Action, entry.Priority);
+            }
+
+            if (prune) {
+                PruneSchedule();
+            }
+
+            _draining = false;
+            SettleLeavers();
+        }
+
+        if (!_roomTickDrain) {
+            DrainReadySignals();
+        }
+    }
+
+    // Only a Show Message whose captured text names a numeric-mode text-output placeholder reads variable state.
+    private static bool ReadsVariableText(ScheduledAction scheduled, ActionChain chain)
+    {
+        if (scheduled.Callback != null || chain.Context.Runtime is not { VariableChanges: not null } runtime
+            || scheduled.Box is not IWiredConfiguredItem { Descriptor.CanonicalName: "wf_act_show_message" } show) {
+            return false;
+        }
+
+        var text = runtime.ConfigurationOf(show).Text;
+
+        return chain.Stack.OfType<IWiredConfiguredItem>().Where(x => x.Descriptor.CanonicalName == "wf_xtra_text_output_variable")
+            .Select(addon => runtime.ConfigurationOf(addon))
+            .Any(config => config.IntParams.Length > 1 && config.IntParams[1] == 1
+                && config.Text.Split('\t') is { Length: > 1 } parts && text.Contains("$(" + parts[1] + ")", StringComparison.Ordinal));
+    }
+
+    private void FlushVariableChanges(ActionChain chain)
+    {
+        try {
+            if (chain.Context.Runtime?.VariableChanges is { IsEmpty: false } batch) {
+                SealPublication();
+                var previous = _flushingChain;
+                _flushingChain = chain;
+
+                try {
+                    batch.Flush();
+                }
+                finally {
+                    _flushingChain = previous;
+                }
+
+                // The Variable Changed stacks of a batched change run in this pass, like those of a change made at once.
+                FlushExternal();
+            }
+        }
+        catch (Exception error) {
+            SealPublication();
+            _error(error);
+        }
+    }
+
+    private static long GetDelay(IWiredItem action) => action is IWiredActionDelay intrinsic
+        ? Math.Max(0, intrinsic.DelayMilliseconds)
+        : action is IWiredCycle cycle ? Math.Max(0L, cycle.Delay) * 500 : 0;
+
+    private void Flash(IWiredItem box) => Flash(box.Item);
+
+    // A stack fired outside speech flashes in the same ObjectsDataUpdate as the furni state its effects write, one wired tick after the firing. Its flashes wait for that tick.
+    private readonly List<(long Cycle, Item Item, int Visits)> _heldFlashes = [];
+
+    private void HoldFlashes(IEnumerable<Item> items, long cycle, int visits = int.MaxValue)
+    {
+        foreach (var item in items) {
+            _heldFlashes.Add((cycle, item, visits));
+        }
+    }
+
+    private void ReleaseHeldFlashes()
+    {
+        if (_heldFlashes.Count == 0) {
+            return;
+        }
+
+        var due = _heldFlashes.Where(entry => entry.Cycle <= _cycle).ToArray();
+        _heldFlashes.RemoveAll(entry => entry.Cycle <= _cycle);
+
+        foreach (var (_, item, visits) in due) {
+            Flash(item, visits);
+        }
+    }
+
+    /// <summary>Flashes an item only to the users whose <see cref="RoomUser.Visit"/> is at most the given visits; set by the room.</summary>
+    internal Action<Item, int>? FlashToVisits { get; set; }
+
+    private void Flash(Item item, int visits = int.MaxValue)
+    {
+        if (_activeFiring is { } firing && !firing.Context.ResumeImmediately) {
+            firing.Flashes.Add(item);
+
+            return;
+        }
+
+        try {
+            if (visits < int.MaxValue && FlashToVisits != null) {
+                FlashToVisits(item, visits);
+            }
+            else {
+                _flash(item);
+            }
+        }
+        catch (Exception e) {
+            SealPublication();
+            _error(e);
+        }
+    }
+
+    private WiredExecutionContext CreateContext(object[] arguments, int depth) =>
+        new(arguments, depth, _actorVisit?.Invoke(arguments));
+
+    private bool IsActorPresent(WiredExecutionContext context) => context.Runtime != null
+        || _actorPresent(context.Arguments)
+            && (_actorVisit == null || ReferenceEquals(context.ActorVisit, _actorVisit(context.Arguments)));
+
+    private bool Execute(IWiredItem box, WiredExecutionContext context)
+    {
+        var runtime = context.Runtime;
+        var previous = runtime?.Publication;
+        var previousFiring = runtime?.Firing;
+        var publication = PublicationFor(box, runtime);
+
+        if (runtime != null) {
+            runtime.Publication = publication;
+            runtime.Firing = _executingAction?.Chain;
+        }
+
+        try {
+            return Invoke(box, context, () => runtime != null
+                ? ExecuteRuntimeBody(box, runtime) : box.Execute(context.Arguments));
+        }
+        finally {
+            if (runtime != null) {
+                runtime.Publication = previous;
+                runtime.Firing = previousFiring;
+            }
+        }
+    }
+
+    private bool Invoke(IWiredItem box, WiredExecutionContext context, Func<bool> body)
+    {
+        if (OutOfBudget() || !IsAttached(box) || !IsActorPresent(context)) {
+            return false;
+        }
+
+        _remaining--;
+        _passPeakDepth = Math.Max(_passPeakDepth, context.Depth);
+        var previous = _context;
+        _context = context;
+        var previousRuntime = _runtimeContext;
+        _runtimeContext = context.Runtime;
+
+        if (context.Runtime != null) {
+            context.Runtime.NowMilliseconds = _now();
+        }
+
+        try {
+            return body();
+        }
+        catch (Exception e) {
+            SealPublication();
+            _error(e);
+
+            return false;
+        }
+        finally {
+            _context = previous;
+            _runtimeContext = previousRuntime;
+        }
+    }
+
+    private bool IsAttached(IWiredItem box) => _items.TryGetValue(box.Item.Id, out var registered)
+        && ReferenceEquals(registered, box) && _attached(box);
+
+    private static bool IsKind(IWiredItem box, InteractionType kind) => box is IWiredConfiguredItem configured
+        ? RuntimeSupported(configured) && (kind, configured.Descriptor.Category) switch
+        {
+            (InteractionType.WiredTrigger, WiredBoxCategory.Trigger) => true,
+            (InteractionType.WiredCondition, WiredBoxCategory.Condition) => true,
+            (InteractionType.WiredEffect, WiredBoxCategory.Action) => true,
+            _ => false
+        }
+        : box.Item.Definition.InteractionType == kind;
+
+    private IWiredItem[] GetStack(IWiredItem source)
+    {
+        RefreshStacks();
+
+        return IsAttached(source) && _stacks.TryGetValue((source.Item.GetX, source.Item.GetY), out var stack)
+            ? stack : [];
+    }
+
+    private void RefreshStacks()
+    {
+        // Item coordinates can change through rollers and movement without a wired hook.
+        // Check at every seam, but only allocate and sort when the index actually changed.
+        _stacksDirty |= _items.Count != _stackSnapshot.Length;
+        List<uint>? detached = null;
+        var index = 0;
+
+        foreach (var box in _items.Values) {
+            if (!_attached(box)) {
+                (detached ??= []).Add(box.Item.Id);
+            }
+            else if (!_stacksDirty) {
+                var previous = _stackSnapshot[index];
+                _stacksDirty = !ReferenceEquals(box, previous.Box)
+                    || (box.Item.GetX, box.Item.GetY, box.Item.GetZ) != (previous.X, previous.Y, previous.Z);
+            }
+
+            index++;
+        }
+
+        if (detached != null) {
+            foreach (var id in detached) {
+                Remove(id);
+            }
+        }
+
+        if (_stacksDirty) {
+            _stacks.Clear();
+
+            foreach (var group in _items.Values.GroupBy(x => (x.Item.GetX, x.Item.GetY))) {
+                _stacks[group.Key] = group.OrderBy(x => x.Item.GetZ).ThenBy(x => x.Item.Id).ToArray();
+            }
+
+            _stackSnapshot = CaptureStackPositions();
+            _stacksDirty = false;
+            UpdateRuntimeItems();
+        }
+        else {
+            UpdateFastWork();
+        }
+    }
+
+    private (IWiredItem Box, int X, int Y, double Z)[] CaptureStackPositions() =>
+        _items.Values.Select(box => (box, box.Item.GetX, box.Item.GetY, box.Item.GetZ)).ToArray();
+
+    private T Pass<T>(Func<T> body)
+    {
+        lock (_sync) {
+            var outermost = _passDepth++ == 0;
+            IDisposable? scope = null;
+
+            if (outermost) {
+                _publicationEpoch++;
+                _remaining = _limits.MaxExecutionsPerPass;
+                _passPeakDepth = 0;
+                _budgetDenied = false;
+                _passStarted = Stopwatch.GetTimestamp();
+            }
+
+            try {
+                if (outermost) {
+                    scope = PassScope?.Invoke();
+                }
+
+                return body();
+            }
+            finally {
+                if (--_passDepth == 0) {
+                    try {
+                        EndPass();
+                    }
+                    finally {
+                        scope?.Dispose();
+                    }
+                }
+            }
+        }
+    }
+
+    // Observes the pass that just ended. It reports the limits the pass met and changes none of its decisions.
+    private void EndPass()
+    {
+        SealPublication();
+        var executions = _limits.MaxExecutionsPerPass - Math.Max(0, _remaining);
+
+        if (_budgetDenied) {
+            LimitReached?.Invoke(WiredEngineLimit.ExecutionBudget,
+                $"One pass used all {_limits.MaxExecutionsPerPass} wired executions; the rest waits for the next pass or was dropped.");
+        }
+
+        _stats.Record(_now(), Stopwatch.GetElapsedTime(_passStarted).TotalMilliseconds, executions, _passPeakDepth);
+        _cost.Record(_now(), executions);
+    }
+
+    // Every budget check that turns waiting work away goes through here, so a pass that spends its
+    // budget exactly is not reported as capped.
+    private bool OutOfBudget()
+    {
+        if (_remaining > 0) {
+            return false;
+        }
+
+        SealPublication();
+        _budgetDenied = true;
+
+        return true;
+    }
+
+    private bool TooDeep(int depth)
+    {
+        if (depth <= _limits.MaxDepth) {
+            return false;
+        }
+
+        LimitReached?.Invoke(WiredEngineLimit.Depth, $"A chain reached depth {depth}, over the limit of {_limits.MaxDepth}, and was not run.");
+
+        return true;
+    }
+
+    private bool QueueFull(int slots)
+    {
+        if (PendingCount + slots <= _limits.MaxPendingStacks) {
+            return false;
+        }
+
+        LimitReached?.Invoke(WiredEngineLimit.PendingStacks,
+            $"The wait queue was full ({PendingCount} of {_limits.MaxPendingStacks} chains); new work was dropped.");
+
+        return true;
+    }
+
+    private void CancelAuxiliary(ScheduledAction action)
+    {
+        if (action.Finished || action.OnCancelled == null) {
+            return;
+        }
+
+        action.Finished = true;
+
+        try {
+            SealPublication();
+            action.OnCancelled();
+        }
+        catch (Exception error) {
+            SealPublication();
+            _error(error);
+        }
+    }
+
+    private sealed record ScheduledAction(ActionChain Chain, IWiredItem Box, Action? Callback = null, Action? OnCancelled = null)
+    {
+        public bool Finished { get; set; }
+        public double PriorityHeight { get; init; } = Box.Item.GetZ;
+        public uint PriorityId { get; init; } = Box.Item.Id;
+        public long PriorityFiring { get; init; }
+        public int PriorityOrder { get; init; }
+        public long DelayMilliseconds { get; init; }
+        public bool DelayElapsed { get; set; }
+        public bool ReadReleased { get; set; }
+        public bool OnRoomTick { get; init; }
+        public bool AfterAvatarUpdates { get; init; }
+    }
+
+    private sealed class ActionChain(IWiredItem source, IWiredItem[] stack,
+        WiredExecutionContext context, int remaining)
+    {
+        public IWiredItem Source { get; } = source;
+        public IWiredItem[] Stack { get; } = stack;
+        public (int, int) Tile { get; } = (source.Item.GetX, source.Item.GetY);
+        public long MovementGeneration { get; } = source.Item.MovementGeneration;
+        public WiredExecutionContext Context { get; } = context;
+        public int Remaining { get; set; } = remaining;
+        public long ReadyAtCycle { get; init; }
+        public long? FirstResumeAt { get; set; }
+        public long? LastMoment { get; set; }
+        public long Id { get; } = Interlocked.Increment(ref _nextChainId);
+        public bool Contains(IWiredItem box) => stack.Contains(box);
+    }
+}

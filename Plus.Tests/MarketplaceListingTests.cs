@@ -1,0 +1,304 @@
+using System.Data;
+using System.Buffers.Binary;
+using System.Reflection;
+using System.Text;
+using Plus.Core.Settings;
+using Plus.Communication.Flash;
+using Plus.Communication.Packets.Incoming.Marketplace;
+using Plus.Communication.Packets.Outgoing;
+using Plus.HabboHotel.Catalog.Marketplace;
+using Plus.HabboHotel.Items;
+using Plus.HabboHotel.Items.DataFormat;
+using Plus.HabboHotel.Users;
+using Plus.HabboHotel.Users.Inventory;
+using Plus.HabboHotel.Users.Inventory.Furniture;
+using Xunit;
+
+namespace Plus.Tests;
+
+[Collection("Group purchase")]
+public class MarketplaceListingTests
+{
+    private static readonly DateTimeOffset Now = DateTimeOffset.FromUnixTimeSeconds(1_700_000_000);
+
+    [Fact]
+    public async Task OwnedFurniIsListedAndRemovedOnlyAfterTheStoreAccepts()
+    {
+        var store = new RecordingStore();
+        var (habbo, item) = Owner(ItemType.Floor);
+        store.BeforeWrite = () => store.OwnedAtWrite = Assert.IsType<InventoryComponent>(habbo.Inventory).Furniture.GetItem(item.Id) != null;
+        var (client, sent) = HabbiconTestSupport.Client(habbo);
+
+        await Offer(store).Parse(client, Packet(100, 1, 1, (int)item.Id));
+
+        Assert.True(store.OwnedAtWrite);
+        Assert.Null(Assert.IsType<InventoryComponent>(habbo.Inventory).Furniture.GetItem(item.Id));
+        Assert.Equal(new[] { ServerPacketHeader.FurniListRemoveComposer, ServerPacketHeader.MarketplaceMakeOfferResultComposer }, sent.Select(message => message.Header));
+        var listing = Assert.Single(store.Listings);
+        Assert.Equal(item.Id, listing.FurniId);
+        Assert.Equal(7, listing.UserId);
+        Assert.Equal(99, listing.AskingPrice);
+        Assert.Equal(100, listing.TotalPrice);
+        Assert.Equal("1", listing.ItemType);
+        Assert.Equal("", listing.ExtraData);
+        Assert.Equal(Now, listing.ListedAt);
+    }
+
+    [Fact]
+    public async Task WallFurniIsListedAsTheSecondItemType()
+    {
+        var store = new RecordingStore();
+        var (habbo, item) = Owner(ItemType.Wall);
+        var (client, _) = HabbiconTestSupport.Client(habbo);
+
+        await Offer(store).Parse(client, Packet(100, 2, 1, (int)item.Id));
+
+        Assert.Equal("2", Assert.Single(store.Listings).ItemType);
+    }
+
+    [Theory]
+    [InlineData("unowned", 100)]
+    [InlineData("zero", 0)]
+    [InlineData("negative", -1)]
+    [InlineData("over", 100000000)]
+    public async Task IneligibleOffersAreRejectedBeforeAnyStoreWrite(string reason, int price)
+    {
+        var store = new RecordingStore();
+        var (habbo, item) = Owner(ItemType.Floor);
+        var itemId = reason == "unowned" ? item.Id + 1 : item.Id;
+        var (client, sent) = HabbiconTestSupport.Client(habbo);
+
+        await Offer(store).Parse(client, Packet(price, 1, 1, (int)itemId));
+
+        Assert.Empty(store.Listings);
+        Assert.Equal(new[] { ServerPacketHeader.MarketplaceMakeOfferResultComposer }, sent.Select(message => message.Header));
+        Assert.NotNull(Assert.IsType<InventoryComponent>(habbo.Inventory).Furniture.GetItem(item.Id));
+    }
+
+    [Theory]
+    [InlineData("foreign-owner")]
+    [InlineData("trade-locked")]
+    [InlineData("not-marketable")]
+    [InlineData("closed-wallet")]
+    public void FurniThatIsNotTheSellersToMarketIsRejected(string reason)
+    {
+        var store = new RecordingStore();
+        var (habbo, item) = Owner(ItemType.Floor);
+
+        if (reason == "foreign-owner") {
+            item.OwnerId = 8;
+        }
+
+        if (reason == "trade-locked") {
+            item.Definition.AllowTrade = false;
+        }
+
+        if (reason == "not-marketable") {
+            item.Definition.AllowMarketplaceSell = false;
+        }
+
+        if (reason == "closed-wallet") {
+            typeof(Habbo).GetField("_disconnected", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(habbo, true);
+        }
+
+        Assert.False(new MarketplaceListingService(store, Fee(), new FixedClock(Now), Settings()).TryList(habbo, [item.Id], 1, 100));
+
+        Assert.Empty(store.Listings);
+        Assert.NotNull(Assert.IsType<InventoryComponent>(habbo.Inventory).Furniture.GetItem(item.Id));
+    }
+
+    [Theory]
+    [InlineData(100, 100, 100)]
+    [InlineData(100, 1, 99999999)]
+    public void AFeeLargerThanThePriceIsRejected(int percentage, int halfTaxLimit, int price)
+    {
+        var store = new RecordingStore();
+        var (habbo, item) = Owner(ItemType.Floor);
+        var listing = new MarketplaceListingService(store, Fee(percentage: percentage, halfTaxLimit: halfTaxLimit), new FixedClock(Now), Settings());
+
+        Assert.False(listing.TryList(habbo, [item.Id], 1, price));
+
+        Assert.Empty(store.Listings);
+    }
+
+    [Fact]
+    public async Task MaximumSellingPriceIsStillListed()
+    {
+        var store = new RecordingStore();
+        var (habbo, item) = Owner(ItemType.Floor);
+        var (client, _) = HabbiconTestSupport.Client(habbo);
+
+        await Offer(store).Parse(client, Packet(99999999, 1, 1, (int)item.Id));
+
+        var listing = Assert.Single(store.Listings);
+        Assert.Equal(99999999, listing.TotalPrice);
+        Assert.Equal(99999999 - 3328307, listing.AskingPrice);
+    }
+
+    [Fact]
+    public async Task ForcedPersistenceFailurePublishesNothingAndKeepsTheFurni()
+    {
+        var store = new RecordingStore { Fail = true };
+        var (habbo, item) = Owner(ItemType.Floor);
+        var (client, sent) = HabbiconTestSupport.Client(habbo);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => Offer(store).Parse(client, Packet(100, 1, 1, (int)item.Id)));
+
+        Assert.NotNull(Assert.IsType<InventoryComponent>(habbo.Inventory).Furniture.GetItem(item.Id));
+        Assert.Empty(sent);
+    }
+
+    [Fact]
+    public void RealStoreCommitsTheOfferAndFurniDeleteTogether()
+    {
+        var database = new GroupManagementTests.RecordingDatabase();
+        var (habbo, item) = Owner(ItemType.Floor);
+        var listing = new MarketplaceListingService(new MarketplaceOfferStore(database), Fee(), new FixedClock(Now), Settings());
+
+        Assert.True(listing.TryList(habbo, [item.Id], 1, 100));
+
+        Assert.Equal(new[] { "commit", "dispose" }, database.Transactions);
+        Assert.Collection(database.Writes,
+            write => Assert.StartsWith("INSERT INTO `catalog_marketplace_offers`", write.Sql),
+            write => Assert.StartsWith("DELETE FROM `items`", write.Sql));
+        Assert.Equal(7, database.Writes[0].Parameters["UserId"]);
+        Assert.Equal(100, database.Writes[0].Parameters["TotalPrice"]);
+        Assert.Equal(99, database.Writes[0].Parameters["AskingPrice"]);
+    }
+
+    [Fact]
+    public void RealStoreRollsBackWhenTheOfferInsertFails()
+    {
+        var database = new GroupManagementTests.RecordingDatabase { FailInsert = true };
+        var (habbo, item) = Owner(ItemType.Floor);
+        var listing = new MarketplaceListingService(new MarketplaceOfferStore(database), Fee(), new FixedClock(Now), Settings());
+
+        Assert.Throws<InvalidOperationException>(() => listing.TryList(habbo, [item.Id], 1, 100));
+
+        Assert.DoesNotContain("commit", database.Transactions);
+        Assert.DoesNotContain(database.Writes, write => write.Sql.StartsWith("DELETE FROM `items`", StringComparison.Ordinal));
+        Assert.NotNull(Assert.IsType<InventoryComponent>(habbo.Inventory).Furniture.GetItem(item.Id));
+    }
+
+    [Theory]
+    [InlineData(false, false, false, true)]
+    [InlineData(true, false, false, false)]
+    [InlineData(true, true, false, true)]
+    [InlineData(true, false, true, true)]
+    [InlineData(true, true, true, true)]
+    public void OptionalRareAndLimitedPolicyPreservesDefaultListings(bool enabled, bool rare, bool limited, bool accepted)
+    {
+        var store = new RecordingStore();
+        var (habbo, item) = Owner(ItemType.Floor);
+        item.Definition.IsRare = rare;
+        item.UniqueNumber = limited ? 3u : 0u;
+        item.UniqueSeries = limited ? 4u : 0u;
+        var listing = new MarketplaceListingService(store, Fee(), new FixedClock(Now), Settings(() => enabled));
+
+        Assert.Equal(accepted, listing.TryList(habbo, [item.Id], 1, 100));
+        Assert.Equal(accepted ? 1 : 0, store.Listings.Count);
+        Assert.Equal(!accepted, Assert.IsType<InventoryComponent>(habbo.Inventory).Furniture.GetItem(item.Id) != null);
+    }
+
+    [Fact]
+    public void ReloadedPolicyAppliesToTheNextListing()
+    {
+        var enabled = true;
+        var store = new RecordingStore();
+        var (habbo, item) = Owner(ItemType.Floor);
+        item.UniqueNumber = item.UniqueSeries = 0;
+        var listing = new MarketplaceListingService(store, Fee(), new FixedClock(Now), Settings(() => enabled));
+
+        Assert.False(listing.TryList(habbo, [item.Id], 1, 100));
+        Assert.Empty(store.Listings);
+        enabled = false;
+        Assert.True(listing.TryList(habbo, [item.Id], 1, 100));
+        Assert.Single(store.Listings);
+    }
+
+    private static ISettingsManager Settings(Func<bool>? enabled = null, int? percentage = null, int? halfTaxLimit = null) =>
+        CatalogSnapshotTestSupport.Proxy<ISettingsManager>((method, args) => method != "TryGetValue" ? throw new InvalidOperationException(method) :
+            (string)args[0]! switch
+            {
+                "catalog.marketplace.only_rare_ltd" => enabled?.Invoke() == true ? "1" : "0",
+                "catalog.marketplace.fee.percentage" => (percentage ?? int.Parse((string)args[1]!)).ToString(),
+                "catalog.marketplace.fee.half_tax_limit" => (halfTaxLimit ?? int.Parse((string)args[1]!)).ToString(),
+                "catalog.marketplace.fee.revenue_limit" => (string)args[1]!,
+                _ => throw new InvalidOperationException((string)args[0]!)
+            });
+
+    private static MarketplaceFeePolicy Fee(int? percentage = null, int? halfTaxLimit = null) => new(Settings(percentage: percentage, halfTaxLimit: halfTaxLimit));
+
+    private static MakeOfferEvent Offer(IMarketplaceOfferStore store) =>
+        new(new MarketplaceListingService(store, Fee(), new FixedClock(Now), Settings()));
+
+    private static (Habbo Habbo, InventoryItem Item) Owner(ItemType type)
+    {
+        var item = new InventoryItem
+        {
+            Id = 41,
+            OwnerId = 7,
+            ExtraData = FurniObjectData.Empty,
+            UniqueNumber = 3,
+            UniqueSeries = 4,
+            Definition = new ItemDefinition { Id = 900, SpriteId = 55, PublicName = "Rare Chair", ItemName = "chair", Type = type, AllowTrade = true, AllowMarketplaceSell = true },
+        };
+        var furniture = new FurnitureInventoryComponent(type == ItemType.Floor ? [item] : [], type == ItemType.Wall ? [item] : []);
+
+        return (new Habbo { Id = 7, Username = "seller", Inventory = new InventoryComponent { Furniture = furniture } }, item);
+    }
+
+    private static FlashIncomingPacket Packet(params int[] values)
+    {
+        using var stream = new MemoryStream();
+
+        foreach (var value in values) {
+            var bytes = new byte[4];
+            BinaryPrimitives.WriteInt32BigEndian(bytes, value);
+            stream.Write(bytes);
+        }
+
+        return new FlashIncomingPacket { Buffer = stream.ToArray() };
+    }
+
+    private sealed class RecordingStore : IMarketplaceOfferStore
+    {
+        public List<MarketplaceListing> Listings { get; } = new();
+        public bool Fail { get; set; }
+        public bool OwnedAtWrite { get; set; }
+        public Action? BeforeWrite { get; set; }
+
+        public bool ListFurni(MarketplaceListing listing)
+        {
+            BeforeWrite?.Invoke();
+
+            if (Fail) {
+                throw new InvalidOperationException("forced persistence failure");
+            }
+
+            Listings.Add(listing);
+
+            return true;
+        }
+
+        public bool ListFurni(IReadOnlyList<MarketplaceListing> listings)
+        {
+            BeforeWrite?.Invoke();
+
+            if (Fail) {
+                throw new InvalidOperationException("forced persistence failure");
+            }
+
+            Listings.AddRange(listings);
+
+            return true;
+        }
+
+        public int? ClaimSold(int userId, Func<int, int?> balanceAfter) => throw new NotSupportedException();
+    }
+
+    private sealed class FixedClock(DateTimeOffset now) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => now;
+    }
+}

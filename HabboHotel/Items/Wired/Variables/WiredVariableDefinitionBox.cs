@@ -1,0 +1,121 @@
+using System.Collections.Concurrent;
+using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Items.Wired.Configuration;
+using Plus.HabboHotel.Rooms;
+
+namespace Plus.HabboHotel.Items.Wired.Variables;
+
+/// <summary>Passive variable metadata. Reads and mutations run through the room module, never as a stack action.</summary>
+public sealed class WiredVariableDefinitionBox : IWiredConfiguredItem, IWiredConfigurationPersistenceProvider, IWiredSaveRefusal
+{
+    private readonly WiredVariableConfigurationPersistence? _persistence;
+    private readonly WiredVariableEditor? _editor;
+    public WiredVariableDefinitionBox(Room room, Item item, WiredBoxDescriptor descriptor,
+        WiredVariableConfigurationPersistence? persistence = null, WiredVariableEditor? editor = null)
+    {
+        if (!WiredVariableDefinitions.Supports(descriptor.CanonicalName)) {
+            throw new ArgumentException("Unsupported variable definition.", nameof(descriptor));
+        }
+
+        Instance = room;
+        Item = item;
+        Descriptor = descriptor with { Support = WiredBoxSupport.Implemented };
+        _persistence = persistence;
+        _editor = editor;
+        Configuration = WiredNativeEditorProjection.DefaultRuntime(item.Id, descriptor) ?? new();
+    }
+    public Room Instance { get; set; }
+    public Item Item { get; set; }
+    public WiredBoxType Type => Item.Definition.WiredType;
+    public ConcurrentDictionary<uint, Item> SetItems { get; set; } = new();
+    public string StringData { get; set; } = "";
+    public bool BoolData { get; set; }
+    public string ItemsData { get; set; } = "";
+    public WiredBoxDescriptor Descriptor { get; }
+    public WiredConfiguration Configuration { get; private set; } = new();
+    public bool HasPersistedConfiguration { get; private set; }
+    public void PersistConfiguration(WiredConfiguration validated) =>
+        (_persistence ?? throw new InvalidOperationException("Definition persistence is not bound.")).Persist(this, validated);
+    public bool TryValidateConfiguration(WiredConfiguration proposed, out WiredConfiguration validated, out string error)
+    {
+        validated = proposed;
+        error = "Invalid native variable definition.";
+
+        if (!WiredNativeEditorProjection.IsBound(Item.Id, Descriptor, proposed)
+            || !WiredNativeEditorProjection.TryValidateRuntime(Item, Descriptor, proposed, out _, out error)) {
+            return false;
+        }
+
+        if (WiredVariableDefinitions.IsUnpickedEcho(Descriptor.CanonicalName, proposed)) {
+            error = "";
+
+            return true;
+        }
+
+        if (!WiredVariableDefinitions.TryDecode(Descriptor.CanonicalName, Item.Id, Instance.Id,
+                Instance.OwnerId > 0 ? (uint)Instance.OwnerId : 0, proposed, out var definition, out error)) {
+            return false;
+        }
+
+        if (definition is { IsPointer: true } && _editor?.RefuseAccessor(definition) is { } refusal) {
+            error = refusal;
+
+            return false;
+        }
+
+        if (definition is { Link: not null } && Descriptor.CanonicalName == "wf_var_reference" && _editor?.RefuseReference(definition, stored: true) is { } duplicate) {
+            error = duplicate;
+
+            return false;
+        }
+
+        // An echo of another echo is refused with this key and no parameters.
+        if (definition?.Link is { } link && Descriptor.CanonicalName == "wf_var_echo"
+            && WiredVariableModule.TryDefinitionId(link.Source.Token, out var echoed)
+            && (echoed == Item.Id || Instance.GetWired() is { } wired && wired.TryGet(echoed, out var source)
+                && source is IWiredConfiguredItem { Descriptor.CanonicalName: "wf_var_echo" })) {
+            error = WiredVariableDefinitions.EchoSelfReferenceKey;
+
+            return false;
+        }
+
+        return true;
+    }
+    /// <summary>
+    /// A new save checks the name before anything else, and an echo of a pointer is refused because a pointer only reads inside an execution.
+    /// </summary>
+    public string? RefuseSave(WiredConfiguration proposed)
+    {
+        if (_editor is null) {
+            return null;
+        }
+
+        if (WiredVariableDefinitions.IsNamed(Descriptor.CanonicalName)) {
+            return _editor.RefuseName(Item.Id, proposed.Text, Descriptor.CanonicalName == "wf_var_pointer");
+        }
+
+        if (!WiredVariableDefinitions.TryDecode(Descriptor.CanonicalName, Item.Id, Instance.Id,
+                Instance.OwnerId > 0 ? (uint)Instance.OwnerId : 0, proposed, out var definition, out _) || definition?.Link is not { } link) {
+            return null;
+        }
+
+        if (Descriptor.CanonicalName == "wf_var_reference") {
+            return _editor.RefuseReference(definition);
+        }
+
+        return Descriptor.CanonicalName == "wf_var_echo" && _editor.IsPointer(link.Source) ? WiredVariableDefinitions.NeedsExecutionContextKey : null;
+    }
+    public void ApplyConfiguration(WiredConfiguration validated)
+    {
+        if (!WiredNativeEditorProjection.IsBound(Item.Id, Descriptor, validated)) {
+            throw new InvalidDataException("Unbound or altered native Wired runtime projection.");
+        }
+
+        Configuration = validated;
+        HasPersistedConfiguration = true;
+        StringData = validated.Text;
+        ItemsData = string.Join(';', validated.SelectedItems);
+    }
+    public bool Execute(params object[] arguments) => false;
+    public void HandleSave(IIncomingPacket packet) => throw new InvalidOperationException("Variable definitions require validated configuration persistence.");
+}

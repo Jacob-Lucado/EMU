@@ -1,0 +1,22 @@
+name: C# checks
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Test release scripts
+        run: python3 -m unittest discover -s .github/scripts -p 'test_*.py'
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+      - run: dotnet run --project tools/Plus.CodeStyle -- check
+      - run: dotnet build "Plus Emulator.sln" --configuration Release --property:Platform="Any CPU" --maxcpucount:1
+      - run: dotnet test Plus.Tests --configuration Release --no-build

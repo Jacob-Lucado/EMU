@@ -1,0 +1,153 @@
+using Plus.Communication.Packets;
+using Plus.Communication.Packets.Outgoing.Moderation;
+using Plus.Communication.Packets.Outgoing.Inventory.Achievements;
+using Plus.HabboHotel.Moderation;
+using Plus.HabboHotel.Achievements;
+using Plus.HabboHotel.Badges.Rarity;
+using Plus.HabboHotel.Groups;
+using Plus.HabboHotel.Users;
+using Plus.Communication.Packets.Outgoing.Groups;
+using Plus.Communication.Packets.Outgoing.FriendList;
+using Plus.Communication.Packets.Outgoing.Sound;
+using Plus.HabboHotel.Users.Messenger;
+using Xunit;
+
+namespace Plus.Tests;
+
+public sealed class PacketCollectionSnapshotTests
+{
+    [Fact]
+    public void FriendRequestsRetainTheirCountOrderAndCapturedIdentity()
+    {
+        var requests = new List<FriendRequestData> { new(7, "Alice", "look") };
+        var composer = new FriendRequestsComposer(requests);
+        object[] expected = [1, 1, 7, "Alice", "look"];
+
+        Assert.Equal(expected, Writes(composer));
+        requests[0] = new(8, "Bob", "changed");
+        requests.Add(new(9, "Third", "other"));
+        Assert.Equal(expected, Writes(composer));
+        Assert.Equal(expected, Writes(composer));
+    }
+
+    [Fact]
+    public void SearchResultsRetainOnlineAndOfflineWireFieldsAfterSourceMutation()
+    {
+        var friend = new SearchResult(7, "Alice", "motto", "look", DateTimeOffset.FromUnixTimeSeconds(2200000000));
+        var friends = new List<HabboSearchEntry> { new(friend, true) };
+        var others = new List<HabboSearchEntry> { new(new(8, "Bob", "away", "hidden", null), false) };
+        var composer = new HabboSearchResultComposer(friends, others);
+        object[] expected = [1, 7, "Alice", "motto", true, false, "", 0, "look", "2200000000",
+            1, 8, "Bob", "away", false, false, "", 0, "", "0"];
+
+        Assert.Equal(expected, Writes(composer));
+        friend.Username = "changed";
+        friends[0] = new(friend, false);
+        others.Clear();
+        Assert.Equal(expected, Writes(composer));
+        Assert.Equal(expected, Writes(composer));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(2)]
+    [InlineData(4)]
+    public void SoundSettingsFreezeVolumesAndPreserveThreeChannelPadding(int count)
+    {
+        var volumes = Enumerable.Range(1, count).ToList();
+        var composer = new SoundSettingsComposer(volumes, true, false, true, 2, WiredAccountPreferences.Default, ChatDisplayPreferences.Default);
+        object[] expected = [count > 0 ? 1 : 0, count > 1 ? 2 : 0, count > 2 ? 3 : 0,
+            true, false, true, 2, 0, false, false, false, 0, false, false, "", 0, 0, 1, 1, 0];
+
+        Assert.Equal(expected, Writes(composer));
+        volumes.Clear();
+        volumes.Add(99);
+        Assert.Equal(expected, Writes(composer));
+        Assert.Equal(expected, Writes(composer));
+    }
+
+    [Fact]
+    public void ModerationTopicsFreezeNestedPresetsAndKeepWireOrdering()
+    {
+        var preset = new ModerationPresetActions(7, 0, "type", "caption", "text", 0, 0, 0, 0, "none");
+        var presets = new Dictionary<string, List<ModerationPresetActions>> { ["category"] = [preset] };
+        var composer = new CfhTopicsInitComposer(CfhTopicCategorySnapshot.Capture(presets));
+        object[] expected = [1, "category", 1, "caption", 7, "type"];
+        Assert.Equal(expected, Writes(composer));
+        preset.Id = 9;
+        preset.Caption = "changed";
+        preset.Type = "changed";
+        presets["category"].Clear();
+        presets.Clear();
+        Assert.Equal(expected, Writes(composer));
+        Assert.Equal(expected, Writes(composer));
+    }
+
+    [Theory]
+    [InlineData(1, 2, "ACH_TEST2", 10, 20, 5, 12, false)]
+    [InlineData(3, 3, "ACH_TEST3", 20, 30, 7, 20, true)]
+    public void AchievementNotificationsFreezeDefinitionAndUserProgress(int userLevel, int level, string badge, int start, int limit, int reward,
+        int progress, bool completed)
+    {
+        var achievement = new Achievement { Id = 7, GroupName = "ACH_TEST", Category = "social" };
+        achievement.AddLevel(new AchievementLevel(1, 3, 5, 10));
+        achievement.AddLevel(new AchievementLevel(2, 5, 10, 20));
+        achievement.AddLevel(new AchievementLevel(3, 7, 10, 30));
+        var user = new UserAchievement("ACH_TEST", userLevel, 12);
+        var progressed = new AchievementProgressedComposer(AchievementProgressSnapshot.Capture(achievement, user)!);
+        var rarity = new BadgeRarityTable(BadgeRarityScale.Empty, new Dictionary<string, int> { ["ACH_TEST2"] = 3 });
+        var unlocked = new AchievementUnlockedComposer(AchievementUnlockSnapshot.Capture(achievement, achievement.Levels[2], rarity));
+        object[] expectedProgress = [7, level, badge, start, limit, reward, 0, progress, completed, "social", "", 3, 0, (short)1];
+        object[] expectedUnlock = [7, 2, 1, "ACH_TEST2", 10, 5, 0, 0, 7, "ACH_TEST1", "social", true, 3, 5];
+        Assert.Equal(expectedProgress, Writes(progressed));
+        Assert.Equal(expectedUnlock, Writes(unlocked));
+        achievement.Id = 9;
+        achievement.GroupName = "ACH_CHANGED";
+        achievement.Category = "changed";
+        user.Level = 99;
+        user.Progress = 99;
+        Assert.Equal(expectedProgress, Writes(progressed));
+        Assert.Equal(expectedUnlock, Writes(unlocked));
+        Assert.Equal(expectedProgress, Writes(progressed));
+        Assert.Equal(expectedUnlock, Writes(unlocked));
+    }
+
+    [Fact]
+    public void GroupPresentationPacketsKeepCapturedGroupAndRequesterFields()
+    {
+        var group = new Group(7, "Crew", "description", "badge", 42, 1, DateTimeOffset.UnixEpoch,
+            0, 3, 4, 0, true, new([1], [], []));
+        var user = new Habbo { Id = 1, Username = "Alice", Look = "look" };
+        var favourite = new UpdateFavouriteGroupComposer(FavouriteGroupSnapshot.Capture(group, 8));
+        var removed = new UpdateFavouriteGroupComposer(FavouriteGroupSnapshot.Capture(null, 8));
+        var settings = new GroupFurniSettingsComposer(GroupFurniSettingsSnapshot.Capture(group, 9, user.Id));
+        var request = new GroupMembershipRequestedComposer(new(group.Id, 3, user.Id, user.Username, user.Look));
+        object[] expectedFavourite = [8, 7, 3, "Crew"];
+        object[] expectedRemoved = [8, 0, 3, ""];
+        object[] expectedSettings = [9u, 7, "Crew", 42u, true, true];
+        object[] expectedRequest = [7, 3, 1, "Alice", "look", ""];
+        Assert.Equal(expectedFavourite, Writes(favourite));
+        Assert.Equal(expectedRemoved, Writes(removed));
+        Assert.Equal(expectedSettings, Writes(settings));
+        Assert.Equal(expectedRequest, Writes(request));
+        group.Id = 99;
+        group.Name = "changed";
+        group.RoomId = 99;
+        group.ForumEnabled = false;
+        user.Id = 99;
+        user.Username = "changed";
+        user.Look = "changed";
+        Assert.Equal(expectedFavourite, Writes(favourite));
+        Assert.Equal(expectedRemoved, Writes(removed));
+        Assert.Equal(expectedSettings, Writes(settings));
+        Assert.Equal(expectedRequest, Writes(request));
+    }
+
+    private static List<object> Writes(IServerPacket composer)
+    {
+        var packet = new HabbiconTestSupport.RecordingPacket();
+        composer.Compose(packet);
+
+        return packet.Writes;
+    }
+}

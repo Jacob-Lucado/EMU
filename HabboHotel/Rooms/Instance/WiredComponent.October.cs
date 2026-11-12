@@ -1,0 +1,160 @@
+using Plus.Communication.Packets.Outgoing.Rooms.Chat;
+using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Items;
+using Plus.HabboHotel.Items.Wired;
+using Plus.HabboHotel.Items.Wired.Configuration;
+using Plus.HabboHotel.Items.Wired.Links;
+using Plus.HabboHotel.Items.Wired.Runtime;
+
+namespace Plus.HabboHotel.Rooms.Instance;
+
+/// <summary>Room services of the October boxes: link endpoints, room initialization and room-wide add-on lookups.</summary>
+public partial class WiredComponent
+{
+    private IWiredLinkStore? _linkStore;
+
+    /// <summary>The WIRED Link networks; tests replace the database store.</summary>
+    public IWiredLinkStore LinkStore
+    {
+        get => _linkStore ??= new DatabaseWiredLinkStore(_database);
+        internal set => _linkStore = value;
+    }
+
+    private bool _roomLoaded;
+
+    /// <summary>The room timer, once the room has loaded; boxes loading with the room join before it counts.</summary>
+    private long? RoomTimerAfterLoad() => _roomLoaded ? _room.TimerElapsedMilliseconds(_clock.GetUtcNow()) : null;
+
+    /// <summary>The room has loaded its furniture: Room Initialized triggers fire once.</summary>
+    public bool RoomInitialized()
+    {
+        _roomLoaded = true;
+
+        return Dispatch(new(WiredEventKind.RoomInitialized));
+    }
+
+    /// <summary>The placed, configured boxes of one canonical name, bottom of the room first.</summary>
+    internal IEnumerable<IWiredConfiguredItem> ConfiguredBoxes(string canonicalName) => _room.GetRoomItemHandler() is not { } handler ? [] : handler.GetFloor
+        .Where(item => item?.Definition != null && DescriptorOf(item)?.CanonicalName == canonicalName).OrderBy(item => item.Id)
+        .Select(item => TryGet(item.Id, out var box) ? box as IWiredConfiguredItem : null).OfType<IWiredConfiguredItem>()
+        .Where(box => ReferenceEquals(handler.GetItem(box.Item.Id), box.Item));
+
+    /// <summary>Achievements the room's Achievement Enablers list, one per line, first mention first.</summary>
+    internal IReadOnlyList<string> EnabledAchievements() => [.. ConfiguredBoxes("wf_xtra_achievement_enabler")
+        .SelectMany(box => box.Configuration.Text.Split('\n')).Select(line => line.Trim()).Where(line => line.Length > 0)
+        .Distinct(StringComparer.OrdinalIgnoreCase)];
+
+    internal bool AchievementEnabled(string achievement) => achievement.Length > 0
+        && EnabledAchievements().Contains(achievement, StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// When any box text in the room uses $(trigger_text), every user entering (owner or visitor) gets NotificationDialog 2356 "wired.error" right after the room-enter packet 1647.
+    /// </summary>
+    public void SendTriggerTextNotice(GameClient session)
+    {
+        var usesTriggerText = (_room.GetRoomItemHandler()?.GetFloor ?? [])
+            .Select(item => TryGet(item.Id, out var box) ? box as IWiredConfiguredItem : null).OfType<IWiredConfiguredItem>()
+            .Any(box => WiredTextPlaceholders.UsesTriggerText(box.Configuration.Text));
+
+        if (usesTriggerText) {
+            session.Send(new Plus.Communication.Packets.Outgoing.Rooms.Notifications.RoomNotificationComposer("wired.error", new Dictionary<string, string>
+            {
+                { "image", "${image.library.url}album1584/WIRD1.png" },
+                { "message", "${room.error.wired.trigger_text_capture}" }
+            }));
+        }
+    }
+
+    /// <summary>Custom-text Global Placeholders of this room as $(name) to text; a later box with the same name wins.</summary>
+    internal IReadOnlyDictionary<string, string> GlobalPlaceholders()
+    {
+        var placeholders = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var box in ConfiguredBoxes("wf_xtra_global_placeholder")) {
+            var parts = box.Configuration.Text.Split('\t', 2);
+
+            if (box.Configuration.IntParams is [0, ..] && parts[0].Length > 0) {
+                placeholders[parts[0]] = parts.Length > 1 ? parts[1] : "";
+            }
+        }
+
+        return placeholders;
+    }
+
+    /// <summary>A box's new settings are live: leaderboards republish, the web API takes the saved keys.</summary>
+    private void OctoberConfigurationPublished(IWiredItem box)
+    {
+        if (box is IWiredConfiguredItem { Descriptor.CanonicalName: "wf_xtra_var_leaderboard" } leaderboard) {
+            LeaderboardSaved(leaderboard);
+        }
+
+        if (box is IWiredConfiguredItem { Descriptor.CanonicalName: "wf_xtra_var_text_connector" } connector) {
+            LeaderboardConnectorChanged(connector.Item.GetX, connector.Item.GetY);
+        }
+
+        if (box is IWiredConfiguredItem { Descriptor.CanonicalName: "wf_xtra_var_web_api" } webApi) {
+            WebApiSaved(webApi);
+        }
+
+        // The editors of Progress Achievement list the enabled achievements from the environment packet.
+        if (box is IWiredConfiguredItem { Descriptor.CanonicalName: "wf_xtra_achievement_enabler" }) {
+            PublishEnvironment();
+        }
+    }
+
+    /// <summary>
+    /// The Share add-on's Synchronize button (header 397, write permission only): the add-ons of the shared variables stacked with it are published to their references.
+    /// </summary>
+    public bool SynchronizeShare(Plus.HabboHotel.GameClients.GameClient session, uint itemId)
+    {
+        return ReferenceEquals(session.GetHabbo()?.CurrentRoom, _room) && Settings.CanModify(session)
+            && _room.GetRoomItemHandler().GetItem(itemId) is { } item && Variables.Synchronize(item);
+    }
+
+    /// <summary>
+    /// A permanent or shared variable box (availability 10 or 11): the client asks before picking it up, since its stored values go with it (in-room variables are picked up directly).
+    /// </summary>
+    public bool StoresVariableData(Item item) => item.Definition.WiredDescriptor?.Category == WiredBoxCategory.Variable
+        && TryGet(item.Id, out var box) && box is IWiredConfiguredItem
+        && Variables.Module.DescribeDefinitions([item.Id]).FirstOrDefault()?.Definition.IsDurable == true;
+
+    private readonly System.Collections.Concurrent.ConcurrentQueue<WiredRuntimeEvent> _linkArrivals = new();
+
+    // A link that receives from another room switches its state, then its Link Speakers talk, before the pass runs the receiving stacks.
+    private void ShowLinkArrivals()
+    {
+        while (_linkArrivals.TryDequeue(out var arrival)) {
+            if (arrival.EventItem is { } link && ReferenceEquals(_room.GetRoomItemHandler().GetItem(link.Id), link)) {
+                link.LegacyDataString = link.LegacyDataString == "1" ? "0" : "1";
+                link.UpdateState(true, false);
+                _room.SendObjectData(link, link.LegacyDataString, false);
+            }
+
+            SpeakLink(arrival);
+            Dispatch(arrival);
+        }
+    }
+
+    /// <summary>Each Link Speaker that picks the receiving link and speaks for this kind shows the received text as a bubble at its tile.</summary>
+    internal void SpeakLink(WiredRuntimeEvent @event)
+    {
+        if (@event.EventItem is not { } receiver || @event.Link is not { } link) {
+            return;
+        }
+
+        var dataframe = @event.Kind == WiredEventKind.LinkDataframe;
+        var text = dataframe ? string.Join('\n', link.Rows.Select(row => $"[b]{row.Key}[/b]: {row.Text}")) : link.Message;
+
+        foreach (var speaker in ConfiguredBoxes("wf_xtra_link_speaker")) {
+            if (speaker.Configuration.IntParams is not [var message, var rows, ..] || (dataframe ? rows : message) != 1
+                || !speaker.Configuration.SelectedItems.Contains(receiver.Id)) {
+                continue;
+            }
+
+            _room.SendChat(viewer => new LinkSpeakerChatComposer(viewer, text, speaker.Item.GetX, speaker.Item.GetY));
+        }
+    }
+
+    internal bool SendLink(Item[] endpoints, WiredLinkPayload payload, WiredEventKind kind) =>
+        WiredLinkTransport.Send(_room, endpoints, payload, kind, LinkStore, _room.Rooms);
+}

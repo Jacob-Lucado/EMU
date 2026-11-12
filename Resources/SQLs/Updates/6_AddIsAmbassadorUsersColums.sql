@@ -1,0 +1,1 @@
+ALTER TABLE `users` ADD `is_ambassador` BOOLEAN NOT NULL DEFAULT FALSE AFTER `allow_mimic`;

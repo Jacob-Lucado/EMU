@@ -1,0 +1,107 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<Nullable>enable</Nullable>
+		<TargetFramework>net10.0</TargetFramework>
+		<Configurations>Debug;Release</Configurations>
+		<OutputType>Exe</OutputType>
+		<RootNamespace>Plus</RootNamespace>
+		<AssemblyName>Plus Emulator</AssemblyName>
+		<GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<PackageLicenseExpression>GPL-3.0-only</PackageLicenseExpression>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<InternalsVisibleTo Include="Plus.Tests" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<!-- Kestrel hosts the login API (Communication/Http). -->
+		<FrameworkReference Include="Microsoft.AspNetCore.App" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<Compile Remove="tools\**" />
+		<Compile Remove="PluginExample\**" />
+		<EmbeddedResource Remove="PluginExample\**" />
+		<None Remove="PluginExample\**" />
+		<Compile Remove="Plus.Tests\**" />
+		<EmbeddedResource Remove="Plus.Tests\**" />
+		<None Remove="Plus.Tests\**" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<!-- The Web API docs page (Communication/Http/WebApiDocsEndpoints.cs) with swagger-ui-dist 5.32.4 (Apache-2.0, see its LICENSE). -->
+		<EmbeddedResource Include="Communication\Http\ApiDocs\index.html;Communication\Http\ApiDocs\swagger-ui-init.js;Communication\Http\ApiDocs\openapi.json" LogicalName="Plus.ApiDocs.%(Filename)%(Extension)" />
+		<EmbeddedResource Include="Communication\Http\ApiDocs\swagger-ui-dist\swagger-ui.css;Communication\Http\ApiDocs\swagger-ui-dist\swagger-ui-bundle.js;Communication\Http\ApiDocs\swagger-ui-dist\swagger-ui-standalone-preset.js;Communication\Http\ApiDocs\swagger-ui-dist\favicon-16x16.png;Communication\Http\ApiDocs\swagger-ui-dist\favicon-32x32.png" LogicalName="Plus.ApiDocs.swagger-ui-dist.%(Filename)%(Extension)" />
+		<!-- Habbo's metadata for the built-in (@) and smart (~) variable catalogue rows (WiredNativeCatalogProjection.Builtins). -->
+		<EmbeddedResource Include="HabboHotel\Items\Wired\Variables\WiredBuiltinCatalogue.json" LogicalName="Plus.Wired.BuiltinCatalogue.json" />
+		<!-- Each floor furni's directions from its .hab asset (scripts/build-furniture-directions.py). -->
+		<EmbeddedResource Include="HabboHotel\Items\FurnitureDirections.tsv" LogicalName="Plus.Items.FurnitureDirections.tsv" />
+		<!-- Schema migrations the emulator applies at startup (Database/Migrator), and the schema for an empty database. -->
+		<EmbeddedResource Include="Database\Migrations\*.sql" LogicalName="Plus.Migrations.%(Filename)%(Extension)" />
+		<EmbeddedResource Include="Resources\SQLs\Updates\*.sql" LogicalName="Plus.Migrations.Updates.%(Filename)%(Extension)" />
+		<EmbeddedResource Include="Database\FreshInstall.sql" LogicalName="Plus.Database.FreshInstall.sql" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Dapper" Version="2.0.123" />
+		<PackageReference Include="Dapper.Contrib" Version="2.0.78" />
+		<PackageReference Include="Microsoft.Extensions.Configuration" Version="10.0.12" />
+		<PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.12" />
+		<PackageReference Include="Microsoft.Extensions.Configuration.Ini" Version="10.0.12" />
+		<PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="10.0.12" />
+		<PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.12" />
+		<PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.12" />
+		<PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.12" />
+		<PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.12" />
+		<PackageReference Include="Microsoft.IO.RecyclableMemoryStream" Version="2.2.1" />
+		<PackageReference Include="MySqlConnector" Version="2.2.5" />
+		<PackageReference Include="NetCoreServer" Version="7.0.0" />
+		<PackageReference Include="NLog" Version="5.1.1" />
+		<PackageReference Include="NLog.Extensions.Logging" Version="5.2.1" />
+		<PackageReference Include="Scrutor" Version="4.2.0" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<Reference Include="HabboEncryption">
+			<HintPath>Resources\libs\HabboEncryption.dll</HintPath>
+		</Reference>
+	</ItemGroup>
+
+	<ItemGroup>
+		<None Update="LICENSE;README.md">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+			<CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+			<ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+		</None>
+		<None Update="Config\config.json">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+		<None Update="Config\figuredata.xml">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+		<None Update="Config\nlog.config">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+	</ItemGroup>
+
+	<ItemGroup>
+		<ContentWithTargetPath Include="Resources\Revisions\**">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+			<TargetPath>revisions\%(Filename)%(Extension)</TargetPath>
+		</ContentWithTargetPath>
+		<ContentWithTargetPath Include="Resources\SnowStorm\**">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+			<TargetPath>snowstorm\%(Filename)%(Extension)</TargetPath>
+		</ContentWithTargetPath>
+	</ItemGroup>
+
+	<Target Name="PostBuild" AfterTargets="PostBuildEvent" Condition=" '$(OS)' == 'Windows_NT' ">
+		<Exec Command="powershell -Command '[Environment]::SetEnvironmentVariable(&quot;PLUS_EMULATOR_HOME&quot;, &quot;$([System.IO.Path]::GetFullPath('$(OutDir)'))&quot;, [System.EnvironmentVariableTarget]::Machine)'" />
+	</Target>
+	<Target Name="PreBuild" BeforeTargets="PreBuildEvent">
+		<Exec Command="echo Configuration: $(Configuration)&#xD;&#xA;echo DevEnvDir: $(DevEnvDir)&#xD;&#xA;echo OutDir: $(OutDir)&#xD;&#xA;echo ProjectDir: $(ProjectDir)&#xD;&#xA;echo VisualStudioVersion: $(VisualStudioVersion)&#xD;&#xA;echo AssemblySearchPaths: $(AssemblySearchPaths)&#xD;&#xA;echo AssemblyName: $(AssemblyName)&#xD;&#xA;echo BaseIntermediateOutputPath: $(BaseIntermediateOutputPath)&#xD;&#xA;echo CscToolPath: $(CscToolPath)" />
+	</Target>
+</Project>

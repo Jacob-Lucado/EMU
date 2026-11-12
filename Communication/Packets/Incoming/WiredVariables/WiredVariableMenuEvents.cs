@@ -1,0 +1,112 @@
+using Plus.Communication.Packets.Incoming.Rooms;
+using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Items.Wired.Variables;
+using Plus.HabboHotel.Rooms;
+
+namespace Plus.Communication.Packets.Incoming.WiredVariables;
+
+public sealed class WiredAllVariablesRequestEvent(IWiredVariableMenuService menus) : RoomPacketEvent
+{
+    public override Task Parse(Room room, GameClient session, IIncomingPacket packet)
+    {
+        if (packet.HasDataRemaining()) {
+            return Task.CompletedTask;
+        }
+
+        menus.ShowCatalogHash(room, session);
+
+        return Task.CompletedTask;
+    }
+}
+
+public sealed class WiredVariableHashesEvent(IWiredVariableMenuService menus) : RoomPacketEvent
+{
+    public override Task Parse(Room room, GameClient session, IIncomingPacket packet)
+    {
+        if (!TryReadHashes(packet, out var hashes)) {
+            return Task.CompletedTask;
+        }
+
+        menus.ShowCatalogDiff(room, session, hashes);
+
+        return Task.CompletedTask;
+    }
+    public static bool TryReadHashes(IIncomingPacket packet, out IReadOnlyDictionary<string, int> hashes)
+    {
+        var result = new Dictionary<string, int>(StringComparer.Ordinal);
+        hashes = result;
+
+        try {
+            var count = packet.ReadInt();
+
+            if (count is < 0 or > 4096) {
+                return false;
+            }
+
+            for (var i = 0; i < count; i++) {
+                var id = packet.ReadString();
+                var hash = packet.ReadInt();
+
+                if (id.Length is < 1 or > 64 || !result.TryAdd(id, hash)) {
+                    return false;
+                }
+            }
+
+            return !packet.HasDataRemaining();
+        }
+        catch (ArgumentException) {
+            return false;
+        }
+    }
+}
+
+public sealed class WiredVariableHoldersRequestEvent(IWiredVariableMenuService menus) : RoomPacketEvent
+{
+    public override Task Parse(Room room, GameClient session, IIncomingPacket packet)
+    {
+        string id;
+
+        try {
+            id = packet.ReadString();
+        }
+        catch (ArgumentException) {
+            return Task.CompletedTask;
+        }
+
+        if (id.Length is < 1 or > 64 || packet.HasDataRemaining()) {
+            return Task.CompletedTask;
+        }
+
+        menus.ShowHolders(room, session, id);
+
+        return Task.CompletedTask;
+    }
+}
+
+public sealed class WiredVariableHoldersPageEvent(IWiredVariableMenuService menus) : RoomPacketEvent
+{
+    public override Task Parse(Room room, GameClient session, IIncomingPacket packet)
+    {
+        string id;
+        int page, size, sort, userType;
+
+        try {
+            id = packet.ReadString();
+            page = packet.ReadInt();
+            size = packet.ReadInt();
+            sort = packet.ReadInt();
+            userType = packet.ReadInt();
+        }
+        catch (ArgumentException) {
+            return Task.CompletedTask;
+        }
+
+        if (id.Length is < 1 or > 64 || !WiredVariableHolderFilters.IsValid(sort, userType) || packet.HasDataRemaining()) {
+            return Task.CompletedTask;
+        }
+
+        menus.ShowHolderPage(room, session, id, page, size, sort, userType);
+
+        return Task.CompletedTask;
+    }
+}

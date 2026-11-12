@@ -1,0 +1,177 @@
+using System.Collections.Concurrent;
+using System.Collections.Immutable;
+using Plus.Communication.Packets.Outgoing.Inventory.Furni;
+using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Items;
+using Plus.HabboHotel.Items.DataFormat;
+
+namespace Plus.HabboHotel.Users.Inventory.Furniture;
+
+public enum ItemType
+{
+    Floor,
+    Wall
+}
+
+public enum FurniCategory
+{
+    Default = 1,
+    WallPaper,
+    Floor,
+    Landscape,
+    PostIt,
+    Poster,
+    SoundSet,
+    TraxSong,
+    Present,
+    EcotronBox,
+    Trophy,
+    CreditFurni,
+    PetShampoo,
+    PetCustomPart,
+    PetCustomPartShampoo,
+    PetSaddle,
+    GuildFurni,
+    GameFurni,
+    MonsterplantSeed,
+    MonsterplantRevival,
+    MonsterplantRebreed,
+    MonsterplantFertilize
+}
+
+public static class ItemTypeExtensions
+{
+    public static string ToCharCode(this ItemType category) => category switch
+    {
+        ItemType.Floor => "S",
+        ItemType.Wall => "I",
+        _ => throw new ArgumentException("Invalid ItemCategory!")
+    };
+
+    public static IFurniObjectData CreateData(this ItemDefinition definition)
+    {
+        if (definition.InteractionType == InteractionType.AreaHide) {
+            return new IntArrayDataFormat { Data = Enumerable.Repeat(0, 8).ToList() };
+        }
+
+        if (definition.InteractionType == InteractionType.Gift) {
+            return new MapDataFormat();
+        }
+
+        if (definition.InteractionType == InteractionType.CrackableEgg) {
+            return new CrackableDataFormat { Target = (uint)Math.Max(definition.Modes, 1) };
+        }
+
+        if (definition.InteractionType == InteractionType.Background) {
+            return new MapDataFormat(new Dictionary<string, string>
+            {
+                ["state"] = "0",
+                ["imageUrl"] = string.Empty,
+                ["clickUrl"] = string.Empty,
+                ["offsetX"] = "0",
+                ["offsetY"] = "0",
+                ["offsetZ"] = "0"
+            });
+        }
+
+        return EmptyDataFormat.Empty;
+    }
+}
+
+public class InventoryItem
+{
+    private int _reserved;
+
+    internal bool TryReserve() => Interlocked.CompareExchange(ref _reserved, 1, 0) == 0;
+    internal void ReleaseReservation() => Volatile.Write(ref _reserved, 0);
+
+    public uint Id { get; set; }
+    public uint OwnerId { get; set; }
+    public bool IsFloorItem => Definition.Type == ItemType.Floor;
+    public bool IsWallItem => Definition.Type == ItemType.Wall;
+    public ItemDefinition Definition { get; set; } = null!;
+    public IFurniObjectData ExtraData { get; set; } = FurniObjectData.Empty;
+    // A Builders Club furni that left its room; it never enters an inventory.
+    public bool IsBuildersClub { get; init; }
+
+    public uint UniqueNumber;
+    public uint UniqueSeries;
+}
+
+public class FurnitureInventoryComponent
+{
+    private readonly ConcurrentDictionary<uint, InventoryItem> _floorItems;
+    private readonly ConcurrentDictionary<uint, InventoryItem> _wallItems;
+
+    public IReadOnlyDictionary<uint, InventoryItem> Floor => _floorItems;
+    public IReadOnlyDictionary<uint, InventoryItem> Wall => _wallItems;
+
+    public FurnitureInventoryComponent(IEnumerable<InventoryItem> floorFurniture, IEnumerable<InventoryItem> wallFurniture)
+    {
+        _floorItems = new(floorFurniture.ToDictionary(f => f.Id));
+        _wallItems = new(wallFurniture.ToDictionary(w => w.Id));
+    }
+
+    public IEnumerable<InventoryItem> GetItems => _floorItems.Values.Concat(_wallItems.Values);
+
+    public IEnumerable<InventoryItem> AllItems => _floorItems.Values.Concat(_wallItems.Values);
+
+    public void SendInventory(GameClient session)
+    {
+        const int itemsPerPage = 700;
+        var items = AllItems.Select(InventoryItemSnapshot.Capture).ToImmutableArray();
+
+        if (items.IsEmpty) {
+            session.Send(new FurniListComposer(items, 1, 1));
+
+            return;
+        }
+
+        var pages = (items.Length - 1) / itemsPerPage + 1;
+        var page = 0;
+
+        foreach (var batch in items.Chunk(itemsPerPage)) {
+            session.Send(new FurniListComposer(batch.ToImmutableArray(), pages, page++));
+        }
+    }
+
+    public void ClearItems()
+    {
+        _floorItems.Clear();
+        _wallItems.Clear();
+    }
+
+    public InventoryItem? GetItem(uint itemId)
+    {
+        if (_floorItems.TryGetValue(itemId, out var item)) {
+            return item;
+        }
+
+        if (_wallItems.TryGetValue(itemId, out item)) {
+            return item;
+        }
+
+        return null;
+    }
+
+    public bool AddItem(InventoryItem item)
+    {
+        if (item.IsBuildersClub) {
+            return false;
+        }
+
+        if (item.IsFloorItem) {
+            return _floorItems.TryAdd(item.Id, item);
+        }
+        else if (item.IsWallItem) {
+            return _wallItems.TryAdd(item.Id, item);
+        }
+        else {
+            throw new InvalidOperationException("Item did not match neither floor or wall item");
+        }
+    }
+
+    public bool HasItem(uint itemId) => _floorItems.ContainsKey(itemId) || _wallItems.ContainsKey(itemId);
+
+    public bool RemoveItem(uint itemId) => _floorItems.TryRemove(itemId, out _) || _wallItems.TryRemove(itemId, out _);
+}

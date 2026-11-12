@@ -1,52 +1,61 @@
-# Contributing to Polaris
+# Contributing to PlusEMU
 
-Polaris is used by live hotels and keeps the established Arcturus/Morningstar
-integration surface compatible. Existing plugin jars must continue to load
-without recompilation, and clients, CMSs, proxies, and databases must not need
-coordinated changes.
+## Build from source
 
-## Development setup
+You need the .NET SDK 10.0.401 or a later patch (pinned in `global.json`).
 
-Use JDK 25 or 26 and the Maven wrapper in `Emulator/` (any 3.x release from 3.9.11 on). Builds continue
-to emit Java 25 bytecode, and release artifacts are produced on JDK 25. Docker
-is needed for the Testcontainers integration suite.
-
-```bash
-./Emulator/mvnw -f Emulator/pom.xml test
-./Emulator/mvnw -f Emulator/pom.xml verify
+```sh
+git clone https://github.com/plus-emulator/PlusEMU.git
+cd PlusEMU
+dotnet build "Plus Emulator.sln" -c Release
+dotnet test Plus.Tests
 ```
 
-Run the smallest focused test first. Refactors follow a test-first workflow:
-add characterization tests against the unchanged implementation, confirm they
-pass, and keep them unchanged through the extraction. Bug fixes start with a
-narrow failing reproduction.
+Some tests read a database connection string from an environment variable, for example `ROOM_COMPONENT_DATABASE`. See the test files.
 
-New tests check behaviour, not source text: call the code and assert on what it
-returns, sends or stores. A test that reads a `.java` file and looks for a
-fragment (`source.contains("...")`) fails on every rename or reformat while the
-behaviour is unchanged, and passes when equivalent code is written differently.
-The existing ones are converted when the code they guard is next touched.
+To run from source, start it in a folder that contains `Config/`:
 
-## Compatibility
+```sh
+dotnet run --project "Plus Emulator.csproj" -c Release
+```
 
-- Keep public `polaris.*` classes, signatures, fields, live collections,
-  plugin metadata, and plugin classloading behavior compatible. A rename of a
-  public name needs its entry in `polaris/plugin/legacy-names.txt`, or old
-  plugin jars stop linking.
-- Preserve packet field order and types.
-- Keep database migrations self-contained in Polaris and never edit a released
-  migration.
-- Test plugin-facing changes against the assembled jar and representative
-  precompiled fixtures, not only the Maven dependency classpath.
-- Do not remove or relocate bundled dependencies without a plugin-classpath
-  compatibility decision.
+## Commits and pull requests
 
-Read `POLARIS.md` before changing plugin compatibility, the legacy SQL bridge,
-or public integration behavior.
+- Open pull requests against `master`.
+- Use [Conventional Commits](https://www.conventionalcommits.org/), for example `feat(wired): ...`, `fix(movement): ...`, `docs: ...`.
+- CI runs the code-style check, a Release build and the tests on every push and pull request. Run them first:
 
-## Git and pull requests
+  ```sh
+  dotnet run --project tools/Plus.CodeStyle -- check   # use "fix" to apply formatting
+  dotnet build "Plus Emulator.sln" -c Release
+  dotnet test Plus.Tests
+  ```
 
-Use `feature/`, `bugfix/`, or `refactor/` branch prefixes and Conventional
-Commits. Keep each pull request reviewable, with a concise title and factual
-description. Add simple manual hotel steps only when automated checks cannot
-cover the behavior.
+## Write a database migration
+
+1. Add the file `Database/Migrations/<next number>_<Name>.sql`. It is MariaDB SQL, and `DELIMITER` lines are allowed.
+2. Make it safe to run again after a partial run (`IF NOT EXISTS`, `INSERT IGNORE`, guarded updates). MariaDB commits schema changes at once, and a failed migration runs again from the top.
+3. Regenerate `Database/FreshInstall.sql` with `scripts/build-fresh-install-sql.sh`.
+
+Operators: see [Database migrations](https://docs.plusemu.dev/getting-started/migrations/).
+
+## Releases
+
+Publish from **Actions > Release > Run workflow** on `master`. The workflow builds and tests before it publishes.
+
+Choose the version change when you run the workflow:
+
+| Choice | Use for | Example |
+|--------|---------|---------|
+| `patch` (default) | Fixes | `v1.2.3` to `v1.2.4` |
+| `minor` | Compatible features | `v1.2.3` to `v1.3.0` |
+| `major` | Breaking changes | `v1.2.3` to `v2.0.0` |
+
+Rules:
+
+- The first semantic release is `v1.0.0`. Later releases increase the highest stable version.
+- Old date-based tags and prereleases do not change the next version.
+- Release runs queue. They do not replace pending runs.
+- Assets upload to a draft first. A retry for the same commit reuses its version and its draft. An already published release stays unchanged.
+- If an unfinished draft belongs to another commit, rerun that draft's original workflow before you release newer changes.
+- A new release must descend from the highest stable release.

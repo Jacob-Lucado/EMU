@@ -1,0 +1,68 @@
+using System.Collections.Immutable;
+using Plus.Communication.Packets.Outgoing.Users;
+using Plus.HabboHotel.Badges.Rarity;
+using Plus.HabboHotel.Friends;
+using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Groups;
+using Plus.HabboHotel.Users.UserData;
+
+namespace Plus.HabboHotel.Users;
+
+public sealed record ProfileGroupSnapshot(int Id, string Name, string Badge, string FirstColor, string SecondColor, bool Favorite, bool ForumEnabled);
+public sealed record PlayerProfileSnapshot(int Id, string Username, string Look, string Motto, DateTimeOffset? CreatedAt,
+    int AchievementPoints, int FriendCount, bool IsFriend, bool RequestedFriendship, bool Online,
+    ImmutableArray<ProfileGroupSnapshot> Groups, int LastOnlineSeconds, int AccountLevel, ProfileBadgeStats? Badges = null);
+
+/// <summary>Badge totals for the profile; a rank below zero hides it.</summary>
+public sealed record ProfileBadgeStats(int Total, int Rank, ImmutableArray<(BadgeRarityTier Tier, int Count)> RarityCounts)
+{
+    public static ProfileBadgeStats None { get; } = new(0, -1, []);
+
+    public static ProfileBadgeStats From(BadgeLeaderboardSnapshot snapshot, int userId)
+    {
+        var total = snapshot.TotalBadges.Find(userId);
+        var rarity = snapshot.RarityBoards.OrderBy(board => board.Key)
+            .Select(board => (board.Key, board.Value.Find(userId)?.Score ?? 0))
+            .Where(entry => entry.Item2 > 0)
+            .ToImmutableArray();
+
+        return new(total?.Score ?? 0, total?.Rank ?? -1, rarity);
+    }
+}
+
+public interface IPlayerProfileService
+{
+    Task Open(GameClient session, int userId);
+}
+
+public sealed class PlayerProfileService(IGroupManager groupManager, IMessengerDataLoader messengerDataLoader,
+    IGameClientManager clients, IUserDataFactory users, IHabboStatsService statsLoader, TimeProvider clock,
+    IBadgeRarityManager badgeRarity) : IPlayerProfileService
+{
+    public async Task Open(GameClient session, int userId)
+    {
+        var target = clients.GetClientByUserId(userId)?.GetHabbo() ?? await users.GetUserDataByIdAsync(userId);
+
+        if (target == null) {
+            session.SendNotification("An error occurred whilst finding that user's profile.");
+
+            return;
+        }
+
+        var stats = await statsLoader.LoadHabboStats(userId);
+        target.HabboStats = stats;
+        var groups = groupManager.GetGroupsForUser(target.Id).Select(group => new ProfileGroupSnapshot(group.Id, group.Name,
+            group.Badge, groupManager.GetColourCode(group.Colour1, true), groupManager.GetColourCode(group.Colour2, false),
+            stats.FavouriteGroupId == group.Id, group.ForumEnabled)).ToImmutableArray();
+        var friendCount = await messengerDataLoader.GetFriendCount(userId);
+        var viewer = session.GetHabbo();
+        var otherUser = target.Id != viewer.Id;
+        var friendship = otherUser && viewer.Messenger?.FriendshipExists(target.Id) == true;
+        var now = clock.GetUtcNow();
+        var elapsed = (int)Math.Clamp(target.LastOnlineAt is { } lastOnline ? (now - lastOnline).Ticks / TimeSpan.TicksPerSecond : 0, 0, int.MaxValue);
+        session.Send(new ProfileInformationComposer(new(target.Id, target.Username, target.Look, target.Motto,
+            target.AccountCreatedAt, stats.AchievementPoints, friendCount, friendship,
+            otherUser && !friendship && viewer.Messenger?.OutstandingFriendRequests.Contains(target.Id) == true,
+            clients.GetClientByUserId(target.Id) != null, groups, elapsed, target.AccountLevel, ProfileBadgeStats.From(badgeRarity.Snapshot, target.Id))));
+    }
+}

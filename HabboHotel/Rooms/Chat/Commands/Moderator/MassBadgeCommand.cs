@@ -1,0 +1,56 @@
+using Plus.HabboHotel.Badges;
+using Plus.HabboHotel.GameClients;
+
+namespace Plus.HabboHotel.Rooms.Chat.Commands.Moderator;
+
+internal class MassBadgeCommand : IChatCommand
+{
+    private readonly IGameClientManager _gameClientManager;
+    private readonly IBadgeManager _badgeManager;
+    public string Key => "massbadge";
+
+    public string Parameters => "%badge%";
+
+    public string Description => "Give a badge to the entire hotel.";
+
+    public MassBadgeCommand(IGameClientManager gameClientManager, IBadgeManager badgeManager)
+    {
+        _gameClientManager = gameClientManager;
+        _badgeManager = badgeManager;
+    }
+
+    public void Execute(GameClient session, Room room, string[] parameters)
+    {
+        var badgeCode = parameters.FirstOrDefault();
+
+        if (string.IsNullOrWhiteSpace(badgeCode)) {
+            session.SendWhisper("Please enter the code of the badge you'd like to give to the entire hotel.");
+
+            return;
+        }
+
+        foreach (var client in _gameClientManager.GetClients.ToList()) {
+            if (client == null || client.GetHabbo() == null || client.GetHabbo().Username == session.GetHabbo().Username) {
+                continue;
+            }
+
+            if (!session.GetHabbo().Access.Outranks(client.GetHabbo().Access)) {
+                continue;
+            }
+
+            if (client.GetHabbo().Inventory is not { } inventory) {
+                continue;
+            }
+
+            if (!inventory.Badges.HasBadge(badgeCode)) {
+                _badgeManager.GiveBadge(client.GetHabbo(), badgeCode).Wait();
+                client.SendNotification("You have just been given a badge!");
+            }
+            else {
+                client.SendWhisper($"{session.GetHabbo().Username} tried to give you a badge, but you already have it!");
+            }
+        }
+
+        session.SendWhisper($"You have successfully given every user in this hotel the {badgeCode} badge!");
+    }
+}

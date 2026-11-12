@@ -1,0 +1,14 @@
+{
+  "name": "plus-trusted-camera-renderer",
+  "private": true,
+  "license": "GPL-3.0-only",
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test *.test.mjs"
+  },
+  "dependencies": {
+    "playwright": "1.63.0",
+    "strip-json-comments": "5.0.3"
+  }
+}

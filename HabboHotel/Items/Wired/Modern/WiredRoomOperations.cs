@@ -1,0 +1,402 @@
+using System.Drawing;
+using System.Collections.Immutable;
+using System.Globalization;
+using Plus.Communication.Packets.Outgoing.Rooms.Engine;
+using Plus.HabboHotel.Items.Wired.Configuration;
+using Plus.HabboHotel.Items.Wired.Modern.Actions;
+using Plus.HabboHotel.Rooms;
+using Plus.HabboHotel.Rooms.PathFinding;
+
+namespace Plus.HabboHotel.Items.Wired.Modern;
+
+/// <summary>
+/// Step: a wired step to another tile, where any other furniture blocks (stackable and helpers too) unless moved through.
+/// Unit: furniture moving along as one stack, which is not in the way of its own move.
+/// </summary>
+public sealed record WiredCollisionPolicy(IReadOnlySet<uint> ThroughFurni, IReadOnlySet<int> ThroughUsers,
+    IReadOnlySet<uint> BlockingFurni, bool Step = false, IReadOnlySet<uint>? Unit = null, bool OntoDoor = false)
+{
+    public bool MovesWith(Item item) => Unit?.Contains(item.Id) == true;
+    public bool BlocksUsers(IEnumerable<RoomUser> users) => users.Any(user => !ThroughUsers.Contains(user.VirtualId));
+    public bool BlocksFurni(Item item) => BlockingFurni.Contains(item.Id)
+        || (Step || !item.Definition.Stackable) && !ThroughFurni.Contains(item.Id);
+}
+
+/// <summary>Movement and queries share the same footprint and placement checks.</summary>
+public static class WiredRoomOperations
+{
+    /// <summary>Save preparation only: capture current picked items before pure validation. Never call while loading.</summary>
+    public static WiredConfiguration PrepareSnapshots(IWiredConfiguredItem box, WiredConfiguration proposed)
+    {
+        if (box.Descriptor.CanonicalName is not ("wf_act_match_to_sshot" or "wf_act_place_furni"
+            or "wf_cnd_match_snapshot" or "wf_cnd_not_match_snap" or "wf_trg_stuff_state" or "wf_trg_state_changed")) {
+            return proposed;
+        }
+
+        var handler = box.Instance.GetRoomItemHandler();
+        var picked = proposed.SelectedItems.Distinct().Select(handler.GetItem)
+            .Where(item => item is { IsFloorItem: true }
+                || box.Descriptor.CanonicalName is "wf_act_match_to_sshot" or "wf_cnd_match_snapshot" or "wf_cnd_not_match_snap"
+                && item is { IsWallItem: true }
+                && WiredWallSnapshot.TryParse(item.WallCoordinates, out _)).ToArray();
+        var templates = box.Descriptor.CanonicalName == "wf_act_place_furni" && proposed.TemporaryPlacement != null;
+
+        return proposed with
+        {
+            Snapshots = templates && picked.Length == 0 ? proposed.Snapshots : picked.Select(Capture).ToImmutableArray(),
+            SelectedItems = templates ? proposed.SelectedItems.Where(id => handler.GetItem(id)?.IsTemporary != true).ToImmutableArray() : proposed.SelectedItems,
+            SecondarySelectedItems = templates ? proposed.SecondarySelectedItems.Where(id => handler.GetItem(id)?.IsTemporary != true).ToImmutableArray() : proposed.SecondarySelectedItems
+        };
+    }
+    public static IEnumerable<Point> Footprint(Item item, int x, int y, int rotation)
+    {
+        // Gamemap.GetAffectedTiles omits the origin and can repeat other cells.
+        yield return new(x, y);
+
+        foreach (var point in Gamemap.GetAffectedTiles(item.Definition.Length, item.Definition.Width,
+                     x, y, rotation).Values.Select(tile => new Point(tile.X, tile.Y)).Distinct()) {
+            yield return point;
+        }
+    }
+
+    // A ridden horse moves only with its rider; a wired that selects the horse moves the rider.
+    internal static RoomUser Rider(Room room, RoomUser user) =>
+        user is { IsBot: true, RidingHorse: true } && room.GetRoomUserManager().GetRoomUserByVirtualId(user.HorseId) is
+        { IsBot: false, RidingHorse: true } rider && rider.HorseId == user.VirtualId ? rider : user;
+
+    internal static RoomUser? Horse(Room room, RoomUser user) =>
+        user is { IsBot: false, RidingHorse: true } && room.GetRoomUserManager().GetRoomUserByVirtualId(user.HorseId) is { } horse
+            && horse != user ? horse : null;
+
+    // The height a user stands at: a rider stands where its horse does.
+    internal static double StandZ(Room room, RoomUser user) => Horse(room, user)?.Z ?? user.Z;
+
+    public static bool IsOnItem(RoomUser user, Item item) =>
+        Footprint(item, item.GetX, item.GetY, item.Rotation).Contains(user.Coordinate);
+
+    /// <summary>
+    /// Whether the user stands on the item for a condition. A user whose step is announced counts on the tile it steps to: the Wired
+    /// walk events fire with that announcement, and a walk-on stack's "triggerer is on furni" condition holds for the furni walked onto.
+    /// </summary>
+    public static bool IsStandingOn(RoomUser user, Item item) =>
+        Footprint(item, item.GetX, item.GetY, item.Rotation).Contains(StandingTile(user));
+
+    /// <summary>
+    /// The tile Wired reads for a user: the tile an announced step goes to, otherwise the user's tile. A users-in-area selector picks a user whose step
+    /// into the area was announced (mv) before the step completes, and no longer picks one whose step out of it was announced.
+    /// </summary>
+    public static Point StandingTile(RoomUser user) => user.SetStep ? new(user.SetX, user.SetY) : user.Coordinate;
+
+    /// <summary>
+    /// The users a Wired furni move onto the tile meets. A Move/Rotate into a tile is blocked by a user whose step onto it was announced, and not by one whose step off it was.
+    /// </summary>
+    public static List<RoomUser> UsersStandingOn(Room room, Point point)
+    {
+        var standing = room.GetGameMap().GetRoomUsers(point).Where(user => user != null && !(user.SetStep && StandingTile(user) != point)).ToList();
+        var arriving = room.GetRoomUserManager()?.GetUserList().Where(user => user is { SetStep: true } && StandingTile(user) == point
+            && !standing.Contains(user)) ?? [];
+
+        standing.AddRange(arriving);
+
+        return standing;
+    }
+
+    public static bool HasStackedItem(Room room, Item item, IReadOnlySet<uint>? ignored = null) =>
+        Footprint(item, item.GetX, item.GetY, item.Rotation)
+            .SelectMany(point => room.GetGameMap().GetCoordinatedItems(point))
+            .Any(other => other.Id != item.Id && ignored?.Contains(other.Id) != true && other.GetZ >= item.TotalHeight);
+
+    public static bool CanMoveItem(Room room, Item item, int x, int y, int rotation,
+        double? height = null, bool throughUsers = false, bool throughFurni = false, WiredCollisionPolicy? collision = null)
+    {
+        return room.GetRoomItemHandler().GetItem(item.Id) == item
+            && CanPlaceItem(room, item, x, y, rotation, height, throughUsers, throughFurni, collision);
+    }
+
+    public static bool CanPlaceItem(Room room, Item item, int x, int y, int rotation,
+        double? height = null, bool throughUsers = false, bool throughFurni = false, WiredCollisionPolicy? collision = null)
+    {
+        if (!item.IsFloorItem || !ValidRotation(item, rotation)
+            || height is { } z && (!double.IsFinite(z) || z < 0 || z > 80)) {
+            return false;
+        }
+
+        var map = room.GetGameMap();
+        var magic = MagicTileHeight.IsMagicTile(item.Definition.InteractionType);
+
+        foreach (var point in Footprint(item, x, y, rotation)) {
+            if (!map.ValidTile(point.X, point.Y)) {
+                return false;
+            }
+
+            if (magic && point.X == map.Model.DoorX && point.Y == map.Model.DoorY) {
+                return false;
+            }
+
+            var placement = map.ResolvePlacement(point.X, point.Y, item.Id, collision);
+
+            if (!magic && !placement.HasHelper && map.Model.SqState[point.X, point.Y] != SquareState.Open && !map.IsWiredDoorLanding(point, collision)) {
+                return false;
+            }
+
+            if (!magic && !placement.HasHelper && !throughUsers && !(item.Definition.IsSeat && Footprint(item, item.GetX, item.GetY, item.Rotation).Contains(point)) && UsersStandingOn(room, point) is var standing
+                && (collision?.BlocksUsers(standing) ?? standing.Count != 0)) {
+                return false;
+            }
+
+            var others = map.GetCoordinatedItems(point).Where(other => other.Id != item.Id && collision?.MovesWith(other) != true).ToArray();
+
+            if (others.Any(other => collision?.BlockingFurni.Contains(other.Id) == true)
+                || (collision?.Step == true || !magic && !placement.HasHelper) && !throughFurni && others.Any(other => collision?.BlocksFurni(other) ?? !other.Definition.Stackable)) {
+                return false;
+            }
+
+            var top = height ?? placement.PlacementZ;
+
+            if (top + item.CurrentHeight > 80) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    public static bool ValidRotation(Item item, int rotation) =>
+        FurnitureDirections.Allows(item.Definition, rotation);
+
+    public static bool MoveItem(Room room, Item item, int x, int y, int? rotation = null,
+        double? height = null, bool keepAltitude = false, bool animate = true, WiredCollisionPolicy? collision = null, bool announce = true)
+    {
+        var rot = rotation ?? item.Rotation;
+        var z = height ?? (keepAltitude ? item.GetZ : (double?)null);
+
+        if (!CanMoveItem(room, item, x, y, rot, z, collision: collision)) {
+            return false;
+        }
+
+        var source = new Point(item.GetX, item.GetY);
+        var sourceZ = item.GetZ;
+        var rotationChanged = rot != item.Rotation;
+
+        if (source.X == x && source.Y == y && rot == item.Rotation && (z == null || z == sourceZ)) {
+            return false;
+        }
+
+        // The full placement path maintains map/index, moved-item persistence and room statuses.
+        if (!room.GetRoomItemHandler().SetFloorItem(null!, item, x, y, rot, false, false,
+                announce && (!animate || rotationChanged), true, z ?? -1, collision, deferPositionSave: true)) {
+            return false;
+        }
+
+        if (item.GetX != source.X || item.GetY != source.Y) {
+            room.GetRoomItemHandler().WaitForRoller(item);
+        }
+
+        if (animate) {
+            room.SendPacket(new SlideObjectBundleComposer(source.X, source.Y, sourceZ,
+                item.GetX, item.GetY, item.GetZ, 0, 0, item.Id));
+        }
+
+        return true;
+    }
+
+    public static bool RelocateAvatar(Room room, RoomUser avatar, int x, int y,
+        bool slide, bool throughUsers = false, bool ignoreOccupants = false, long? discardThrough = null, bool inPlace = false)
+    {
+        return RelocateExecutorAvatar(room, avatar, x, y, slide, throughUsers, ignoreOccupants, discardThrough, inPlace);
+    }
+
+    private static bool CanRelocateAvatar(Room room, RoomUser avatar, int x, int y, bool throughUsers, bool ignoreOccupants, bool inPlace = false)
+    {
+        var map = room.GetGameMap();
+
+        if (room.GetRoomUserManager().GetRoomUserByVirtualId(avatar.VirtualId) != avatar
+            || !map.ValidTile(x, y) || map.Model.SqState[x, y] != SquareState.Open) {
+            return false;
+        }
+
+        if (avatar.X == x && avatar.Y == y) {
+            return inPlace;
+        }
+
+        if (ignoreOccupants) {
+            return AvatarCanStand(map, x, y);
+        }
+
+        return throughUsers || map.CanWalk(x, y, false) && !map.GetRoomUsers(new(x, y)).Any(other => other != avatar);
+    }
+
+    internal static bool AvatarCanStandWithPhysics(Gamemap map, int x, int y, IReadOnlySet<uint> throughFurni)
+    {
+        if (AvatarCanStand(map, x, y)) {
+            return true;
+        }
+
+        var items = map.GetCoordinatedItems(new(x, y));
+
+        return items.Any(item => throughFurni.Contains(item.Id))
+            && items.All(item => throughFurni.Contains(item.Id) || map.ItemWalkState(item) is 1 or 3);
+    }
+
+    // A magic tile or an empty square can be stood on. Otherwise the highest furni must be walkable or a seat/bed.
+    // An uninitialized map byte of 0 is not solid: tests and unloaded tiles have no furni there.
+    internal static bool AvatarCanStand(Gamemap map, int x, int y)
+    {
+        if (map.WalkMagicAt(x, y) != null) {
+            return true;
+        }
+
+        var items = map.GetCoordinatedItems(new(x, y));
+
+        if (items.Count == 0) {
+            return true;
+        }
+
+        Item? top = null;
+
+        foreach (var item in items) {
+            if (item.Definition.InteractionType == InteractionType.WalkMagicTile) {
+                continue;
+            }
+
+            if (top == null || item.TotalHeight > top.TotalHeight || item.TotalHeight == top.TotalHeight && item.Id > top.Id) {
+                top = item;
+            }
+        }
+
+        return top == null || map.ItemWalkState(top) is 1 or 3;
+    }
+
+    private static void RelocateOwned(Room room, RoomNavigation navigation, RoomUser actor,
+        int x, int y, bool slide, bool throughUsers, bool ignoreOccupants, long discardThrough, bool inPlace)
+    {
+        if (!CanRelocateAvatar(room, actor, x, y, throughUsers, ignoreOccupants, inPlace)) {
+            return;
+        }
+
+        var source = (actor.X, actor.Y, actor.Z);
+        var horse = Horse(room, actor);
+        var horseSource = horse == null ? default : (horse.X, horse.Y, horse.Z);
+        var wasLaying = actor.HasStatus("lay");
+        var wasSitting = actor.HasStatus("sit");
+        navigation.ForcePlaceThrough(actor, x, y, room.GetGameMap().SqAbsoluteHeight(x, y), ForceResolution.ExactZ, discardThrough);
+        navigation.Executor.Context.LandingEffects.Apply(actor, wasLaying, wasSitting);
+
+        if (slide && horse != null) {
+            room.SendPacket(new SlideObjectBundleComposer(horseSource.X, horseSource.Y, horseSource.Z,
+                horse.X, horse.Y, horse.Z, 0, horse.VirtualId, 0));
+        }
+
+        if (slide) {
+            room.SendPacket(new SlideObjectBundleComposer(source.X, source.Y, source.Z,
+                actor.X, actor.Y, actor.Z, 0, actor.VirtualId, 0));
+        }
+    }
+
+    private static bool RelocateExecutorAvatar(Room room, RoomUser avatar, int x, int y,
+        bool slide, bool throughUsers = false, bool ignoreOccupants = false, long? discardThrough = null, bool inPlace = false)
+    {
+        if (!CanRelocateAvatar(room, avatar, x, y, throughUsers, ignoreOccupants, inPlace)) {
+            return false;
+        }
+
+        var navigation = room.GetGameMap().Navigation!;
+        navigation.RunOwner(avatar, (actor, sequence) => RelocateOwned(room, navigation, actor, x, y, slide, throughUsers, ignoreOccupants, discardThrough ?? sequence, inPlace));
+
+        return true;
+    }
+
+    public static WiredFurniSnapshot Capture(Item item) => new(item.Id, item.Definition.Id,
+        item.GetX, item.GetY, item.GetZ, item.Rotation, item.LegacyDataString ?? string.Empty)
+    {
+        Wall = CaptureWall(item)
+    };
+
+    private static WiredWallSnapshot? CaptureWall(Item item)
+    {
+        if (!item.IsWallItem || !WiredWallSnapshot.TryParse(item.WallCoordinates, out var wall)) {
+            return null;
+        }
+
+        if (wall!.NativeAltitude == null && item.GetRoom()?.GetGameMap().StaticModel is { } model) {
+            wall = wall with { CapturedAltitudeHundredths = (int)Math.Floor(WiredWallGeometry.Altitude(model, wall) * 100 + 0.5) };
+        }
+
+        return wall;
+    }
+
+    public static bool MatchesSnapshot(Item item, WiredFurniSnapshot snapshot,
+        bool state, bool direction, bool position, bool altitude) =>
+        item.IsWallItem ? MatchesWallSnapshot(item, snapshot, state, position, altitude) :
+        item.IsFloorItem && snapshot.Wall == null
+        && (!state || string.Equals(item.LegacyDataString ?? string.Empty, snapshot.StateFor(item.Definition), StringComparison.Ordinal))
+        && (!direction || item.Rotation == snapshot.Rotation)
+        && (!position || item.GetX == snapshot.X && item.GetY == snapshot.Y)
+        && (!altitude || Math.Abs(item.GetZ - snapshot.Z) < 0.00001);
+
+    /// <summary>
+    /// A picked wall torch takes part in the snapshot conditions, and with state matching on, match passes at the saved state and fails once a Wired toggle changed it.
+    /// A wall item has no rotation, so direction never fails it; position is its wall tile, offset and side, altitude its saved height.
+    /// </summary>
+    private static bool MatchesWallSnapshot(Item item, WiredFurniSnapshot snapshot, bool state, bool position, bool altitude)
+    {
+        if (snapshot.Wall is not { } saved || snapshot.DefinitionId != item.Definition.Id
+            || state && !string.Equals(item.LegacyDataString ?? string.Empty, snapshot.StateFor(item.Definition), StringComparison.Ordinal)) {
+            return false;
+        }
+
+        if (!position && !altitude) {
+            return true;
+        }
+
+        if (!WiredWallSnapshot.TryParse(item.WallCoordinates, out var current)) {
+            return false;
+        }
+
+        if (position && (current!.TileX != saved.TileX || current.TileY != saved.TileY || current.LocalX != saved.LocalX || current.Left != saved.Left)) {
+            return false;
+        }
+
+        if (!altitude) {
+            return true;
+        }
+
+        if (item.GetRoom()?.GetGameMap().StaticModel is not { } model) {
+            return current!.PixelY == saved.PixelY && current.NativeAltitude == saved.NativeAltitude;
+        }
+
+        return Math.Abs(WiredWallGeometry.Altitude(model, current!) - WiredWallGeometry.SavedAltitude(model, saved)) < 0.005;
+    }
+
+    public static bool TryAltitude(string text, out double height) =>
+        double.TryParse(text, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out height)
+        && double.IsFinite(height) && height is >= 0 and <= 80;
+
+    public static bool Quantify(IEnumerable<bool> outcomes, int quantifier)
+    {
+        var found = false;
+
+        foreach (var outcome in outcomes) {
+            if (quantifier == 0 && !outcome) {
+                return false;
+            }
+
+            if (quantifier != 0 && outcome) {
+                return true;
+            }
+
+            found = true;
+        }
+
+        return quantifier == 0 && found;
+    }
+
+    /// <summary>Polaris three-way editor comparison: 0 less, 1 equal, 2 greater.</summary>
+    public static bool Compare(long actual, long expected, int comparison) => comparison switch
+    {
+        0 => actual < expected,
+        1 => actual == expected,
+        2 => actual > expected,
+        _ => false
+    };
+}

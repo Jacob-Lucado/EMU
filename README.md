@@ -1,114 +1,57 @@
-# Polaris
+# PlusEMU
 
-Polaris is a fork of [Arcturus Community](https://git.krews.org/morningstar/Arcturus-Community) and is completely independently developed and has no ties to Krews / Team Morningstar
+PlusEMU is a Habbo Hotel server (an "emulator") written in C#. It works with the official Habbo AIR client and with the [Volt](https://github.com/plus-emulator/Volt) web client.
 
-**Polaris** is a complete, self-contained hotel package: a modern Java game
-server (formerly known as *Arcturus Morningstar Extended*), the Octane browser
-client, a ready-to-import database and all the assets needed to bring a hotel
-online.
+[![Join our Discord](https://img.shields.io/badge/Discord-Join%20our%20server-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/D7B42G7Rxk)
 
-> ### 📢 Disclaimer
-> This repository is provided as an educational resource for learning purposes
-> only. The creators and contributors are not responsible for any misuse or
-> unintended consequences arising from its use. By using these files you agree
-> to take full responsibility for your actions and to comply with all
-> applicable laws and regulations.
+**Need help or have a question? [Join our Discord](https://discord.gg/D7B42G7Rxk).**
 
-## Requirements
+Full guides are on the documentation site: <https://docs.plusemu.dev>
 
-- **Emulator:** Java 25 (JDK). The build also runs on JDK 26. Maven is not needed: the
-  `Emulator/` folder ships the Maven wrapper (`mvnw` / `mvnw.cmd`)
-- **Database:** MariaDB (CI runs the migrations against 10.11, 11.4 and 12.3)
+## Setup
 
-## Quick start
+The easiest way is the [installer](https://docs.plusemu.dev/getting-started/installation/). It sets up the emulator, the client, the website and the database together.
 
-### 1. Database
+To set up only the emulator by hand:
 
-Create an empty MariaDB database and put its name and credentials in
-`config.ini`. Polaris creates the schema automatically on first startup; you do
-not need to import a database dump.
+1. Install MariaDB or MySQL, then create an empty database:
 
-Already running an Arcturus Morningstar 3.5.5 or older Polaris hotel? **Make a
-full database backup first**, point Polaris at that database, and start the
-emulator. A recognized hotel is adopted and upgraded automatically while its
-users, rooms, items, currencies, settings, and custom tables are preserved.
-Polaris refuses to modify a non-empty database that does not look like an
-Arcturus/Polaris hotel.
+   ```sh
+   mysql -u root -p -e "CREATE DATABASE plus CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+   ```
 
-Automatic migrations are enabled by default. Advanced deployments can set
-`db.migrate.on_startup=false` (or `DB_MIGRATE_ON_STARTUP=false`) after applying
-migrations separately.
+2. Download the archive for your system from [Releases](https://github.com/plus-emulator/PlusEMU/releases) and extract it. You do not need to install .NET.
+3. Open `Config/config.json` and set your database password under `Database`.
+4. Start the emulator from the folder that contains `Config/`:
 
-Deployment and troubleshooting commands:
+   ```sh
+   ./"Plus Emulator"
+   ```
 
-```bash
-# Apply migrations and exit without starting the hotel
-java -jar Polaris-<version>-jar-with-dependencies.jar --migrations-only
+   On Windows, run `Plus Emulator.exe`.
 
-# Read-only compatibility, checksum and pending-migration report
-java -jar Polaris-<version>-jar-with-dependencies.jar --migrations=validate
+On an empty database, the emulator creates all tables by itself.
 
-# Realign the migration history (e.g. a migration whose file is no longer present), then exit
-java -jar Polaris-<version>-jar-with-dependencies.jar --migrations=repair
-```
+To connect a client, set its `socket.url` to `ws://127.0.0.1:2096`. See [Configuration](https://docs.plusemu.dev/getting-started/configuration/) for all settings.
 
-`--migrations=apply` explicitly applies migrations before normal startup. There
-is no interactive startup prompt, because that would hang Docker, systemd and
-hosting-panel restarts.
+## Update
 
-### 2. Game server
+If you used the installer, run `sudo plusemu-update` (Linux) or `plusemu-update` (Windows).
 
-```
-cd Emulator
-./mvnw package          # mvnw.cmd package on Windows
-```
+To update by hand:
 
-The build produces `target/Polaris-<version>-jar-with-dependencies.jar`.
-Place a `config.ini` with your database credentials next to the jar (or set
-the `DB_HOSTNAME`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME` and `DB_PASSWORD`
-environment variables) and start it with:
+1. Stop the emulator.
+2. Back up your database and your `Config/` folder.
+3. Download the new release. Replace the old executable with the new one. Keep your `Config/` folder.
+4. Compare your `Config/config.json` with the new one, and add any new settings.
+5. Start the emulator. It updates the database by itself and makes a backup first.
 
-```
-java -jar Polaris-<version>-jar-with-dependencies.jar
-```
+See [Update PlusEMU](https://docs.plusemu.dev/getting-started/updates/) for details.
 
-## Plugins & backwards compatibility
+## Contribute
 
-Polaris keeps its promise to existing plugin authors:
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
-- Plugin jars built for Arcturus/Morningstar **load unchanged** — the Java API
-  now lives in `polaris.*`, and old jars are rewritten to the new names as they
-  load (see `docs/plugin-author-guide.md`).
-- Raw SQL written against pre-Polaris table names is translated on the fly by
-  the **legacy bridge**. The best-known example: the old `permissions` table
-  is now split into `permission_ranks` and `permission_definitions`, and the
-  bridge rewrites old-style statements (such as
-  `ALTER TABLE permissions ADD cmd_x ...`) into their new-schema equivalents
-  automatically.
+## Licence
 
-How it works, what it covers and how to configure it is documented in
-[`POLARIS.md`](POLARIS.md).
-
-The plugin surface is checked on every build: `PluginAbiCompatibilityTest`
-compares the emulator's public classes with Arcturus Morningstar 3.5.5 and with
-the last released Polaris jar, and fails on any change that would break an
-already compiled plugin (see [`Emulator/abi-baseline`](Emulator/abi-baseline)).
-Writing a new plugin is covered in the
-[plugin author guide](docs/plugin-author-guide.md).
-
-## Credits
-
-- **TheGeneral** — the original Arcturus emulator
-- **The Arcturus Morningstar team** ([krews.org](https://krews.org)) — the community fork Polaris grew from
-- **DuckieTM**, **simoleo**, **Medievalshell**, **Lorenzo**, **Remco**, **Valentin**, **Dennis (DennisObject)**
-- **Dippy** — Improved wired architecture base
-- **Seth / iSetht** — Opacity & Gravity wireds
-- **Puffin** — the MyBoBBa catalogue assets, **xlRaiko** — the clothing pack
-- **bop** — Easter egg exploit & Nitro Memory Leaks
-- **Pathfinder** - This is based on the same logic as plusemu.dev from **Dennis  
-
-## Community
-
-[![Discord](https://img.shields.io/badge/Discord-Join%20our%20community-5865F2?logo=discord&logoColor=white)](https://discord.gg/jqZfVrhbf)
-
-Need help, want to contribute, or just want to chat?
+[GPL-3.0-only](LICENSE). The licence does not cover third-party code, or Habbo trademarks and assets.

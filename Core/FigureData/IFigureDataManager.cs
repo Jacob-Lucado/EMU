@@ -1,0 +1,23 @@
+using Plus.Core.FigureData.Types;
+using Plus.HabboHotel.Users.Clothing.Parts;
+
+namespace Plus.Core.FigureData;
+
+public interface IFigureDataManager
+{
+    public const string DefaultFigure = "sh-3338-93.ea-1406-62.hr-831-49.ha-3331-92.hd-180-7.ch-3334-93-1408.lg-3337-92.ca-1813-62";
+
+    void Init();
+    string ProcessFigure(string figure, string gender, ICollection<ClothingParts>? clothingParts, int clubLevel);
+
+    // Habbo's stored form: parts in figuredata set-type order, and a part saved without a colour keeps none.
+    string ProcessFigureCanonical(string figure, string gender, ICollection<ClothingParts>? clothingParts, int clubLevel)
+        => ProcessFigure(figure, gender, clothingParts, clubLevel);
+    Palette? GetPalette(int colorId);
+    bool TryGetPalette(int palletId, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out Palette? palette);
+    int GetRandomColor(int palletId, int clubLevel = 0);
+    public string FilterFigure(string figure);
+
+    // A random wearable outfit for temporary bots.
+    string GenerateRandomFigure(string gender, Random random) => DefaultFigure;
+}

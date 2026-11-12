@@ -1,0 +1,153 @@
+using System.Buffers.Binary;
+using System.Globalization;
+using System.Reflection;
+using Plus.Communication.Packets.Incoming.Users;
+using Plus.Communication.Packets.Outgoing;
+using Plus.Communication.Packets.Outgoing.Users;
+using Plus.HabboHotel.Badges.Rarity;
+using Plus.HabboHotel.Friends;
+using Plus.HabboHotel.Groups;
+using Plus.HabboHotel.Users;
+using Xunit;
+
+namespace Plus.Tests;
+
+public sealed class PlayerProfileSnapshotTests
+{
+    // Hidden, three ints, two bools, badge total, achievement level, an empty rarity list and the badge rank.
+    private const int ProfileTailBytes = 31;
+
+    [Fact]
+    public void ProfileWireLayoutUsesCapturedDataAndInvariantDates()
+    {
+        PlayerProfileSnapshot profile = new(7, "Alice", "hd-1", "hello", new(2020, 2, 3, 0, 0, 0, TimeSpan.Zero),
+            12, 3, false, true, false, [new(42, "Group", "badge", "red", "blue", true, true)], 90, 11,
+            new(5, 9, [(BadgeRarityTier.Mythical, 2)]));
+        var composer = new ProfileInformationComposer(profile);
+        var oldCulture = CultureInfo.CurrentCulture;
+
+        try {
+            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("ar-SA");
+            var packet = new HabbiconTestSupport.RecordingPacket();
+            composer.Compose(packet);
+            Assert.Equal(new object[] { 7, "Alice", "hd-1", "hello", "03/02/2020", 12, 3, false, true, (byte)0, 1,
+                42, "Group", "badge", "red", "blue", true, 0, true, 90, true,
+                false, 11, 0, 0, false, false, 5, 0, 1, (byte)4, 2, 9 }, packet.Writes);
+            var changed = profile with { Groups = profile.Groups.Add(new(99, "New", "", "", "", false, false)) };
+            Assert.Equal(2, changed.Groups.Length);
+            var repeated = new HabbiconTestSupport.RecordingPacket();
+            composer.Compose(repeated);
+            Assert.Equal(packet.Writes, repeated.Writes);
+        }
+        finally {
+            CultureInfo.CurrentCulture = oldCulture;
+        }
+    }
+
+    // The profile answer carries the account level of the profile's owner, not the viewer's, whatever the achievement score.
+    [Fact]
+    public async Task TheRawProfileRequestAnswersWithTheTargetsAccountLevel()
+    {
+        var viewer = new Habbo { Id = 3, Username = "Viewer", AccountLevel = 13 };
+        var target = new Habbo { Id = 7, Username = "Alice", AccountLevel = 6 };
+        var (session, sent) = HabbiconTestSupport.Client(viewer);
+        var (targetClient, _) = HabbiconTestSupport.Client(target);
+        var clients = new SharedTestClients();
+        clients.Online[3] = session;
+        clients.Online[7] = targetClient;
+        var profiles = new PlayerProfileService(DispatchProxy.Create<IGroupManager, EmptyGroups>(),
+            DispatchProxy.Create<IMessengerDataLoader, FriendCount>(), clients, null!, new Stats(), new FixedClock(), new NoBadges());
+
+        await new OpenPlayerProfileEvent(profiles).Parse(session, HabbiconTestSupport.Incoming(7, true));
+        target.AccountLevel = 21;
+        await new OpenPlayerProfileEvent(profiles).Parse(session, HabbiconTestSupport.Incoming(7, false));
+
+        Assert.Equal(2, sent.Count);
+        Assert.All(sent, packet => Assert.Equal(ServerPacketHeader.ProfileInformationComposer, packet.Header));
+        Assert.Equal([6, 21], sent.Select(packet => BinaryPrimitives.ReadInt32BigEndian(packet.Payload.AsSpan(packet.Payload.Length - ProfileTailBytes + 1, 4))));
+    }
+
+    [Theory]
+    [InlineData(null, 0)]
+    [InlineData(2_200_000_000L, 0)]
+    [InlineData(1_700_000_000L, 100)]
+    [InlineData(-62_135_596_800L, int.MaxValue)]
+    public async Task ProfileServiceCapturesAndBoundsElapsedTime(long? lastOnline, int expected)
+    {
+        var habbo = new Habbo
+        {
+            Id = 7,
+            Username = "Alice",
+            Look = "hd-1",
+            Motto = "hello",
+            LastOnlineAt = lastOnline.HasValue ? DateTimeOffset.FromUnixTimeSeconds(lastOnline.Value) : null
+        };
+        var (client, sent) = HabbiconTestSupport.Client(habbo);
+        var clients = new SharedTestClients();
+        clients.Online[7] = client;
+        var groups = DispatchProxy.Create<IGroupManager, EmptyGroups>();
+        var messenger = DispatchProxy.Create<IMessengerDataLoader, FriendCount>();
+        var profiles = new PlayerProfileService(groups, messenger, clients, null!, new Stats(), new FixedClock(), new NoBadges());
+        await profiles.Open(client, 7);
+        var payload = Assert.Single(sent).Payload;
+        Assert.Equal(expected, BinaryPrimitives.ReadInt32BigEndian(payload.AsSpan(payload.Length - ProfileTailBytes - 5, 4)));
+        Assert.Equal((byte)1, payload[^(ProfileTailBytes + 1)]);
+    }
+
+    [Fact]
+    public async Task ProfileElapsedSecondsRetainFractionsUntilTheWireBoundary()
+    {
+        var now = DateTimeOffset.FromUnixTimeSeconds(1_700_000_100).ToOffset(TimeSpan.FromHours(9));
+        var habbo = new Habbo { Id = 7, LastOnlineAt = now.ToOffset(TimeSpan.FromHours(-7)).AddTicks(-1) };
+        var (client, sent) = HabbiconTestSupport.Client(habbo);
+        var clients = new SharedTestClients();
+        clients.Online[7] = client;
+        var profiles = new PlayerProfileService(DispatchProxy.Create<IGroupManager, EmptyGroups>(),
+            DispatchProxy.Create<IMessengerDataLoader, FriendCount>(), clients, null!, new Stats(), new FixedClock(), new NoBadges());
+        await profiles.Open(client, 7);
+        var payload = Assert.Single(sent).Payload;
+        Assert.Equal(0, BinaryPrimitives.ReadInt32BigEndian(payload.AsSpan(payload.Length - ProfileTailBytes - 5, 4)));
+    }
+
+    [Fact]
+    public async Task ProfileElapsedSecondsTruncateTicksJustBelowTheIntegerLimit()
+    {
+        var now = DateTimeOffset.FromUnixTimeSeconds(1_700_000_100).ToOffset(TimeSpan.FromHours(9));
+        var habbo = new Habbo { Id = 7, LastOnlineAt = now.ToOffset(TimeSpan.FromHours(-7)).AddSeconds(-int.MaxValue).AddTicks(1) };
+        var (client, sent) = HabbiconTestSupport.Client(habbo);
+        var clients = new SharedTestClients();
+        clients.Online[7] = client;
+        var profiles = new PlayerProfileService(DispatchProxy.Create<IGroupManager, EmptyGroups>(),
+            DispatchProxy.Create<IMessengerDataLoader, FriendCount>(), clients, null!, new Stats(), new FixedClock(), new NoBadges());
+        await profiles.Open(client, 7);
+        var payload = Assert.Single(sent).Payload;
+        Assert.Equal(int.MaxValue - 1, BinaryPrimitives.ReadInt32BigEndian(payload.AsSpan(payload.Length - ProfileTailBytes - 5, 4)));
+    }
+
+    private sealed class NoBadges : IBadgeRarityManager
+    {
+        public BadgeLeaderboardSnapshot Snapshot => BadgeLeaderboardSnapshot.Empty;
+        public Task Refresh() => Task.CompletedTask;
+        public Task<LeaderboardProfile?> GetProfile(int userId) => Task.FromResult<LeaderboardProfile?>(null);
+    }
+
+    private sealed class FixedClock : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => DateTimeOffset.FromUnixTimeSeconds(1_700_000_100);
+    }
+    private sealed class Stats : IHabboStatsService
+    {
+        public Task<HabboStats> LoadHabboStats(int id) => Task.FromResult(new HabboStats(0, 0, 0, 0, 0, 0, 0, 0, 12, 0, 0, 0, "", 0));
+        public Task UpdateDailyRespectsAndTimestamp(int id, int dailyRespects, string timestamp) => throw new NotSupportedException();
+    }
+    private class EmptyGroups : DispatchProxy
+    {
+        protected override object? Invoke(MethodInfo? method, object?[]? args) => method?.Name == "GetGroupsForUser"
+            ? new List<Group>() : throw new NotSupportedException(method?.Name);
+    }
+    private class FriendCount : DispatchProxy
+    {
+        protected override object? Invoke(MethodInfo? method, object?[]? args) => method?.Name == "GetFriendCount"
+            ? Task.FromResult(3) : throw new NotSupportedException(method?.Name);
+    }
+}

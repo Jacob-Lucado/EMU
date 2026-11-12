@@ -1,0 +1,291 @@
+using Plus.HabboHotel.Items.Wired.Configuration;
+
+namespace Plus.HabboHotel.Items;
+
+public static class InteractionTypes
+{
+    /// <summary>Furni sold as two linked halves (room_items_tele_links): teleporters and the WIRED Room Linker.</summary>
+    public static bool IsLinkedPair(InteractionType type) => type is InteractionType.Teleport or InteractionType.WiredRoomLinker;
+
+    public static InteractionType GetTypeFromString(string type)
+    {
+        if (WiredBoxRegistry.TryGet(type, out var descriptor)) {
+            return descriptor.Category switch
+            {
+                WiredBoxCategory.Trigger => InteractionType.WiredTrigger,
+                WiredBoxCategory.Condition => InteractionType.WiredCondition,
+                WiredBoxCategory.Selector => InteractionType.WiredSelector,
+                WiredBoxCategory.Addon => InteractionType.WiredAddon,
+                WiredBoxCategory.Variable => InteractionType.WiredVariable,
+                _ => InteractionType.WiredEffect
+            };
+        }
+
+        switch (type.ToLower()) {
+            case "area_hide":
+                return InteractionType.AreaHide;
+            case "invis_control":
+                return InteractionType.InvisibleFurniControl;
+            case "chooser_disable":
+                return InteractionType.ChooserDisabler;
+            case "handitem_block":
+                return InteractionType.HandItemBlocker;
+            case "wired_disable":
+                return InteractionType.WiredDisabler;
+            case "queue_speed":
+                return InteractionType.RollerSpeedController;
+            case "recolorable":
+                return InteractionType.Recolorable;
+            case "effect_box":
+                return InteractionType.EffectBox;
+            case "wired_chest_furni":
+                return InteractionType.WiredChestFurni;
+            case "wired_chest_coins":
+                return InteractionType.WiredChestCoins;
+            case "wired_contract_payment":
+                return InteractionType.WiredContractPayment;
+            case "wired_contract_trade":
+                return InteractionType.WiredContractTrade;
+            case "wired_contract_reward":
+                return InteractionType.WiredContractReward;
+            case "wired_room_linker":
+                return InteractionType.WiredRoomLinker;
+            case "wired_label":
+                return InteractionType.WiredLabel;
+            case "wired_link":
+                return InteractionType.WiredLink;
+            case "":
+            case "default":
+                return InteractionType.None;
+            case "gate":
+                return InteractionType.Gate;
+            case "postit":
+                return InteractionType.Postit;
+            case "dimmer":
+                return InteractionType.Moodlight;
+            case "trophy":
+                return InteractionType.Trophy;
+            case "bed":
+                return InteractionType.Bed;
+            case "scoreboard":
+                return InteractionType.Scoreboard;
+            case "vendingmachine":
+                return InteractionType.VendingMachine;
+            case "alert":
+                return InteractionType.Alert;
+            case "onewaygate":
+                return InteractionType.OneWayGate;
+            case "loveshuffler":
+                return InteractionType.LoveShuffler;
+            case "habbowheel":
+                return InteractionType.HabboWheel;
+            case "dice":
+                return InteractionType.Dice;
+            case "hopper":
+                return InteractionType.Hopper;
+            case "bottle":
+                return InteractionType.Bottle;
+            case "teleport":
+                return InteractionType.Teleport;
+            case "pool":
+                return InteractionType.Pool;
+            case "roller":
+                return InteractionType.Roller;
+            case "fbgate":
+                return InteractionType.FootballGate;
+            case "icetag_pole":
+                return InteractionType.IceTagPole;
+            case "icetag_field":
+            case "iceskates":
+                return InteractionType.IceSkates;
+            case "rollerskate":
+                return InteractionType.NormalSkates;
+            case "lowpool":
+                return InteractionType.Lowpool;
+            case "haloweenpool":
+                return InteractionType.Haloweenpool;
+            case "ball":
+                return InteractionType.Football;
+            case "green_goal":
+                return InteractionType.FootballGoalGreen;
+            case "yellow_goal":
+                return InteractionType.FootballGoalYellow;
+            case "red_goal":
+                return InteractionType.FootballGoalRed;
+            case "blue_goal":
+                return InteractionType.FootballGoalBlue;
+            case "green_score":
+                return InteractionType.Footballcountergreen;
+            case "yellow_score":
+                return InteractionType.Footballcounteryellow;
+            case "blue_score":
+                return InteractionType.Footballcounterblue;
+            case "red_score":
+                return InteractionType.Footballcounterred;
+            case "bb_blue_gate":
+                return InteractionType.Banzaigateblue;
+            case "bb_red_gate":
+                return InteractionType.Banzaigatered;
+            case "bb_yellow_gate":
+                return InteractionType.Banzaigateyellow;
+            case "bb_green_gate":
+                return InteractionType.Banzaigategreen;
+            case "bb_patch":
+                return InteractionType.Banzaifloor;
+            case "bb_blue_score":
+                return InteractionType.Banzaiscoreblue;
+            case "bb_red_score":
+                return InteractionType.Banzaiscorered;
+            case "bb_yellow_score":
+                return InteractionType.Banzaiscoreyellow;
+            case "bb_green_score":
+                return InteractionType.Banzaiscoregreen;
+            case "banzaicounter":
+                return InteractionType.Banzaicounter;
+            case "bb_teleport":
+                return InteractionType.Banzaitele;
+            case "banzaipuck":
+                return InteractionType.Banzaipuck;
+            case "bb_pyramid":
+                return InteractionType.Banzaipyramid;
+            case "freezetimer":
+                return InteractionType.Freezetimer;
+            case "freezeexit":
+                return InteractionType.Freezeexit;
+            case "freezeredcounter":
+                return InteractionType.Freezeredcounter;
+            case "freezebluecounter":
+                return InteractionType.Freezebluecounter;
+            case "freezeyellowcounter":
+                return InteractionType.Freezeyellowcounter;
+            case "freezegreencounter":
+                return InteractionType.Freezegreencounter;
+            case "freezeyellowgate":
+                return InteractionType.FreezeYellowGate;
+            case "freezeredgate":
+                return InteractionType.FreezeRedGate;
+            case "freezegreengate":
+                return InteractionType.FreezeGreenGate;
+            case "freezebluegate":
+                return InteractionType.FreezeBlueGate;
+            case "freezetileblock":
+                return InteractionType.FreezeTileBlock;
+            case "freezetile":
+                return InteractionType.FreezeTile;
+            case "jukebox":
+                return InteractionType.Jukebox;
+            case "musicdisc":
+                return InteractionType.MusicDisc;
+            case "pressure_pad":
+                return InteractionType.PressurePad;
+            case "wf_floor_switch1":
+                return InteractionType.WfFloorSwitch1;
+            case "wf_floor_switch2":
+                return InteractionType.WfFloorSwitch2;
+            case "puzzlebox":
+                return InteractionType.PuzzleBox;
+            case "water":
+                return InteractionType.Pool;
+            case "gift":
+                return InteractionType.Gift;
+            case "background":
+                return InteractionType.Background;
+            case "mannequin":
+                return InteractionType.Mannequin;
+            case "vip_gate":
+                return InteractionType.GateVip;
+            case "roombg":
+                return InteractionType.Toner;
+            case "gld_item":
+                return InteractionType.GuildItem;
+            case "gld_gate":
+                return InteractionType.GuildGate;
+            case "guild_forum":
+                return InteractionType.GuildForum;
+            case "tent":
+                return InteractionType.Tent;
+            case "tent_small":
+                return InteractionType.TentSmall;
+            case "badge_display":
+                return InteractionType.BadgeDisplay;
+            case "tile_walkmagic":
+                return InteractionType.WalkMagicTile;
+            case "stacktool":
+                return InteractionType.Stacktool;
+            case "television":
+                return InteractionType.Television;
+            case "wired_effect":
+                return InteractionType.WiredEffect;
+            case "wired_trigger":
+                return InteractionType.WiredTrigger;
+            case "wired_condition":
+                return InteractionType.WiredCondition;
+            case "wired_selector":
+                return InteractionType.WiredSelector;
+            case "wired_addon":
+                return InteractionType.WiredAddon;
+            case "wired_variable":
+                return InteractionType.WiredVariable;
+            case "floor":
+                return InteractionType.Floor;
+            case "wallpaper":
+                return InteractionType.Wallpaper;
+            case "landscape":
+                return InteractionType.Landscape;
+            case "badge":
+                return InteractionType.Badge;
+            case "crackable_egg":
+                return InteractionType.CrackableEgg;
+            case "effect":
+                return InteractionType.Effect;
+            case "deal":
+                return InteractionType.Deal;
+            case "roomdeal":
+                return InteractionType.Roomdeal;
+            case "horse_saddle_1":
+                return InteractionType.HorseSaddle1;
+            case "horse_saddle_2":
+                return InteractionType.HorseSaddle2;
+            case "horse_hairstyle":
+                return InteractionType.HorseHairstyle;
+            case "horse_body_dye":
+                return InteractionType.HorseBodyDye;
+            case "horse_hair_dye":
+                return InteractionType.HorseHairDye;
+            case "gnome_box":
+                return InteractionType.GnomeBox;
+            case "bot":
+                return InteractionType.Bot;
+            case "purchasable_clothing":
+                return InteractionType.PurchasableClothing;
+            case "pet_breeding_box":
+                return InteractionType.PetBreedingBox;
+            case "arrow":
+                return InteractionType.Arrow;
+            case "lovelock":
+                return InteractionType.Lovelock;
+            case "cannon":
+                return InteractionType.Cannon;
+            case "wf_upcounter1":
+            case "wf_upcounter2":
+            case "wf_game_upcounter1":
+            case "wf_game_upcounter2":
+            case "counter":
+                return InteractionType.Counter;
+            case "camera_picture":
+                return InteractionType.CameraPicture;
+            case "fx_provider":
+                return InteractionType.FxProvider;
+            case "exchange":
+                return InteractionType.Exchange;
+            case "skateboard":
+                return InteractionType.Skateboard;
+            case "pet":
+                return InteractionType.Pet;
+            default: {
+                    //Logging.WriteLine("Unknown interaction type in parse code: " + pType, ConsoleColor.Yellow);
+                    return InteractionType.None;
+                }
+        }
+    }
+}

@@ -1,0 +1,335 @@
+using System.Collections.Immutable;
+using Plus.Communication.Packets.Outgoing.Rooms.Engine;
+using Plus.HabboHotel.Items.Wired.Configuration;
+using Plus.HabboHotel.Items.Wired.Runtime;
+using Plus.HabboHotel.Rooms;
+using Plus.HabboHotel.Rooms.AI;
+
+namespace Plus.HabboHotel.Items.Wired.Modern.Actions;
+
+public static class WiredBotActions
+{
+    /// <summary>The bot name box of every bot editor takes 32 characters (AS3 TextInputParam("", 32, ...)).</summary>
+    public const int NameEditorLength = 32;
+    public static readonly IReadOnlySet<string> Names = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    { "wf_act_bot_teleport", "wf_act_bot_move", "wf_act_bot_follow_avatar", "wf_act_bot_give_handitem", "wf_act_bot_talk", "wf_act_bot_talk_to_avatar", "wf_act_bot_clothes" };
+    public static WiredConfiguration Defaults(string name) => new()
+    {
+        IntParams = name switch
+        {
+            "wf_act_bot_teleport" or "wf_act_bot_move" => [100, 100],
+            "wf_act_bot_follow_avatar" => [0, 0, 100],
+            "wf_act_bot_give_handitem" => [0, 0, 100],
+            "wf_act_bot_talk" => [0, 100, -1],
+            "wf_act_bot_talk_to_avatar" => [0, 0, 100, -1],
+            "wf_act_bot_clothes" => [100],
+            _ => throw new ArgumentException("Unknown bot action.", nameof(name))
+        },
+        Text = name is "wf_act_bot_talk" or "wf_act_bot_talk_to_avatar" or "wf_act_bot_clothes" ? "\t" : ""
+    };
+    public static bool TryValidate(string name, WiredConfiguration proposed, out WiredConfiguration validated, out string error)
+    {
+        validated = proposed;
+        error = "Invalid bot configuration.";
+
+        if (!Names.Contains(name) || !WiredLegacyProtocol.IsWithinLimits(proposed)) {
+            return false;
+        }
+
+        var p = proposed.IntParams;
+        var f = ImmutableDictionary.CreateBuilder<string, int>();
+        var u = ImmutableDictionary.CreateBuilder<string, int>();
+        bool Source(int index) => p[index] is 0 or 100 or 200 or 201;
+        bool User(int index) => p[index] is 0 or 10 or 11 or 200 or 201;
+
+        switch (name) {
+            case "wf_act_bot_teleport":
+            case "wf_act_bot_move":
+                if (p.Length != 2 || !Source(0) || !Source(1)) {
+                    return false;
+                }
+
+                f["items"] = p[0];
+                u["bots"] = p[1];
+                break;
+            case "wf_act_bot_follow_avatar":
+            case "wf_act_bot_give_handitem":
+                if (p.Length != 3 || p[0] < 0 || name == "wf_act_bot_follow_avatar" && p[0] > 1 || !User(1) || !Source(2)) {
+                    return false;
+                }
+
+                u["users"] = p[1];
+                u["bots"] = p[2];
+                break;
+            case "wf_act_bot_talk":
+                if (p.Length is not (3 or 4) || p[0] is < 0 or > 1 || !Source(1) || p[2] is < -1 or > 2 || p.Length == 4 && p[3] is not (0 or 1)) {
+                    return false;
+                }
+
+                u["bots"] = p[1];
+                break;
+            case "wf_act_bot_talk_to_avatar":
+                if (p.Length is not (4 or 5) || p[0] is < 0 or > 1 || !User(1) || !Source(2) || p[3] is < -1 or > 2
+                    || p.Length == 5 && p[4] is not (0 or 1)) {
+                    return false;
+                }
+
+                u["users"] = p[1];
+                u["bots"] = p[2];
+                break;
+            case "wf_act_bot_clothes":
+                if (p.Length != 1 || !Source(0)) {
+                    return false;
+                }
+
+                u["bots"] = p[0];
+                break;
+        }
+
+        if (proposed.Text.Split('\t', 2)[0].Length > 64) {
+            return false;
+        }
+
+        validated = proposed with
+        {
+            FurniSources = f.ToImmutable(),
+            UserSources = u.ToImmutable(),
+            Text = name is "wf_act_bot_talk" or "wf_act_bot_talk_to_avatar" ? TalkText(proposed.Text) : proposed.Text
+        };
+        error = "";
+
+        return true;
+    }
+
+    /// <summary>
+    /// "bot TAB message", read the way the hotel splits it: trailing empty fields are dropped, and a single field is the message, not
+    /// the bot. A talk box saved with bot "Robbie" and no message reads back as "\tRobbie".
+    /// </summary>
+    internal static string TalkText(string text)
+    {
+        var fields = text.Split('\t').ToList();
+
+        while (fields.Count > 0 && fields[^1].Length == 0) {
+            fields.RemoveAt(fields.Count - 1);
+        }
+
+        return fields.Count switch
+        {
+            // A fresh talk box has an empty text, not "\t".
+            0 => "",
+            1 => "\t" + fields[0],
+            _ => fields[0] + "\t" + string.Join('\t', fields.Skip(1))
+        };
+    }
+    public static bool Execute(string name, WiredRuntimeContext context, WiredConfiguration config,
+        WiredRoomMovement movement, IBotManagementStore botStore, Func<RoomUser, Item, bool>? teleport = null)
+    {
+        if (!TryValidate(name, config, out config, out _)) {
+            return false;
+        }
+
+        var parts = config.Text.Split('\t', 2);
+        var botName = parts[0];
+        var text = parts.Length > 1 ? parts[1] : "";
+        var source = config.UserSources["bots"];
+        // The bot box names its bot; an empty name picks nobody. Hand item alone lets the bot be left out (its "use bot" box unticked).
+        var optionalUnnamedHandItem = name == "wf_act_bot_give_handitem" && botName.Length == 0;
+        var bots = source == 0 ? context.Event.Actor is { IsBot: true, IsPet: false } actor
+                && context.Targets.AllUsers().Any(user => ReferenceEquals(user, actor)) ? new[] { actor } : []
+            : source == WiredSources.BotByName && botName.Length == 0 ? []
+            : context.Targets.ResolveUsers(context, [], source, botName).Where(user => user.IsBot && !user.IsPet).ToArray();
+
+        if (bots.Length == 0 && !optionalUnnamedHandItem) {
+            return false;
+        }
+
+        var users = config.UserSources.TryGetValue("users", out var userSource)
+            ? context.Targets.ResolveUsers(context, [], userSource).Where(user => !user.IsBot).ToArray() : [];
+        var items = config.FurniSources.TryGetValue("items", out var furniSource) ? context.Targets.ResolveFurni(context, config.SelectedItems, furniSource) : [];
+        var p = config.IntParams;
+        var changed = false;
+        var targets = WiredBotTargets.For(context.Room);
+
+        switch (name) {
+            case "wf_act_bot_teleport":
+            case "wf_act_bot_move":
+                if (items.Length == 0) {
+                    return false;
+                }
+
+                foreach (var bot in bots) {
+                    // Every resolved bot passed IsBot, so its bot data is loaded.
+                    if (bot.BotData is not { } botData) {
+                        continue;
+                    }
+
+                    var item = items[Random.Shared.Next(items.Length)];
+
+                    if (name == "wf_act_bot_teleport") {
+                        // A bot teleport is a normal Teleport To. A bot does not teleport onto a tile another avatar stands on.
+                        if (teleport != null) {
+                            if (!context.Room.GetGameMap().GetRoomUsers(new(item.GetX, item.GetY)).Any(other => !ReferenceEquals(other, bot))) {
+                                changed |= teleport(bot, item);
+                            }
+                        }
+                        else {
+                            WiredAvatarState.For(context.Room).Thaw(bot, teleport: true);
+                            changed |= movement.MoveAvatar(context, bot, item.GetX, item.GetY, false);
+                        }
+                    }
+                    else if (WiredBotTargets.StandsStillOn(bot, item.GetX, item.GetY)) {
+                        // A Bot Move to the tile the bot stands still on sends nothing.
+                        targets.Stop(bot);
+                    }
+                    else {
+                        botData.ForcedUserTargetMovement = 0;
+                        botData.ForcedMovement = true;
+                        botData.TargetCoordinate = new(item.GetX, item.GetY);
+                        bot.MoveTo(item.GetX, item.GetY);
+                        targets.Walk(bot, item);
+                        changed = true;
+                    }
+                }
+
+                return changed;
+            case "wf_act_bot_follow_avatar":
+                if (p[0] == 0) {
+                    foreach (var bot in bots) {
+                        targets.Stop(bot);
+                    }
+
+                    return true;
+                }
+
+                if (users.Length == 0) {
+                    return false;
+                }
+
+                for (var index = 0; index < bots.Length; index++) {
+                    var bot = bots[index];
+
+                    // Every resolved bot passed IsBot, so its bot data is loaded.
+                    if (bot.BotData is not { } botData) {
+                        continue;
+                    }
+
+                    var user = users[index % users.Length];
+                    botData.ForcedMovement = false;
+                    botData.ForcedUserTargetMovement = user.HabboId;
+                    targets.Follow(bot, user);
+                }
+
+                foreach (var arrived in targets.Poll(context.Room, context.NowMilliseconds)) {
+                    context.Room.GetWired().Dispatch(arrived);
+                }
+
+                return true;
+            case "wf_act_bot_give_handitem":
+                if (users.Length == 0) {
+                    return false;
+                }
+
+                // Without a bot (its "use bot" box unticked) the users get the item at once.
+                if (bots.Length == 0) {
+                    foreach (var user in users) {
+                        user.CarryItem(p[0]);
+                    }
+
+                    return true;
+                }
+
+                for (var index = 0; index < bots.Length; index++) {
+                    targets.Give(context.Room, bots[index], users[index % users.Length], p[0], context.NowMilliseconds);
+                }
+
+                return true;
+            case "wf_act_bot_clothes":
+                if (!FigureWellFormed(text)) {
+                    return false;
+                }
+
+                foreach (var bot in bots) {
+                    // Every resolved bot passed IsBot, so its bot data is loaded.
+                    if (bot.BotData is not { } botData) {
+                        continue;
+                    }
+
+                    botStore.SaveAppearance(botData.Id, context.Room.RoomId, text, botData.Gender);
+                    botData.Look = text;
+                    context.Room.SendPacket(new UserChangeComposer(AvatarChangeSnapshot.Capture(botData)));
+                }
+
+                return true;
+            case "wf_act_bot_talk":
+            case "wf_act_bot_talk_to_avatar":
+                if (text.Length == 0) {
+                    return false;
+                }
+
+                if (name == "wf_act_bot_talk_to_avatar" && users.Length == 0) {
+                    return false;
+                }
+
+                foreach (var bot in bots) {
+                    // Every resolved bot passed IsBot, so its bot data is loaded.
+                    if (bot.BotData is not { } botData) {
+                        continue;
+                    }
+
+                    var formatted = context.Policy.FormatText(context, text.Replace("%name%", botData.Name, StringComparison.Ordinal));
+                    var width = p[name == "wf_act_bot_talk" ? 2 : 3];
+                    var hideName = p.Length > (name == "wf_act_bot_talk" ? 3 : 4) && p[name == "wf_act_bot_talk" ? 3 : 4] == 1;
+
+                    if (name == "wf_act_bot_talk_to_avatar" && p[0] == 1) {
+                        foreach (var user in users) {
+                            var client = user.GetClient();
+
+                            if (client == null) {
+                                continue;
+                            }
+
+                            client.Send(new WiredChatComposer(bot.VirtualId, user.VirtualId, formatted, botData.ChatBubble, width, true, HideUsername: hideName));
+                            changed = true;
+                        }
+                    }
+                    else if (name == "wf_act_bot_talk_to_avatar") {
+                        // Said aloud, the bot addresses the avatar by name ("Objecto: hello you"), once per avatar.
+                        var said = false;
+
+                        foreach (var user in users) {
+                            var username = user.GetClient()?.GetHabbo()?.Username;
+
+                            if (string.IsNullOrEmpty(username)) {
+                                continue;
+                            }
+
+                            context.Room.SendChat(receiver => new WiredChatComposer(bot.VirtualId, receiver, $"{username}: {formatted}", botData.ChatBubble, width, false, false, hideName));
+                            said = true;
+                        }
+
+                        if (said) {
+                            context.Room.GetRoomUserManager().TurnHeadsToward(bot);
+                            changed = true;
+                        }
+                    }
+                    else {
+                        context.Room.SendChat(receiver => new WiredChatComposer(bot.VirtualId, receiver, formatted, botData.ChatBubble, width, false, p[0] == 1, hideName));
+                        context.Room.GetRoomUserManager().TurnHeadsToward(bot);
+                        changed = true;
+                    }
+                }
+
+                return changed;
+            default:
+                throw new InvalidOperationException("No bot executor.");
+        }
+    }
+    public static bool FigureWellFormed(string figure) => figure.Length is > 0 and <= 512 && figure.Split('.').All(part =>
+    {
+        var fields = part.Split('-');
+
+        // A colour field may be empty ("hr-100-"). Habbo saves it and drops the empty colour.
+        return fields.Length >= 2 && fields[0].Length == 2 && fields[0].All(c => c is >= 'a' and <= 'z') && fields[1].Length > 0
+            && fields.Skip(1).All(field => field.All(c => c is >= '0' and <= '9'));
+    });
+}

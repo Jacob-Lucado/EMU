@@ -1,0 +1,101 @@
+using System.Drawing;
+using Plus.Communication.Packets.Outgoing.Rooms.Engine;
+using Plus.HabboHotel.Items;
+
+namespace Plus.HabboHotel.Rooms.PathFinding;
+
+// Snapshots each roller's cargo and rider once per cycle, with the original carried-Z formula.
+internal sealed class RollerLoadBuilder(Room room, RollerTransport transport)
+{
+    private const int MaxCargo = 10;
+
+    internal IReadOnlyList<RollerLoad> Build(IEnumerable<Item> rollers)
+    {
+        var cargoSeen = new HashSet<uint>();
+        var actorsSeen = new HashSet<RoomUser>(ReferenceEqualityComparer.Instance);
+        var loads = new List<RollerLoad>();
+
+        foreach (var roller in rollers) {
+            if (roller == null || roller.SquareInFront == new Point(roller.GetX, roller.GetY)
+                || room.GetRoomItemHandler().WaitsForRoller(roller)) {
+                continue;
+            }
+
+            var load = Load(roller, cargoSeen, actorsSeen);
+
+            if (load.Moves.Count > 0) {
+                loads.Add(load);
+            }
+        }
+
+        transport.RefreshCapabilities(actorsSeen);
+
+        return loads;
+    }
+
+    private RollerLoad Load(Item roller, HashSet<uint> cargoSeen, HashSet<RoomUser> actorsSeen)
+    {
+        var map = room.GetGameMap();
+        var destination = roller.SquareInFront;
+        var nextIsRoller = map.GetAllRoomItemForSquare(destination.X, destination.Y).Any(RollerIdentity.IsRoller);
+        var moves = map.GetRoomItemForSquare(roller.GetX, roller.GetY, roller.GetZ)
+            .Where(cargo => transport.RestsOnRoller(roller, cargo) && !room.GetRoomItemHandler().WaitsForRoller(cargo)).Take(MaxCargo)
+            .Where(cargo => cargoSeen.Add(cargo.Id))
+            .Select(cargo => CargoMove(roller, cargo, destination, nextIsRoller)).ToList();
+        // A ridden horse never rolls on its own: its rider rolls and takes it along.
+        var actor = map.GetRoomUsers(new(roller.GetX, roller.GetY))
+            .FirstOrDefault(user => transport.Horse(user) == null && !transport.IsRidden(user) && transport.RestsOnRoller(roller, user))
+            ?? map.GetRoomUsers(new(roller.GetX, roller.GetY)).FirstOrDefault(user => transport.Horse(user) is { } horse
+                && transport.RestsOnRoller(roller, horse));
+
+        if (actor != null && transport.CanRide(actor) && actorsSeen.Add(actor)) {
+            moves.Add(ActorMove(roller, actor, transport.Horse(actor), destination, nextIsRoller));
+        }
+
+        return new(roller, destination, moves);
+    }
+
+    // The setter's own height adjustment is applied here, so the captured slide matches the commit.
+    private RollerMove CargoMove(Item roller, Item cargo, Point destination, bool nextIsRoller)
+    {
+        var z = room.GetRoomItemHandler().ResolveFloorZ(cargo, destination.X, destination.Y,
+            Carried(cargo.GetZ, roller, nextIsRoller));
+        var slide = new SlideObjectBundleComposer(cargo.GetX, cargo.GetY, cargo.GetZ, destination.X, destination.Y,
+            z, roller.Id, 0, cargo.Id);
+
+        return new(roller, new(roller.GetX, roller.GetY), destination, Snapshot(roller, cargo.GetZ, 0, cargo.Rotation), z, cargo, null, slide);
+    }
+
+    // A rider is carried at its horse's height; the rider keeps its seat offset above the horse.
+    private RollerMove ActorMove(Item roller, RoomUser actor, RoomUser? horse, Point destination, bool nextIsRoller)
+    {
+        if (horse != null) {
+            var horseZ = Carried(horse.Z, roller, nextIsRoller);
+            var seat = actor.Z - horse.Z;
+            var riderSlide = new SlideObjectBundleComposer(actor.X, actor.Y, actor.Z, destination.X, destination.Y,
+                horseZ + seat, roller.Id, actor.VirtualId, 0);
+            var horseSlide = new SlideObjectBundleComposer(horse.X, horse.Y, horse.Z, destination.X, destination.Y,
+                horseZ, roller.Id, horse.VirtualId, 0);
+
+            return new(roller, new(roller.GetX, roller.GetY), destination,
+                Snapshot(roller, horse.Z, actor.Movement.LocationRevision), horseZ, null, actor, riderSlide, horse, horseSlide);
+        }
+
+        var z = Carried(actor.Z, roller, nextIsRoller);
+
+        if (Math.Abs(actor.Z - roller.TotalHeight) <= SurfaceSelection.Tolerance) {
+            z = nextIsRoller ? transport.RollerTopZ(destination) : transport.StandZ(destination, z);
+        }
+
+        var slide = new SlideObjectBundleComposer(actor.X, actor.Y, actor.Z, destination.X, destination.Y,
+            z, roller.Id, actor.VirtualId, 0);
+
+        return new(roller, new(roller.GetX, roller.GetY), destination,
+            Snapshot(roller, actor.Z, actor.Movement.LocationRevision), z, null, actor, slide);
+    }
+
+    private static RollerSnapshot Snapshot(Item roller, double sourceZ, long actorRevision, int cargoRotation = 0)
+        => new(roller.Rotation, roller.GetZ, sourceZ, actorRevision, cargoRotation);
+
+    private static double Carried(double z, Item roller, bool nextIsRoller) => nextIsRoller ? z : z - roller.Definition.Height;
+}

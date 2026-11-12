@@ -1,0 +1,170 @@
+using System.Runtime.CompilerServices;
+using Plus.HabboHotel.Items.Wired.Runtime;
+using Plus.HabboHotel.Rooms;
+using Plus.HabboHotel.Rooms.Games.Teams;
+
+namespace Plus.HabboHotel.Items.Wired.Modern.Actions;
+
+/// <summary>Room-scoped typed game grants, separate from the legacy editor's arithmetic operation.</summary>
+public sealed class WiredGameState
+{
+    private readonly Dictionary<(uint Box, int Player), int> _grants = [];
+    private readonly Dictionary<RoomUser, (int Type, Team Team, long Revision)> _types = [];
+    private readonly HashSet<uint> _spentScoreTriggers = [];
+    private static readonly ConditionalWeakTable<Room, WiredGameState> Rooms = new();
+    public static WiredGameState For(Room room) => Rooms.GetValue(room, _ => new());
+    public void ResetQuotas()
+    {
+        _grants.Clear();
+        _spentScoreTriggers.Clear();
+    }
+    public void Forget(RoomUser user) => _types.Remove(user);
+    public void Clear()
+    {
+        _grants.Clear();
+        _types.Clear();
+        _spentScoreTriggers.Clear();
+    }
+    /// <summary>A Battle Banzai, Freeze or football game, or a Wired game counter, is in progress: the only time a team score exists.</summary>
+    public static bool GameRunning(Room room) => room.GetBanzai().IsBanzaiActive || room.GetFreeze().GameIsStarted || room.GetSoccer().GameIsStarted
+        || room.GetWired() is { GameCounterRunning: true };
+    // Outside a running game giving score is a no-op: no points, no quota use, no score event. The box still flashes.
+    public bool GiveScore(Room room, uint boxId, int playerId, Team team, int amount, int? quota, Action<WiredRuntimeEvent> publish)
+    {
+        if ((int)team is < 1 or > 4 || !GameRunning(room)) {
+            return false;
+        }
+
+        var key = (boxId, playerId);
+
+        if (quota is > 0) {
+            var grants = _grants.GetValueOrDefault(key);
+
+            if (grants >= quota) {
+                return false;
+            }
+
+            _grants[key] = grants + 1;
+        }
+
+        var previous = room.GetGameManager().Points[(int)team];
+        room.GetGameManager().AddPointToTeam(team, amount);
+        publish(new(WiredEventKind.Score) { Team = (int)team, PreviousValue = previous, Value = room.GetGameManager().Points[(int)team] });
+
+        return true;
+    }
+    // A Score Achieved box fires once per game round, for the first team that crosses,
+    // and a firing stopped by a false condition still counts. A new game or a save that changes its settings rearms it.
+    public bool TryFireScoreTrigger(uint boxId) => _spentScoreTriggers.Add(boxId);
+    public void RearmScoreTrigger(uint boxId) => _spentScoreTriggers.Remove(boxId);
+    public bool Join(Room room, RoomUser user, int type, Team chosen, int mode, IEnumerable<RoomUser> allUsers,
+        Action<RoomUser, Team, int>? applyEffect = null)
+    {
+        if (user.IsBot) {
+            return false;
+        }
+
+        var manager = type switch { 1 => room.GetTeamManagerForBanzai(), 2 => room.GetTeamManagerForFreeze(), _ => null };
+        var candidates = Enumerable.Range(1, 4).Select(value => (Team)value).ToArray();
+        var members = allUsers.Where(member => !member.IsBot && !ReferenceEquals(member, user) && TeamType(room, member) == type).ToArray();
+        var team = mode switch
+        {
+            1 => candidates.OrderBy(team => members.Count(member => member.Team == team)).ThenBy(team => user.Team == team ? 0 : 1).First(),
+            2 => candidates[Random.Shared.Next(candidates.Length)],
+            _ => chosen
+        };
+
+        if ((int)team is < 1 or > 4 || manager != null && user.Team != team && !manager.CanEnterOnTeam(team)) {
+            return false;
+        }
+
+        if (user.Team == team && TeamType(room, user) == type) {
+            return false;
+        }
+
+        RemoveFromManagers(room, user);
+        user.Team = team;
+        _types[user] = (type, team, user.TeamRevision);
+        manager?.AddUser(user);
+
+        if (applyEffect == null) {
+            user.ApplyEffect(TeamEffect(type, team));
+        }
+        else {
+            applyEffect(user, team, TeamEffect(type, team));
+        }
+
+        // Joining or leaving a Wired team sends only the AvatarEffect, no UserUpdate.
+        return true;
+    }
+    public bool Leave(Room room, RoomUser user, Action<RoomUser, int>? clearEffect = null)
+    {
+        if (user.IsBot || user.Team == Team.None) {
+            return false;
+        }
+
+        var effect = TeamEffect(TeamType(room, user), user.Team);
+        RemoveFromManagers(room, user);
+        user.Team = Team.None;
+        _types.Remove(user);
+
+        if (clearEffect != null) {
+            clearEffect(user, effect);
+        }
+        else if (user.GetClient()?.GetHabbo()?.Effects?.CurrentEffect == effect) {
+            user.ApplyEffect(0);
+        }
+
+        return true;
+    }
+    public int? ReadTeamType(Room room, RoomUser user)
+    {
+        if (user.IsBot || user.Team == Team.None) {
+            return null;
+        }
+
+        if (Contains(room.Teambanzai, user)) {
+            return 0;
+        }
+
+        if (Contains(room.Teamfreeze, user)) {
+            return 1;
+        }
+
+        return _types.TryGetValue(user, out var joined) && joined.Team == user.Team && joined.Type == 0 ? 4 : null;
+    }
+    // A user in a plain Wired team talks, shouts and whispers with the team bubble, 130 in Red and 133 in Green, and 0 outside a team.
+    // Blue 131 and Yellow 132 follow the @event.chat.style connector's team styles.
+    // A user that Join Team put into a Battle Banzai or Freeze team, and a user that walked onto a Battle Banzai or Freeze gate,
+    // talks with the same bubbles, also after walking off the gate. A user whose team changed after a Join Team keeps the own
+    // bubble unless a Battle Banzai or Freeze team list holds them.
+    public static int? TeamChatStyle(Room room, RoomUser user) => !user.IsBot && user.Team != Team.None
+        && (For(room)._types.TryGetValue(user, out var joined) && joined.Team == user.Team && joined.Revision == user.TeamRevision
+            || Contains(room.Teambanzai, user) || Contains(room.Teamfreeze, user))
+        ? user.Team switch { Team.Red => 130, Team.Blue => 131, Team.Yellow => 132, Team.Green => 133, _ => null }
+        : null;
+    // The effect is 222 + team for a plain wired team, 32 + team for a Battle Banzai team and 39 + team for a Freeze team.
+    // Leaving delivers effect 0. The own avatar gets it after the action's own stack effects, so it rides the next 500 ms state
+    // update instead of a fixed delay.
+    // Battle Banzai and Freeze number their effects in team order; Wired teams use 223 Red, 224 Blue, 225 Yellow, 226 Green.
+    internal static int TeamEffect(int type, Team team) => type switch
+    {
+        1 => (int)team + 32,
+        2 => (int)team + 39,
+        _ => team switch { Team.Red => 223, Team.Blue => 224, Team.Yellow => 225, Team.Green => 226, _ => 222 + (int)team }
+    };
+    private int TeamType(Room room, RoomUser user) => _types.TryGetValue(user, out var joined) && joined.Team == user.Team ? joined.Type
+        : Contains(room.Teambanzai, user) ? 1 : Contains(room.Teamfreeze, user) ? 2 : 0;
+    private static bool Contains(TeamManager? manager, RoomUser user) => manager != null
+        && (manager.RedTeam.Contains(user) || manager.GreenTeam.Contains(user) || manager.BlueTeam.Contains(user) || manager.YellowTeam.Contains(user));
+    private static void RemoveFromManagers(Room room, RoomUser user)
+    {
+        if (Contains(room.Teambanzai, user)) {
+            room.Teambanzai.OnUserLeave(user);
+        }
+
+        if (Contains(room.Teamfreeze, user)) {
+            room.Teamfreeze.OnUserLeave(user);
+        }
+    }
+}

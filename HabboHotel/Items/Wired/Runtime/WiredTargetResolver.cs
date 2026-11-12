@@ -1,0 +1,90 @@
+using Plus.HabboHotel.Rooms;
+using Plus.HabboHotel.Items.Wired.Configuration;
+
+namespace Plus.HabboHotel.Items.Wired.Runtime;
+
+public sealed class WiredTargetResolver(Func<IEnumerable<Item>> furni, Func<IEnumerable<RoomUser>> users,
+    Func<uint, Item?>? findFurni = null, Func<int, RoomUser?>? findUser = null, Func<IEnumerable<Item>>? attachedFurni = null)
+{
+    /// <summary>Users who left and whose Leaves Room stacks are still running their immediate part.</summary>
+    internal HashSet<RoomUser> Leavers { get; } = new(ReferenceEqualityComparer.Instance);
+    internal bool IsLeaving(RoomUser user) => Leavers.Contains(user);
+    public Item[] AllFurni() => furni().ToArray();
+    internal Item[] AttachedFurni() => (attachedFurni?.Invoke() ?? furni()).ToArray();
+    public RoomUser[] AllUsers() => users().ToArray();
+    public bool IsAttached(Item item) => ReferenceEquals(item,
+        findFurni == null ? AttachedFurni().FirstOrDefault(candidate => candidate.Id == item.Id) : findFurni(item.Id));
+
+    public Item[] ResolveFurni(WiredRuntimeContext context, IEnumerable<uint> saved, int source, bool raw = false)
+    {
+        var savedIds = saved.Distinct().Order().ToArray();
+        IEnumerable<uint> ids = source switch
+        {
+            WiredSources.Trigger => context.Triggering.FurniIds,
+            WiredSources.Selected or WiredSources.Snapshot => savedIds,
+            WiredSources.Selector => context.SelectorPool.FurniIds,
+            WiredSources.Signal => context.Signal?.Selection.FurniIds ?? [],
+            WiredSources.AllRoom => AllFurni().Select(x => x.Id),
+            _ => throw new ArgumentOutOfRangeException(nameof(source), source, "Unknown furniture source")
+        };
+
+        // Static editor picks never acquire ownership of transient furniture, including after ID reuse.
+        if (source is WiredSources.Selected or WiredSources.Snapshot) {
+            ids = ids.Where(id => context.FurniIdentity.TryGetValue(id, out var picked) && !picked.IsTemporary);
+        }
+
+        var wanted = ids.ToHashSet();
+        var candidates = findFurni == null ? AttachedFurni().Where(x => wanted.Contains(x.Id))
+            : wanted.Select(findFurni).OfType<Item>();
+
+        if (source == WiredSources.AllRoom) {
+            candidates = candidates.ToArray();
+
+            foreach (var item in candidates) {
+                context.FurniIdentity.TryAdd(item.Id, item);
+            }
+        }
+
+        return candidates.Where(x => wanted.Contains(x.Id) && (source is not (WiredSources.Selected or WiredSources.Snapshot) || !x.IsTemporary)
+            && context.FurniIdentity.TryGetValue(x.Id, out var original)
+            && ReferenceEquals(x, original)).ToArray();
+    }
+
+    public RoomUser[] ResolveUsers(WiredRuntimeContext context, IEnumerable<int> saved, int source, string? name = null, bool raw = false)
+    {
+        var savedIds = saved.Distinct().Order().ToArray();
+        var roomUsers = source == WiredSources.AllRoom || name != null ? AllUsers() : [];
+        IEnumerable<int> ids = source switch
+        {
+            WiredSources.Trigger => context.Triggering.UserIds,
+            WiredSources.ClickedUser when context.Event.Kind == WiredEventKind.ClickUser =>
+                context.Event.TargetUser is { } clicked ? [clicked.VirtualId] : [],
+            WiredSources.ClickedUser => [],
+            WiredSources.ReachedUser => context.Event.TargetUser is { } target ? [target.VirtualId] : [],
+            WiredSources.Selected when name == null => savedIds,
+            WiredSources.BotByName => roomUsers.Where(x => x.IsBot && !x.IsPet
+                && (string.IsNullOrEmpty(name) || string.Equals(x.BotData.Name, name, StringComparison.OrdinalIgnoreCase))).Select(x => x.VirtualId),
+            WiredSources.UserByName => roomUsers.Where(x => !x.IsBot
+                && string.Equals(x.GetClient()?.GetHabbo()?.Username, name, StringComparison.OrdinalIgnoreCase)).Select(x => x.VirtualId),
+            WiredSources.Selector => context.SelectorPool.UserIds,
+            WiredSources.Signal => context.Signal?.Selection.UserIds ?? [],
+            WiredSources.AllRoom => roomUsers.Select(x => x.VirtualId),
+            _ => throw new ArgumentOutOfRangeException(nameof(source), source, "Unknown avatar source")
+        };
+
+        var wanted = ids.ToHashSet();
+        var candidates = findUser == null ? (roomUsers.Length > 0 ? roomUsers : AllUsers()).Where(x => wanted.Contains(x.VirtualId))
+            : wanted.Select(findUser).OfType<RoomUser>();
+
+        if (source == WiredSources.AllRoom) {
+            candidates = candidates.ToArray();
+
+            foreach (var user in candidates) {
+                context.UserIdentity.TryAdd(user.VirtualId, user);
+            }
+        }
+
+        return candidates.Where(x => wanted.Contains(x.VirtualId) && context.UserIdentity.TryGetValue(x.VirtualId, out var original)
+            && ReferenceEquals(x, original)).ToArray();
+    }
+}

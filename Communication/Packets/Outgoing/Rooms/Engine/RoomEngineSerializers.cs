@@ -1,0 +1,44 @@
+using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Items;
+
+namespace Plus.Communication.Packets.Outgoing.Rooms.Engine;
+
+public static class RoomEngineSerializers
+{
+    public static void Serialize(this IOutgoingPacket packet, RoomItemSnapshot item)
+    {
+        packet.WriteUInteger(BuildersClubItemIds.ToWire(item.Id));
+        packet.WriteInteger(item.SpriteId);
+        packet.WriteInteger(item.X);
+        packet.WriteInteger(item.Y);
+        packet.WriteInteger(item.Rotation);
+        packet.WriteString(item.Z);
+        packet.WriteString(item.Height);
+        packet.WriteInteger(item.FloorExtra);
+        FurnitureDataSerializer.Write(packet, item.Data, item.UniqueNumber, item.UniqueSeries);
+        packet.WriteInteger(-1);
+        packet.WriteInteger(item.UseButton);
+        packet.WriteInteger(item.UserId);
+    }
+
+    internal static void WriteWallItem(IOutgoingPacket packet, RoomItemSnapshot item)
+    {
+        packet.WriteString(BuildersClubItemIds.ToWire(item.Id).ToString(System.Globalization.CultureInfo.InvariantCulture));
+        packet.WriteInteger(item.SpriteId);
+        packet.WriteString(item.WallCoordinates);
+        packet.WriteString(item.WallData);
+        packet.WriteInteger(-1);
+        packet.WriteInteger(item.UseButton);
+        packet.WriteInteger(item.UserId);
+    }
+
+    internal static void WriteOwnerMap(IOutgoingPacket packet, RoomFurnitureSnapshot furniture)
+    {
+        packet.WriteInteger(furniture.Owners.Length);
+
+        foreach (var owner in furniture.Owners) {
+            packet.WriteInteger(owner.Id);
+            packet.WriteString(owner.Name);
+        }
+    }
+}

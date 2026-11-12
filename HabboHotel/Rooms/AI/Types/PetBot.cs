@@ -1,0 +1,369 @@
+using Plus.Core;
+using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Rooms.PathFinding;
+using Plus.Utilities;
+using Plus.HabboHotel.Rooms.Chat.Pets.Commands;
+using Plus.HabboHotel.Rooms.Chat.Pets.Locale;
+
+namespace Plus.HabboHotel.Rooms.AI.Types;
+
+public class PetBot : BotAi
+{
+    private int _actionTimer;
+    private int _energyTimer;
+    private int _speechTimer;
+    private readonly IPetLocale _locale;
+    private readonly IPetCommandManager _commands;
+
+    public PetBot(int virtualId, IPetLocale locale, IPetCommandManager commands)
+    {
+        _locale = locale;
+        _commands = commands;
+        _speechTimer = Random.Shared.Next(10, 60);
+        _actionTimer = Random.Shared.Next(10, 30 + virtualId);
+        _energyTimer = Random.Shared.Next(10, 60);
+    }
+
+    private void RemovePetStatus()
+    {
+        var botUser = GetRoomUser();
+
+        if (botUser == null) {
+            return;
+        }
+
+        var pet = botUser;
+
+        if (pet != null) {
+            foreach (var kvp in pet.Statusses.ToList()) {
+                if (pet.Statusses.ContainsKey(kvp.Key)) {
+                    pet.Statusses.Remove(kvp.Key);
+                }
+            }
+        }
+    }
+
+    public override void OnSelfEnterRoom()
+    {
+        var botRoom = GetRoom();
+
+        if (botRoom == null) {
+            return;
+        }
+
+        var botUser = GetRoomUser();
+
+        if (botUser == null) {
+            return;
+        }
+
+        if (botUser != null && botRoom.GetGameMap().TryGetRandomWalkableSquare(out var nextCoord)) {
+            botUser.MoveTo(nextCoord.X, nextCoord.Y);
+        }
+    }
+
+    public override void OnSelfLeaveRoom(bool kicked) { }
+
+
+    public override void OnUserEnterRoom(RoomUser user)
+    {
+        var botUser = GetRoomUser();
+
+        if (botUser == null) {
+            return;
+        }
+
+        var speakerSession = user?.GetClient();
+
+        if (speakerSession == null) {
+            return;
+        }
+
+        if (speakerSession != null && speakerSession.GetHabbo() != null) {
+            var pet = botUser;
+
+            if (pet?.PetData is { } petData) {
+                if (speakerSession.GetHabbo().Username == petData.OwnerName) {
+                    var speech = _locale.GetValue($"welcome.speech.pet{petData.Type}");
+                    var rSpeech = speech[Random.Shared.Next(0, speech.Length)];
+                    pet.Chat(rSpeech);
+                }
+            }
+        }
+    }
+
+    public override void OnUserLeaveRoom(GameClient client) { }
+
+    public override void OnUserShout(RoomUser user, string message) { }
+
+    public override void OnTimerTick()
+    {
+        var botRoom = GetRoom();
+
+        if (botRoom == null) {
+            return;
+        }
+
+        var botUser = GetRoomUser();
+
+        if (botUser == null) {
+            return;
+        }
+
+        var pet = botUser;
+
+        if (pet?.PetData is not { } petData) {
+            return;
+        }
+
+        if (_speechTimer <= 0) {
+            if (petData.DbState != PetDatabaseUpdateState.NeedsInsert) {
+                petData.DbState = PetDatabaseUpdateState.NeedsUpdate;
+            }
+
+            if (pet != null) {
+                RemovePetStatus();
+                var speech = _locale.GetValue($"speech.pet{petData.Type}");
+                var rSpeech = speech[Random.Shared.Next(0, speech.Length)];
+
+                if (rSpeech.Length != 3) {
+                    pet.Chat(rSpeech);
+                }
+                else {
+                    pet.Statusses.Add(rSpeech, TextHandling.GetString(pet.Z));
+                }
+            }
+
+            _speechTimer = Random.Shared.Next(20, 120 + 1);
+        }
+        else {
+            _speechTimer--;
+        }
+
+        if (_actionTimer <= 0) {
+            try {
+                RemovePetStatus();
+                _actionTimer = Random.Shared.Next(15, 40 + petData.VirtualId + 1);
+
+                if (!botUser.RidingHorse) {
+                    // Remove Status
+                    RemovePetStatus();
+
+                    if (botUser.CanWalk && botRoom.GetGameMap().TryGetRandomWalkableSquare(out var nextCoord)) {
+                        botUser.MoveTo(nextCoord.X, nextCoord.Y);
+                    }
+                }
+            }
+            catch (Exception e) {
+                ExceptionLogger.LogException(e);
+            }
+        }
+        else {
+            _actionTimer--;
+        }
+
+        if (_energyTimer <= 0) {
+            RemovePetStatus(); // Remove Status
+            petData.PetEnergy(true); // Add Energy
+            _energyTimer = Random.Shared.Next(30, 120 + 1); // 2 Min Max
+        }
+        else {
+            _energyTimer--;
+        }
+    }
+
+    public override void OnUserSay(RoomUser user, string message)
+    {
+        var botRoom = GetRoom();
+
+        if (botRoom == null) {
+            return;
+        }
+
+        var botUser = GetRoomUser();
+
+        if (botUser == null) {
+            return;
+        }
+
+        var speakerSession = user?.GetClient();
+
+        if (speakerSession == null) {
+            return;
+        }
+
+        if (user == null) {
+            return;
+        }
+
+        var pet = botUser;
+
+        if (pet?.PetData is not { } petData) {
+            return;
+        }
+
+        if (petData.DbState != PetDatabaseUpdateState.NeedsInsert) {
+            petData.DbState = PetDatabaseUpdateState.NeedsUpdate;
+        }
+
+        if (message.ToLower().Equals(petData.Name.ToLower())) {
+            pet.SetRot(Rotation.Calculate(pet.X, pet.Y, user.X, user.Y), false);
+
+            return;
+        }
+
+        //if (!Pet.Statusses.ContainsKey("gst thr"))
+        //    Pet.Statusses.Add("gst thr", TextHandling.GetString(Pet.Z));
+        if (message.ToLower().StartsWith($"{petData.Name.ToLower()} ") && speakerSession.GetHabbo().Username.ToLower() == petData.OwnerName.ToLower() ||
+            message.ToLower().StartsWith($"{petData.Name.ToLower()} ") &&
+            _commands.TryInvoke(message.Substring(petData.Name.ToLower().Length + 1)) == 8) {
+            var commandId = _commands.TryInvoke(message.Substring(petData.Name.ToLower().Length + 1));
+
+            if (petData.ObeysCommand(commandId)) {
+                RemovePetStatus(); // Remove Status
+
+                switch (commandId) {
+                    // TODO - Level you can use the commands at...
+                    case 1:
+                        RemovePetStatus();
+
+                        //int randomX = PlusEnvironment.GetRandomNumber(0, botRoom.Model.MapSizeX);
+                        //int randomY = PlusEnvironment.GetRandomNumber(0, botRoom.Model.MapSizeY);
+                        if (botRoom.GetGameMap().TryGetRandomWalkableSquare(out var nextCoord)) {
+                            pet.MoveTo(nextCoord.X, nextCoord.Y);
+                        }
+
+                        petData.Addexperience(10); // Give XP
+                        break;
+                    case 2:
+                        RemovePetStatus();
+                        var newX = user.X;
+                        var newY = user.Y;
+                        _actionTimer = 30; // Reset ActionTimer
+
+                        if (user.RotBody == 4) {
+                            newY = user.Y + 1;
+                        }
+                        else if (user.RotBody == 0) {
+                            newY = user.Y - 1;
+                        }
+                        else if (user.RotBody == 6) {
+                            newX = user.X - 1;
+                        }
+                        else if (user.RotBody == 2) {
+                            newX = user.X + 1;
+                        }
+                        else if (user.RotBody == 3) {
+                            newX = user.X + 1;
+                            newY = user.Y + 1;
+                        }
+                        else if (user.RotBody == 1) {
+                            newX = user.X + 1;
+                            newY = user.Y - 1;
+                        }
+                        else if (user.RotBody == 7) {
+                            newX = user.X - 1;
+                            newY = user.Y - 1;
+                        }
+                        else if (user.RotBody == 5) {
+                            newX = user.X - 1;
+                            newY = user.Y + 1;
+                        }
+
+                        petData.Addexperience(10); // Give XP
+                        pet.MoveTo(newX, newY);
+                        break;
+                    case 3:
+                        // Remove Status
+                        RemovePetStatus();
+                        petData.Addexperience(10); // Give XP
+
+                        // Add Status
+                        pet.Statusses.Add("sit", TextHandling.GetString(pet.Z));
+                        pet.UpdateNeeded = true;
+                        _actionTimer = 25;
+                        _energyTimer = 10;
+                        break;
+                    case 4:
+                        // Remove Status
+                        RemovePetStatus();
+
+                        // Add Status
+                        pet.Statusses.Add("lay", TextHandling.GetString(pet.Z));
+                        pet.UpdateNeeded = true;
+                        petData.Addexperience(10); // Give XP
+                        _actionTimer = 30;
+                        _energyTimer = 5;
+                        break;
+                    case 5:
+                        // Remove Status
+                        RemovePetStatus();
+
+                        // Add Status
+                        pet.Statusses.Add("ded", TextHandling.GetString(pet.Z));
+                        pet.UpdateNeeded = true;
+                        petData.Addexperience(10); // Give XP
+
+                        // Don't move to speak for a set amount of time.
+                        _speechTimer = 45;
+                        _actionTimer = 30;
+                        break;
+                    case 6:
+                        // Remove Status
+                        RemovePetStatus();
+                        pet.Chat("ZzzZZZzzzzZzz");
+                        pet.Statusses.Add("lay", TextHandling.GetString(pet.Z));
+                        pet.UpdateNeeded = true;
+                        petData.Addexperience(10); // Give XP
+
+                        // Don't move to speak for a set amount of time.
+                        _energyTimer = 5;
+                        _speechTimer = 30;
+                        _actionTimer = 45;
+                        break;
+                    case 7:
+                        // Remove Status
+                        RemovePetStatus();
+
+                        // Add Status
+                        pet.Statusses.Add("jmp", TextHandling.GetString(pet.Z));
+                        pet.UpdateNeeded = true;
+                        petData.Addexperience(10); // Give XP
+
+                        // Don't move to speak for a set amount of time.
+                        _energyTimer = 5;
+                        _speechTimer = 10;
+                        _actionTimer = 5;
+                        break;
+                    case 46:
+                        break;
+                    default:
+                        var speech = _locale.GetValue("pet.unknowncommand");
+                        pet.Chat(speech[Random.Shared.Next(0, speech.Length)]);
+                        break;
+                }
+
+                petData.PetEnergy(false); // Remove Energy
+            }
+            else {
+                RemovePetStatus(); // Remove Status
+
+                if (petData.IsTired) {
+                    var speech = _locale.GetValue("pet.tired");
+                    pet.Chat(speech[Random.Shared.Next(0, speech.Length)]);
+                    pet.Statusses.Add("lay", TextHandling.GetString(pet.Z));
+                    pet.UpdateNeeded = true;
+                    _speechTimer = 50;
+                    _actionTimer = 45;
+                    _energyTimer = 5;
+                }
+                else {
+                    var speech = _locale.GetValue("pet.lazy");
+                    pet.Chat(speech[Random.Shared.Next(0, speech.Length)]);
+                    petData.PetEnergy(false); // Remove Energy
+                }
+            }
+        }
+        //Pet = null;
+    }
+}

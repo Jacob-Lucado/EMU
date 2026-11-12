@@ -1,0 +1,42 @@
+using Plus.Communication.Packets.Outgoing.Rooms.Chat;
+using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Users;
+
+namespace Plus.HabboHotel.Rooms.Chat.Commands.Moderator.Fun;
+
+internal class MakeSayCommand : ITargetChatCommand
+{
+    public string Key => "makesay";
+
+    public string Parameters => "%username% %message%";
+
+    public string Description => "Forces the specified user to say the specified message.";
+
+    public bool MustBeInSameRoom => true;
+
+    public Task Execute(GameClient session, Room room, Habbo target, string[] parameters)
+    {
+        if (!session.GetHabbo().Access.Outranks(target.Access)) {
+            return Task.CompletedTask;
+        }
+
+        if (!parameters.Any()) {
+            session.SendWhisper("You must enter a username and the message you wish to force them to say.");
+        }
+        else {
+            var message = CommandManager.MergeParams(parameters);
+            var targetUser = session.GetHabbo().CurrentRoom.GetRoomUserManager().GetRoomUserByHabbo(target.Id);
+
+            if (targetUser != null) {
+                if (targetUser.GetClient() != null && targetUser.GetClient().GetHabbo() != null) {
+                    room.SendChat(receiver => new ChatComposer(targetUser.VirtualId, message, 0, targetUser.LastBubble, receiver));
+                }
+            }
+            else {
+                session.SendWhisper("This user could not be found in the room");
+            }
+        }
+
+        return Task.CompletedTask;
+    }
+}

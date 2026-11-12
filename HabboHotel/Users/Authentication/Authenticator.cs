@@ -1,0 +1,141 @@
+using Plus.Core;
+using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Users.UserData;
+using System.Diagnostics;
+
+namespace Plus.HabboHotel.Users.Authentication;
+
+internal class Authenticator : IAuthenticator
+{
+    private readonly IEnumerable<IAuthenticationTask> _authenticationTasks;
+    private readonly IGameClientManager _gameClientManager;
+    private readonly IUserDataFactory _userDataFactory;
+    private readonly ISsoTicketStore _ssoTickets;
+    private readonly IAccountSessionGate _sessionGate;
+    private readonly IUserPersistenceService _persistence;
+    private readonly ILoginThrottle _loginThrottle;
+
+    public Authenticator(IEnumerable<IAuthenticationTask> authenticationTasks, IGameClientManager gameClientManager, IUserDataFactory userDataFactory, ISsoTicketStore ssoTickets,
+        IAccountSessionGate sessionGate, IUserPersistenceService persistence, ILoginThrottle loginThrottle)
+    {
+        _authenticationTasks = authenticationTasks;
+        _gameClientManager = gameClientManager;
+        _userDataFactory = userDataFactory;
+        _ssoTickets = ssoTickets;
+        _sessionGate = sessionGate;
+        _persistence = persistence;
+        _loginThrottle = loginThrottle;
+    }
+
+    public async Task<AuthenticationError?> AuthenticateUsingSSO(GameClient session, string sso)
+    {
+        if (_loginThrottle.IsBlocked(session.RemoteAddress)) {
+            return AuthenticationError.TooManyAttempts;
+        }
+
+        AuthenticationError? error;
+
+        // The packet manager abandons slow logins and closes the socket; the login must stop with it.
+        try {
+            error = await AuthenticateUsingSSO(session, sso, session.Closed);
+        }
+        catch (OperationCanceledException) when (session.Closed.IsCancellationRequested) {
+            return AuthenticationError.SessionClosed;
+        }
+
+        // Only a ticket that is not live counts; a valid ticket for a prohibited account is no guess.
+        if (error is AuthenticationError.EmptySSO or AuthenticationError.InvalidSSO or AuthenticationError.NoAccountFound) {
+            _loginThrottle.RecordFailure(session.RemoteAddress);
+        }
+
+        return error;
+    }
+
+    private async Task<AuthenticationError?> AuthenticateUsingSSO(GameClient session, string sso, CancellationToken cancellationToken)
+    {
+        var started = _sessionGate.Begin();
+        sso = sso.Trim();
+
+        if (string.IsNullOrEmpty(sso)) {
+            return AuthenticationError.EmptySSO;
+        }
+
+        if (!Debugger.IsAttached && sso.Length < 15) {
+            return AuthenticationError.InvalidSSO;
+        }
+
+        // Single use even with a debugger attached: the ticket is cleared as it is read.
+        if (await _ssoTickets.Consume(sso) is not { } userId) {
+            return AuthenticationError.NoAccountFound;
+        }
+
+        Habbo? habbo;
+
+        // Staff writes to this account wait until the session is registered, so they never land under a stale load.
+        using (await _sessionGate.EnterAsync(userId, cancellationToken)) {
+            // A password reset after this ticket was resolved revokes the login.
+            if (_sessionGate.IsRevoked(userId, started)) {
+                return AuthenticationError.LoginProhibited;
+            }
+
+            var canLogin = await CanLogin(session, userId);
+
+            if (!canLogin) {
+                return AuthenticationError.LoginProhibited;
+            }
+
+            habbo = await _userDataFactory.Create(userId, cancellationToken);
+
+            if (habbo == null) {
+                return AuthenticationError.NoAccountFound;
+            }
+
+            var loaded = habbo;
+            loaded.Disconnected += (_, _) => OnHabboDisconnected(loaded);
+
+            // TODO @80O: Remove after splitting up
+            loaded.Init(session);
+
+            // A connection that closed while this login waited must never become a registered session.
+            if (!session.TryAttach(loaded, () => _gameClientManager.RegisterClient(session, loaded.Id, loaded.Username))) {
+                return AuthenticationError.SessionClosed;
+            }
+        }
+
+        _persistence.MarkOnline(session, habbo.Id);
+        await RaiseHabboLoggedIn(habbo);
+
+        return null;
+    }
+
+    private async Task<bool> CanLogin(GameClient session, int userId)
+    {
+        foreach (var task in _authenticationTasks) {
+            if (!(await task.CanLogin(session, userId))) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private async Task RaiseHabboLoggedIn(Habbo habbo)
+    {
+        foreach (var task in _authenticationTasks) {
+            await task.UserLoggedIn(habbo);
+        }
+    }
+
+    // Runs inside the disconnect: one failing task must not skip the others or the save that follows.
+    private void OnHabboDisconnected(Habbo habbo)
+    {
+        foreach (var task in _authenticationTasks) {
+            try {
+                task.UserLoggedOut(habbo);
+            }
+            catch (Exception e) {
+                ExceptionLogger.LogException(e);
+            }
+        }
+    }
+}

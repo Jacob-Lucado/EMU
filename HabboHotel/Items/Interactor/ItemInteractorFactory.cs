@@ -1,0 +1,83 @@
+using Plus.HabboHotel.Achievements;
+using Plus.HabboHotel.Quests;
+using Plus.HabboHotel.Users;
+
+namespace Plus.HabboHotel.Items.Interactor;
+
+public interface IItemInteractorFactory
+{
+    IFurniInteractor Create(Item item, TimeProvider timeProvider);
+}
+
+public sealed class ItemInteractorFactory(
+    IItemTravelStore travelStore,
+    IUserProfileService profiles,
+    IQuestManager quests,
+    IRewardTrackManager rewards,
+    IAchievementManager achievements,
+    IItemRedemptionService redemptions) : IItemInteractorFactory
+{
+    public IFurniInteractor Create(Item item, TimeProvider timeProvider)
+    {
+        if (Plus.HabboHotel.Rooms.Music.RoomMusicDefinition.IsPlayer(item.Definition)) {
+            return new InteractorRoomMusic();
+        }
+
+        if (Plus.HabboHotel.Items.Wired.Chests.WiredChestFurniture.IsChest(item.Definition)) {
+            return new InteractorWiredChest();
+        }
+
+        if (Plus.HabboHotel.Items.Wired.Chests.WiredChestFurniture.IsContract(item.Definition)) {
+            return new InteractorWiredContract();
+        }
+
+        if (item.IsWired) {
+            return new InteractorWired();
+        }
+
+        if (Plus.HabboHotel.Items.Wired.WiredStackEngine.IsSignalAntenna(item)) {
+            return new InteractorWiredAntenna(new InteractorGenericSwitch(quests, rewards));
+        }
+
+        return item.Definition.InteractionType switch
+        {
+            InteractionType.IceSkates or InteractionType.IceTagPole => new InteractorIceTag(),
+            InteractionType.AreaHide => new InteractorAreaHide(),
+            InteractionType.WiredLink => new InteractorWiredLink(),
+            InteractionType.WiredLabel => new InteractorWiredLabel(),
+            InteractionType.InvisibleFurniControl or InteractionType.ChooserDisabler or InteractionType.HandItemBlocker
+                or InteractionType.WiredDisabler => new InteractorConfigurationSwitch(timeProvider),
+            InteractionType.RollerSpeedController => new InteractorRollerSpeed(),
+            InteractionType.Gate => new InteractorGate(),
+            InteractionType.FootballGate => new InteractorFootballGate(item),
+            InteractionType.Teleport => new InteractorTeleport(timeProvider),
+            InteractionType.Hopper => new InteractorHopper(travelStore),
+            InteractionType.Bottle => new InteractorSpinningBottle(),
+            InteractionType.Dice => new InteractorDice(),
+            InteractionType.HabboWheel => new InteractorHabboWheel(),
+            InteractionType.LoveShuffler => new InteractorLoveShuffler(),
+            InteractionType.OneWayGate => new InteractorOneWayGate(timeProvider),
+            InteractionType.Alert => new InteractorAlert(),
+            InteractionType.VendingMachine => new InteractorVendor(),
+            InteractionType.Scoreboard => new InteractorScoreboard(),
+            InteractionType.PuzzleBox => new InteractorPuzzleBox(),
+            InteractionType.Mannequin => new InteractorMannequin(profiles),
+            InteractionType.Banzaicounter => new InteractorBanzaiTimer(),
+            InteractionType.Freezetimer => new InteractorFreezeTimer(),
+            InteractionType.FreezeTileBlock or InteractionType.FreezeTile => new InteractorFreezeTile(),
+            InteractionType.Footballcounterblue or InteractionType.Footballcountergreen or
+                InteractionType.Footballcounterred or InteractionType.Footballcounteryellow => new InteractorScoreCounter(),
+            InteractionType.Banzaiscoreblue or InteractionType.Banzaiscoregreen or
+                InteractionType.Banzaiscorered or InteractionType.Banzaiscoreyellow => new InteractorBanzaiScoreCounter(),
+            InteractionType.WfFloorSwitch1 or InteractionType.WfFloorSwitch2 => new InteractorSwitch(quests, rewards),
+            InteractionType.Lovelock => new InteractorLoveLock(),
+            InteractionType.Cannon => new InteractorCannon(),
+            InteractionType.Counter => new InteractorCounter(),
+            InteractionType.CrackableEgg => new InteractorCrackable(achievements),
+            InteractionType.Skateboard => new InteractorSkateboard(achievements),
+            InteractionType.CameraPicture => new InteractorCameraPicture(),
+            InteractionType.EffectBox => new InteractorEffectBox(redemptions, timeProvider),
+            _ => new InteractorGenericSwitch(quests, rewards)
+        };
+    }
+}

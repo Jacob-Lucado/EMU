@@ -1,7 +1,22 @@
-# Polaris compatibility requirements
+# PlusEMU - agent instructions
 
-- Security fixes and new functionality must remain self-contained within Polaris.
-- Do not require CMSs, clients, proxies, or other external integrations to change code, schemas, payloads, or behavior.
-- Preserve compatibility with existing deployments where external systems continue using the established Polaris interface.
-- If a proposed fix cannot be implemented safely at the emulator level (including Polaris-owned database migrations), do not implement it as a breaking cross-system requirement. Document the limitation and seek an emulator-local design instead.
-- Keep this `AGENTS.md` file local and uncommitted.
+## Writing
+
+- Write in plain language (ISO 24495-1): short sentences, common words, active voice. Use a plain hyphen, never an em or en dash.
+- Say what the code or change does, as in "Fixes ..." or "Adds ...". "just like Habbo" is fine.
+- Never write where or how a behavior was observed or proven: no client builds, AIR paths, run or firing counts, rooms, test sessions, probe or trace names. That evidence belongs in the task report, not in the repository.
+
+## Code comments
+
+- The fewer the better. Add one only when it explains a rule or reason the code cannot show.
+- State the rule, as in `// A blob changes state on the next room tick.`, in one or two short sentences.
+- No history, evidence, PR numbers or "who found it".
+
+## Commits and pull requests
+
+- Titles use [Conventional Commits](https://www.conventionalcommits.org/): `type(scope): summary`, at most 70 characters, e.g. `fix(wired): re-stack a furni_to_furni mover already on its target`.
+- Wrap code names in backticks in titles, descriptions, commit messages and release notes, for example `` `@state` `` or `` `furni_to_furni` ``. GitHub turns a bare `@name` into a mention of the GitHub user with that name, and release notes are built from PR titles. Before you publish a release, check its notes: every `@` outside backticks must be a PR author.
+- The body has only `## Why`: one or two short sentences on what was wrong and what the change does.
+- No test counts, suite results, lint or code-style status, checklists or long tables.
+- No "Generated with" footers, no AI co-author trailers and no mention of an AI or a tool.
+- Never mention other emulators or clients (for example Turbo or Habz) in titles, descriptions, commit messages or code comments. Only official Habbo behaviour is evidence.

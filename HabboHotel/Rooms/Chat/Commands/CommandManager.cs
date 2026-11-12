@@ -1,0 +1,174 @@
+using System.Diagnostics.CodeAnalysis;
+using Plus.HabboHotel.Permissions;
+using Dapper;
+using System.Collections.Concurrent;
+using System.Text;
+using Plus.Communication.Packets.Outgoing.Notifications;
+using Plus.Database;
+using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Items.Wired;
+using Microsoft.Extensions.Logging;
+
+namespace Plus.HabboHotel.Rooms.Chat.Commands;
+
+public class CommandManager : ICommandManager
+{
+    private readonly IGameClientManager _gameClientManager;
+    private readonly IDatabase _database;
+    private readonly TimeProvider _clock;
+    private readonly ILogger<CommandManager> _logger;
+    /// <summary>
+    /// Commands registered for use.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, ICommandBase> _commands;
+    /// <summary>
+    /// Command Prefix only applies to custom commands.
+    /// </summary>
+    private readonly string _prefix = ":";
+
+    /// <summary>
+    /// The default initializer for the CommandManager
+    /// </summary>
+    public CommandManager(IEnumerable<ICommandBase> commands, IGameClientManager gameClientManager, IDatabase database, TimeProvider clock, ILogger<CommandManager> logger)
+    {
+        _gameClientManager = gameClientManager;
+        _database = database;
+        _clock = clock;
+        _logger = logger;
+        _commands = new(commands.ToDictionary(command => command.Key));
+    }
+
+    /// <summary>
+    /// Request the text to parse and check for commands that need to be executed.
+    /// </summary>
+    /// <param name="session">Session calling this method.</param>
+    /// <param name="message">The message to parse.</param>
+    /// <returns>True if parsed or false if not.</returns>
+    public async Task<bool> Parse(GameClient session, string message)
+    {
+        if (session == null || session.GetHabbo() == null || session.GetHabbo().CurrentRoom == null) {
+            return false;
+        }
+
+        if (!message.StartsWith(_prefix)) {
+            return false;
+        }
+
+        if (message == $"{_prefix}commands") {
+            var list = new StringBuilder();
+            list.Append("This is the list of commands you have available:\n");
+
+            foreach (var cmdList in _commands.ToList()) {
+                if (!session.GetHabbo().Access.Can("command." + cmdList.Value.Key)) {
+                    continue;
+                }
+
+                list.Append($"{Usage(cmdList.Value)} - {cmdList.Value.Description}\n");
+            }
+
+            session.Send(new MOTDNotificationComposer(list.ToString()));
+
+            return true;
+        }
+
+        message = message.Substring(1);
+
+        if (string.IsNullOrWhiteSpace(message)) {
+            return false;
+        }
+
+        var split = message.Split(' ');
+        var key = split[0];
+        var parameters = split.Length > 1 ? split[1..] : Array.Empty<string>();
+
+        if (_commands.TryGetValue(key.ToLower(), out var command)) {
+            if (session.GetHabbo().Access.Can(PermissionKeys.ModerationTool)) {
+                LogCommand(session.GetHabbo().Id, message, session.GetHabbo().MachineId);
+            }
+
+            if (!session.GetHabbo().Access.Can("command." + command.Key)) {
+                return false;
+            }
+
+            session.GetHabbo().ChatCommand = command;
+            session.GetHabbo().CurrentRoom.GetWired().TriggerEvent(WiredBoxType.TriggerUserSaysCommand, session.GetHabbo(), this);
+
+            try {
+                if (command is IChatCommand chatCommand) {
+                    chatCommand.Execute(session, session.GetHabbo().CurrentRoom, parameters);
+                }
+                else if (command is ITargetChatCommand targetChatCommand) {
+                    if (!parameters.Any()) {
+                        session.SendWhisper("No username specified.");
+
+                        return true;
+                    }
+
+                    var username = parameters[0];
+                    parameters = parameters.Length > 1 ? parameters[1..] : Array.Empty<string>();
+                    var target = _gameClientManager.GetClientByUsername(username);
+
+                    if (target == null) {
+                        session.SendWhisper($"User {username} seems to be offline.");
+
+                        return true;
+                    }
+
+                    if (targetChatCommand.MustBeInSameRoom && session.GetHabbo().CurrentRoom != target.GetHabbo().CurrentRoom) {
+                        session.SendWhisper($"You must be in the same room as {username} to execute this command.");
+
+                        return true;
+                    }
+
+                    await targetChatCommand.Execute(session, session.GetHabbo().CurrentRoom, target.GetHabbo(), parameters);
+                }
+            }
+            catch (Exception e) {
+                _logger.LogError(e, "Error running chat command {Message} for {Username}", message, session.GetHabbo().Username);
+                session.SendWhisper($"Something went wrong with this command. Use it like this: {Usage(command)}");
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Registers a Chat Command.
+    /// </summary>
+    /// <param name="commandText">Text to type for this command.</param>
+    /// <param name="command">The command to execute.</param>
+    public void Register(string commandText, ICommandBase command)
+    {
+        _commands.TryAdd(commandText, command);
+    }
+
+    private static string Usage(ICommandBase command) =>
+        string.IsNullOrEmpty(command.Parameters) ? $":{command.Key}" : $":{command.Key} {command.Parameters}";
+
+    public static string MergeParams(string[] @params, int start = 0)
+    {
+        var merged = new StringBuilder();
+
+        for (var i = start; i < @params.Length; i++) {
+            if (i > start) {
+                merged.Append(" ");
+            }
+
+            merged.Append(@params[i]);
+        }
+
+        return merged.ToString();
+    }
+
+    public void LogCommand(int userId, string data, string? machineId)
+    {
+        using var connection = _database.Connection();
+        var timestamp = _clock.GetUtcNow().UtcDateTime;
+        connection.Execute("INSERT INTO logs_client_staff (user_id,data_string,machine_id,`timestamp`) VALUES (@userId,@data,@machineId,@timestamp)",
+            new { userId, data, machineId = machineId ?? string.Empty, timestamp });
+    }
+
+    public bool TryGetCommand(string command, [NotNullWhen(true)] out ICommandBase? chatCommand) => _commands.TryGetValue(command, out chatCommand);
+}

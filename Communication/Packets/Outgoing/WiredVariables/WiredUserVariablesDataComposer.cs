@@ -1,0 +1,90 @@
+using System.Text.Json;
+using System.Collections.Immutable;
+using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Items.Wired.Variables;
+using Plus.HabboHotel.Items;
+
+namespace Plus.Communication.Packets.Outgoing.WiredVariables;
+
+/// <summary>Legacy editor snapshot of live room assignments; offline holders are available through the paged protocol.</summary>
+public sealed class WiredUserVariablesDataComposer(WiredVariableMenuSnapshot snapshot, bool exact = false) : IServerPacket
+{
+    private readonly WiredVariableMenuSnapshot _captured = snapshot with
+    {
+        Definitions = snapshot.Definitions.Select(WiredVariableWireCapture.Capture).ToImmutableArray(),
+        Assignments = snapshot.Assignments.ToImmutableArray()
+    };
+    public uint MessageId => exact ? ServerPacketHeader.WiredUserVariablesData64Composer : ServerPacketHeader.WiredUserVariablesDataComposer;
+    public void Compose(IOutgoingPacket packet)
+    {
+        if (exact) {
+            packet.WriteInt(WiredVariableWireProtocol.Version);
+        }
+
+        var definitions = _captured.Definitions.ToDictionary(x => x.Definition.ItemId);
+        packet.WriteUInteger(_captured.RoomId);
+        WriteDefinitions(WiredVariableTarget.User);
+        WriteHolders(WiredVariableTarget.User);
+        WriteDefinitions(WiredVariableTarget.Furni);
+        WriteHolders(WiredVariableTarget.Furni);
+        WriteDefinitions(WiredVariableTarget.Global);
+        var globals = _captured.Assignments.Where(x => x.Key.Target == WiredVariableTarget.Global).ToArray();
+        packet.WriteInteger(globals.Length);
+
+        foreach (var value in globals) {
+            WriteAssignment(value);
+        }
+
+        WriteDefinitions(WiredVariableTarget.Context);
+        var connectors = _captured.Definitions.Where(x => x.TextConnector.Count > 0).Select(x => new
+        {
+            itemId = x.Definition.ItemId,
+            variableType = x.Definition.Target switch { WiredVariableTarget.Furni => 0, WiredVariableTarget.Global => 1, WiredVariableTarget.User => 2, _ => 3 },
+            textConnector = x.TextConnector.OrderBy(x => x.Key).Select(x => new { key = x.Key, value = x.Value }).ToArray()
+        }).ToArray();
+
+        if (connectors.Length > 0) {
+            packet.WriteString(JsonSerializer.Serialize(connectors));
+        }
+
+        void WriteDefinitions(WiredVariableTarget target)
+        {
+            var selected = _captured.Definitions.Where(x => x.Definition.Target == target).ToArray();
+            packet.WriteInteger(selected.Length);
+
+            foreach (var variable in selected) {
+                packet.WriteUInteger(BuildersClubItemIds.ToWire(variable.Definition.ItemId));
+                packet.WriteString(variable.Definition.Name);
+                packet.WriteBoolean(variable.HasValue);
+                packet.WriteInteger((int)variable.Definition.Availability);
+                packet.WriteBoolean(variable.TextConnector.Count > 0);
+                packet.WriteBoolean(variable.ReadOnly);
+            }
+        }
+        void WriteHolders(WiredVariableTarget target)
+        {
+            var groups = _captured.Assignments.Where(x => x.Key.Target == target).GroupBy(x => x.Key.HolderId).OrderBy(x => x.Key).ToArray();
+            packet.WriteInteger(groups.Length);
+
+            foreach (var group in groups) {
+                packet.WriteInteger(target == WiredVariableTarget.Furni ? TemporaryItemIds.ToWiredEntityId(checked((int)group.Key)) : checked((int)group.Key));
+                packet.WriteInteger(group.Count());
+
+                foreach (var value in group.OrderBy(x => x.Key.DefinitionId)) {
+                    WriteAssignment(value);
+                }
+            }
+        }
+        void WriteAssignment(WiredVariableStoredHolder value)
+        {
+            var definition = definitions[value.Key.DefinitionId];
+            packet.WriteUInteger(value.Key.DefinitionId);
+            packet.WriteBoolean(definition.HasValue);
+            WiredVariableWireProtocol.WriteValue(packet, definition.HasValue ? value.Value.Value : 0, exact);
+            packet.WriteInteger(LegacySeconds(value.Value.CreatedAt));
+            packet.WriteInteger(LegacySeconds(value.Value.UpdatedAt));
+        }
+        static int LegacySeconds(DateTimeOffset? timestamp) => timestamp is { } value
+            ? (int)Math.Clamp(value.ToUnixTimeSeconds(), 0, int.MaxValue) : 0;
+    }
+}

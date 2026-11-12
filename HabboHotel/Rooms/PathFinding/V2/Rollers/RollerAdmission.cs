@@ -1,0 +1,62 @@
+using System.Drawing;
+using Plus.HabboHotel.Items;
+using Plus.HabboHotel.Items.Wired.Modern;
+
+namespace Plus.HabboHotel.Rooms.PathFinding;
+
+// Plan-local admission: confirmed departures stop blocking, everything else still does.
+internal sealed class RollerAdmission(Room room, RollerTransport transport)
+{
+    internal bool Admits(RollerMove move, IRollerDepartureView departures)
+    {
+        var destination = move.Destination;
+        var departing = transport.Departing(departures, destination);
+
+        if (!(room.GetGameMap().CanRollItemHere(destination.X, destination.Y) || move.Cargo == null && IsDoor(destination))
+            || !NextRollerClear(destination, departing)) {
+            return false;
+        }
+
+        return move.Cargo is { } cargo
+            ? AdmitsCargo(cargo, move, departing, departures) && transport.AdmitsCargo(move, departures)
+            : transport.AdmitsActor(move, departing);
+    }
+
+    // A roller takes a user onto the door tile, even where the heightmap marks that tile void.
+    private bool IsDoor(Point tile) => tile.X == room.GetGameMap().Model.DoorX && tile.Y == room.GetGameMap().Model.DoorY;
+
+    // Next-roller clearance: nothing that stays may rise above the destination roller.
+    private bool NextRollerClear(Point tile, RollerDepartures departing)
+    {
+        var items = room.GetGameMap().GetAllRoomItemForSquare(tile.X, tile.Y);
+        var rollers = items.Where(RollerIdentity.IsRoller).ToList();
+
+        if (rollers.Count == 0) {
+            return true;
+        }
+
+        var top = rollers.Max(roller => roller.TotalHeight);
+
+        return items.All(item => item.TotalHeight <= top || departing.Items.Contains(item.Id));
+    }
+
+    // Preflights every rejection of the furniture setter, so the group commit itself cannot fail.
+    private bool AdmitsCargo(Item cargo, RollerMove move, RollerDepartures departing, IRollerDepartureView departures)
+    {
+        var destination = move.Destination;
+
+        return departing.AllUsersLeave(room.GetGameMap().GetRoomUsers(destination))
+            && room.GetRoomItemHandler().CanMoveFloorItem(cargo, destination.X, destination.Y, move.CarriedZ,
+                cargo.IsTemporary ? PlanLocalCollision(cargo, destination, departures) : null);
+    }
+
+    // Temporary cargo checks its whole footprint; departing occupants there no longer collide.
+    private WiredCollisionPolicy PlanLocalCollision(Item cargo, Point destination, IRollerDepartureView departures)
+    {
+        var footprint = WiredRoomOperations.Footprint(cargo, destination.X, destination.Y, cargo.Rotation)
+            .Select(tile => transport.Departing(departures, tile)).ToList();
+
+        return new(footprint.SelectMany(tile => tile.Items).ToHashSet(),
+            footprint.SelectMany(tile => tile.Users).Select(user => user.VirtualId).ToHashSet(), new HashSet<uint>());
+    }
+}

@@ -1,0 +1,153 @@
+using System.Globalization;
+using Plus.HabboHotel.Items.Wired.Configuration;
+using Plus.HabboHotel.Items.Wired.Modern.Addons;
+using Plus.HabboHotel.Items.Wired.Variables.Fx;
+using Plus.HabboHotel.Rooms;
+
+namespace Plus.HabboHotel.Items.Wired.Variables;
+
+/// <summary>Passive metadata consumed by the room's variable presentation, never a successful stack action.</summary>
+public sealed class WiredVariableMetadataBox : WiredConfiguredBehaviorBox
+{
+    public WiredVariableMetadataBox(Room room, Item item, WiredBoxDescriptor descriptor)
+        : base(room, item, descriptor, configuration => Validate(descriptor.CanonicalName, configuration))
+    {
+        ConfigurationChanged();
+    }
+    public WiredVariableTimeUtilities? TimeUtilities { get; private set; }
+    public WiredVariableLevelSystem? LevelSystem { get; private set; }
+    public IReadOnlyDictionary<long, string> TextConnector { get; private set; } = new WiredTextConnector(new Dictionary<long, string>(), null);
+    public static bool Supports(string name) => IsFx(name) || name is "wf_xtra_var_lvlup_system" or "wf_xtra_var_text_connector" or "wf_xtra_var_time_util"
+        or "wf_xtra_var_share" or "wf_xtra_var_import";
+    /// <summary>Whether a Share or Import add-on has its category on: 0 text connectors, 1 subvariable creators, 2 variable FX.</summary>
+    public bool Category(int index) => Configuration.IntParams.Length > index && Configuration.IntParams[index] != 0;
+    // The level-up sub-variable names; a sub-variable is named "<parent>.<name>".
+    public static readonly string[] LevelKeys = ["current_level", "current_xp", "progress", "progress_percentage", "xp_required", "xp_remaining", "is_maxed", "max_level"];
+    public string[] DerivedKeys => LevelKeys;
+    public bool HasDerived(int sub) => sub >= 0 && sub < DerivedKeys.Length && LevelSystem is { } level && (level.SubvariableMask & (1 << sub)) != 0;
+    public long? ReadDerived(long value, int sub)
+    {
+        if (!HasDerived(sub)) {
+            throw new ArgumentOutOfRangeException(nameof(sub));
+        }
+
+        return LevelSystem!.Read(value, sub);
+    }
+    public static bool IsFx(string name) => name is "wf_xtra_var_fx_health" or "wf_xtra_var_fx_progress" or "wf_xtra_var_fx_level"
+        or "wf_xtra_var_fx_status" or "wf_xtra_var_fx_boss" or "wf_xtra_var_fx_number";
+    protected override void ConfigurationChanged()
+    {
+        if (Descriptor.CanonicalName == "wf_xtra_var_time_util") {
+            TimeUtilities = new(Configuration.IntParams[0], Configuration.IntParams[1]);
+        }
+
+        if (Descriptor.CanonicalName == "wf_xtra_var_lvlup_system") {
+            WiredVariableLevelSystem.TryParse(Configuration.Text, out var level);
+            LevelSystem = level;
+        }
+
+        if (Descriptor.CanonicalName == "wf_xtra_var_text_connector") {
+            TextConnector = ParseConnector(Configuration.Text);
+        }
+    }
+    internal static WiredConfiguration Validate(string name, WiredConfiguration configuration)
+    {
+        if (configuration.Version != 1 || configuration.Text.Length > 8192) {
+            throw new ArgumentException("Invalid variable metadata.");
+        }
+
+        if (IsFx(name)) {
+            // The unconfigured box before its native defaults are applied has nothing to decode yet.
+            if (configuration.IntParams.IsEmpty && configuration.Text.Length == 0 && configuration.VariableIds.IsEmpty) {
+                return configuration;
+            }
+
+            var target = WiredVariableFxSettings.UsesUserSource(configuration) ? WiredVariableTarget.User : WiredVariableTarget.Furni;
+
+            if (!WiredVariableFxSettings.TryDecode(name, 1, configuration, new(target, ""), null, out _, out var error, saving: true)) {
+                throw new ArgumentException(error);
+            }
+        }
+        else if (name == "wf_xtra_var_lvlup_system") {
+            if (configuration.Text.Length == 0) {
+                configuration = configuration with { Text = "{\"mode\":1,\"stepSize\":100,\"maxLevel\":10,\"firstLevelXp\":100,\"increaseFactor\":100,\"interpolationText\":\"\",\"subvariables\":[0,1]}" };
+            }
+
+            if (!WiredVariableLevelSystem.TryParse(configuration.Text, out _)) {
+                throw new ArgumentException("Invalid level system.");
+            }
+        }
+        else if (name == "wf_xtra_var_time_util") {
+            if (configuration.IntParams.Length == 0) {
+                configuration = configuration with { IntParams = [0, 0] };
+            }
+
+            if (configuration.IntParams.Length != 2 || configuration.Text.Length != 0) {
+                throw new ArgumentException("Invalid time utility configuration.");
+            }
+
+            // The editor only offers the valid subvariables and three clocks; anything else is refused, not trimmed.
+            if ((configuration.IntParams[0] & WiredVariableTimeUtilities.ValidMask) != configuration.IntParams[0] || configuration.IntParams[1] is < 0 or > 2) {
+                throw new ArgumentException("Invalid time utility configuration.");
+            }
+        }
+        else if (name == "wf_xtra_var_text_connector") {
+            // Validate also loads a stored row, so the size limit is checked only on a save (WiredTextAddonRules.ConnectorRefusal).
+        }
+        else if (name is "wf_xtra_var_share" or "wf_xtra_var_import") {
+            if (configuration.IntParams.Length != 3 || configuration.IntParams.Any(flag => flag is not (0 or 1)) || configuration.Text.Length != 0) {
+                throw new ArgumentException("Invalid share or import configuration.");
+            }
+        }
+        else {
+            throw new ArgumentException("Unsupported variable metadata.");
+        }
+
+        return configuration;
+    }
+    internal static string NormalizeConnector(string text)
+    {
+        try {
+            var connector = ParseConnector(text);
+            var lines = connector.OrderBy(pair => pair.Key).Select(pair => pair.Key.ToString(CultureInfo.InvariantCulture) + "=" + pair.Value);
+
+            return string.Join('\n', connector.Fallback is null ? lines : lines.Append("_=" + connector.Fallback));
+        }
+        catch (ArgumentException) {
+            return text;
+        }
+    }
+
+    /// <summary>
+    /// The connector text may hold 1000 UTF-8 bytes, the "_=" line included, and any number of lines. A longer text is refused with wiredfurni.error.too_much_text and the stored text stays.
+    /// </summary>
+    internal const int MaxConnectorBytes = 1000;
+
+    internal static WiredTextConnector ParseConnector(string text)
+    {
+        var result = new Dictionary<long, string>();
+        string? fallback = null;
+        var lines = text.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+
+        // Every line is "number=text"; a line that is not is dropped and the save still succeeds ("bad", "x=1", "Seven=7" and " 3 = z " all dropped).
+        // The text may be empty ("5=" keeps ""), the number may be negative, and a repeated number keeps its last text.
+        foreach (var raw in lines) {
+            var line = raw.TrimEnd('\r');
+            var separator = line.IndexOf('=');
+
+            // "_=text" is the fallback shown for a number with no label. The last one wins, the text may be empty or hold "=", and a "_" with spaces around it is a bad line.
+            if (separator == 1 && line[0] == '_') {
+                fallback = line[2..];
+                continue;
+            }
+
+            if (separator <= 0 || !long.TryParse(line[..separator], NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var key)) {
+                continue;
+            }
+
+            result[key] = line[(separator + 1)..];
+        }
+
+        return new(result, fallback);
+    }
+}

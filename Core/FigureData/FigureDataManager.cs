@@ -1,0 +1,254 @@
+using System.Collections.Concurrent;
+using System.Xml;
+using Microsoft.Extensions.Logging;
+using Plus.Core.FigureData.Types;
+using Plus.HabboHotel.Users.Clothing.Parts;
+using Plus.Utilities;
+
+namespace Plus.Core.FigureData;
+
+public class FigureDataManager : IFigureDataManager, IStartable
+{
+    private readonly ILogger<FigureDataManager> _logger;
+    private readonly Dictionary<int, Palette> _palettes; //pallet id, Pallet
+
+    private readonly List<string> _requirements;
+    private readonly Dictionary<string, FigureSet> _setTypes; //type (hr, ch, etc), Set
+
+    // Set types a random outfit may wear, with the chance each is worn.
+    private static readonly (string Type, double Chance)[] RandomOutfitTypes =
+    [
+        ("hd", 1), ("hr", 0.95), ("ch", 1), ("lg", 1), ("sh", 0.9), ("ha", 0.25),
+        ("ea", 0.2), ("fa", 0.1), ("cc", 0.25), ("ca", 0.15), ("wa", 0.15)
+    ];
+
+    private readonly ConcurrentDictionary<(string Type, string Gender), Set[]> _randomSets = new();
+    private readonly ConcurrentDictionary<int, int[]> _randomColors = new();
+
+    public FigureDataManager(ILogger<FigureDataManager> logger)
+    {
+        _logger = logger;
+        _palettes = new();
+        _setTypes = new();
+        _requirements = new()
+        {
+            "hd",
+            "ch",
+            "lg"
+        };
+    }
+
+    public int StartOrder => 10;
+    public Task Start()
+    {
+        Init();
+
+        return Task.CompletedTask;
+    }
+
+    public void Init()
+    {
+        if (_palettes.Count > 0) {
+            _palettes.Clear();
+        }
+
+        if (_setTypes.Count > 0) {
+            _setTypes.Clear();
+        }
+
+        _randomSets.Clear();
+        _randomColors.Clear();
+
+        var projectSolutionPath = Directory.GetCurrentDirectory();
+        var xDoc = new XmlDocument();
+        xDoc.Load($"{projectSolutionPath}//Config//figuredata.xml");
+        var colors = xDoc.GetElementsByTagName("colors");
+
+        foreach (XmlNode node in colors) {
+            foreach (XmlNode child in node.ChildNodes) {
+                _palettes.Add(Convert.ToInt32(RequiredAttribute(child, "id")), new(Convert.ToInt32(RequiredAttribute(child, "id"))));
+
+                foreach (XmlNode sub in child.ChildNodes) {
+                    _palettes[Convert.ToInt32(RequiredAttribute(child, "id"))].Colors.Add(Convert.ToInt32(RequiredAttribute(sub, "id")),
+                        new(Convert.ToInt32(RequiredAttribute(sub, "id")), Convert.ToInt32(RequiredAttribute(sub, "index")), Convert.ToInt32(RequiredAttribute(sub, "club")),
+                            Convert.ToInt32(RequiredAttribute(sub, "selectable")) == 1, Convert.ToString(sub.InnerText)));
+                }
+            }
+        }
+
+        var sets = xDoc.GetElementsByTagName("sets");
+
+        foreach (XmlNode node in sets) {
+            foreach (XmlNode child in node.ChildNodes) {
+                _setTypes.Add(RequiredAttribute(child, "type"), new(SetTypeUtility.GetSetType(RequiredAttribute(child, "type")), Convert.ToInt32(RequiredAttribute(child, "paletteid"))));
+
+                foreach (XmlNode sub in child.ChildNodes) {
+                    _setTypes[RequiredAttribute(child, "type")].Sets.Add(Convert.ToInt32(RequiredAttribute(sub, "id")),
+                        new(Convert.ToInt32(RequiredAttribute(sub, "id")), Convert.ToString(RequiredAttribute(sub, "gender")), Convert.ToInt32(RequiredAttribute(sub, "club")),
+                            Convert.ToInt32(RequiredAttribute(sub, "colorable")) == 1, Convert.ToInt32(RequiredAttribute(sub, "selectable")) == 1,
+                            Convert.ToInt32(RequiredAttribute(sub, "preselectable")) == 1, sub.Attributes?["sellable"]?.Value == "1"));
+
+                    foreach (XmlNode subb in sub.ChildNodes) {
+                        if (subb.Attributes?["type"] != null) {
+                            _setTypes[RequiredAttribute(child, "type")].Sets[Convert.ToInt32(RequiredAttribute(sub, "id"))].Parts.Add(
+                                $"{Convert.ToInt32(RequiredAttribute(subb, "id"))}-{RequiredAttribute(subb, "type")}",
+                                new(Convert.ToInt32(RequiredAttribute(subb, "id")), SetTypeUtility.GetSetType(RequiredAttribute(child, "type")),
+                                    Convert.ToInt32(RequiredAttribute(subb, "colorable")) == 1, Convert.ToInt32(RequiredAttribute(subb, "index")), Convert.ToInt32(RequiredAttribute(subb, "colorindex"))));
+                        }
+                    }
+                }
+            }
+        }
+
+        //Faceless.
+        _setTypes["hd"].Sets.Add(99999, new(99999, "U", 0, true, false, false));
+        _logger.LogInformation("Loaded " + _palettes.Count + " Color Palettes");
+        _logger.LogInformation("Loaded " + _setTypes.Count + " Set Types");
+    }
+
+    private static string RequiredAttribute(XmlNode node, string name)
+        => node.Attributes?[name]?.Value ?? throw new XmlException($"Figure element '{node.Name}' is missing attribute '{name}'.");
+
+    public string ProcessFigure(string figure, string gender, ICollection<ClothingParts>? clothingParts, int clubLevel)
+        => Process(figure, gender, clothingParts, clubLevel, false);
+
+    // A stored figure lists its parts in figure data order, not in the order the client sent, and a part sent without a colour
+    // is stored without one.
+    public string ProcessFigureCanonical(string figure, string gender, ICollection<ClothingParts>? clothingParts, int clubLevel)
+        => Process(figure, gender, clothingParts, clubLevel, true);
+
+    private string Process(string figure, string gender, ICollection<ClothingParts>? clothingParts, int clubLevel, bool canonical)
+    {
+        gender = gender.ToUpperInvariant();
+        var rebuilt = new Dictionary<string, string>();
+        var owned = clothingParts?.Select(part => part.PartId).ToHashSet();
+
+        // As on Habbo, a sellable set is only worn once its clothing furni has been redeemed. Without a wardrobe there is no check.
+        bool Owns(Set candidate) => owned == null || !candidate.Sellable || owned.Contains(candidate.Id);
+
+        foreach (var part in figure.ToLowerInvariant().Split('.')) {
+            var pieces = part.Split('-');
+
+            if (pieces.Length < 2 || !int.TryParse(pieces[1], out var id) || !_setTypes.TryGetValue(pieces[0], out var type)) {
+                continue;
+            }
+
+            if (!type.Sets.TryGetValue(id, out var set)) {
+                continue;
+            }
+
+            bool Allowed(Set candidate) => (candidate.Gender == gender || candidate.Gender == "U") && candidate.ClubLevel <= clubLevel && Owns(candidate);
+
+            if (!Allowed(set)) {
+                set = type.Sets.Values.FirstOrDefault(candidate => candidate.Selectable && Allowed(candidate));
+            }
+
+            if (set == null) {
+                continue;
+            }
+
+            var uncoloured = pieces.Length < 3 || pieces[2].Length == 0;
+            var color = pieces.Length > 2 && int.TryParse(pieces[2], out var c) ? c : 0;
+            var second = pieces.Length > 3 && int.TryParse(pieces[3], out var c2) ? c2 : 0;
+            int ValidateColor(int value) => _palettes.TryGetValue(type.PalletId, out var palette) &&
+                palette.Colors.TryGetValue(value, out var entry) && entry.ClubLevel <= clubLevel ? value : GetRandomColor(type.PalletId, clubLevel);
+
+            if (canonical && uncoloured) {
+                rebuilt[pieces[0]] = $"{pieces[0]}-{set.Id}";
+                continue;
+            }
+
+            // A part that takes no colour is stored without one ("hr-100-61" becomes "hr-100").
+            if (canonical && !set.Colorable && pieces[0] is not ("ca" or "wa")) {
+                rebuilt[pieces[0]] = $"{pieces[0]}-{set.Id}";
+                continue;
+            }
+
+            if (set.Colorable) {
+                color = ValidateColor(color);
+
+                if (pieces.Length > 3) {
+                    second = ValidateColor(second);
+                }
+            }
+            else if (pieces[0] is not ("ca" or "wa")) {
+                color = 0;
+            }
+
+            rebuilt[pieces[0]] = $"{pieces[0]}-{set.Id}-{color}" + (second != 0 ? $"-{second}" : "");
+        }
+
+        foreach (var requirement in _requirements) {
+            // A missing chest and legs are filled for a male figure too, with the lowest selectable set and the first colour.
+            if (rebuilt.ContainsKey(requirement) || !canonical && requirement == "ch" && gender == "M" || !_setTypes.TryGetValue(requirement, out var type)) {
+                continue;
+            }
+
+            var candidates = type.Sets.Values.Where(candidate => candidate.Selectable && (candidate.Gender == gender || candidate.Gender == "U") &&
+                candidate.ClubLevel <= clubLevel && Owns(candidate));
+            var set = canonical ? candidates.OrderBy(candidate => candidate.Id).FirstOrDefault() : candidates.FirstOrDefault();
+
+            if (set != null) {
+                rebuilt[requirement] = $"{requirement}-{set.Id}-{GetRandomColor(type.PalletId, clubLevel)}";
+            }
+        }
+
+        var parts = canonical ? _setTypes.Keys.Where(rebuilt.ContainsKey).Select(type => rebuilt[type]) : rebuilt.Values;
+
+        return string.Join('.', parts) + (rebuilt.Count > 0 ? "." : "");
+    }
+
+    public Palette? GetPalette(int colorId)
+    {
+        return _palettes.FirstOrDefault(x => x.Value.Colors.ContainsKey(colorId)).Value;
+    }
+
+    public bool TryGetPalette(int palletId, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out Palette? palette) => _palettes.TryGetValue(palletId, out palette);
+
+    public int GetRandomColor(int palletId, int clubLevel = 0) => _palettes[palletId].Colors.Values.FirstOrDefault(color => color.Selectable && color.ClubLevel <= clubLevel)?.Id ?? 0;
+
+    public string GenerateRandomFigure(string gender, Random random)
+    {
+        gender = gender.ToUpperInvariant();
+        var parts = new List<string>();
+
+        foreach (var (type, chance) in RandomOutfitTypes) {
+            if (!_setTypes.TryGetValue(type, out var setType) || random.NextDouble() >= chance) {
+                continue;
+            }
+
+            // Only sets anyone can pick in the wardrobe: selectable and not sold as clothing furni.
+            var sets = _randomSets.GetOrAdd((type, gender), key => setType.Sets.Values
+                .Where(set => set.Selectable && !set.Sellable && set.Parts.Count > 0 && (set.Gender == key.Gender || set.Gender == "U"))
+                .ToArray());
+
+            if (sets.Length == 0) {
+                continue;
+            }
+
+            var chosen = sets[random.Next(sets.Length)];
+            var part = $"{type}-{chosen.Id}";
+
+            if (chosen.Colorable) {
+                var colors = _randomColors.GetOrAdd(setType.PalletId, id => _palettes.TryGetValue(id, out var palette)
+                    ? palette.Colors.Values.Where(color => color.Selectable).Select(color => color.Id).ToArray()
+                    : []);
+                // Two-colour sets have parts with colorindex 2.
+                var slots = chosen.Parts.Values.Where(p => p.Colorable).Select(p => p.ColorIndex).DefaultIfEmpty(1).Max();
+
+                for (var slot = 0; slot < Math.Max(slots, 1) && colors.Length > 0; slot++) {
+                    part += $"-{colors[random.Next(colors.Length)]}";
+                }
+            }
+
+            parts.Add(part);
+        }
+
+        return parts.Count > 0 ? string.Join('.', parts) : IFigureDataManager.DefaultFigure;
+    }
+
+    public string FilterFigure(string figure)
+    {
+        return StringCharFilter.IsValid(figure) ? figure : IFigureDataManager.DefaultFigure;
+    }
+}

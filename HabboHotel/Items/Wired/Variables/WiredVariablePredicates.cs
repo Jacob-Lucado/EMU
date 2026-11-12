@@ -1,0 +1,40 @@
+namespace Plus.HabboHotel.Items.Wired.Variables;
+
+public static class WiredVariablePredicates
+{
+    // Polaris/Volt comparison codes.
+    public static bool Compare(int comparison, long value, long reference) => comparison switch
+    {
+        0 => value > reference,
+        1 => value >= reference,
+        2 => value == reference,
+        3 => value <= reference,
+        4 => value < reference,
+        5 => value != reference,
+        _ => false
+    };
+
+    public static IReadOnlyList<WiredVariableHolder> Filter(WiredVariableModule variables, WiredVariableReference reference,
+        IEnumerable<WiredVariableHolder> holders, WiredVariableFrame frame, int sort, int count)
+    {
+        if (sort is < 0 or > 5) {
+            return [];
+        }
+
+        // Sorting by value over a user variable without a value keeps nobody, so the one selected user is dropped. The editor offers the value orders only for variables that hold a value.
+        if (sort < 2 && !variables.CarriesValue(reference)) {
+            return [];
+        }
+
+        using var reads = variables.CaptureReads([reference], frame);
+        var values = holders.Select(holder => (holder, value: reads.Read(reference, holder, frame)))
+            .Where(x => x.value is not null)
+            .Select(x => (x.holder, key: sort < 2 ? (long?)x.value!.Value : sort < 4
+                ? x.value!.CreatedAt?.UtcTicks : x.value!.UpdatedAt?.UtcTicks))
+            .Where(x => x.key.HasValue);
+        // Polaris puts highest value first at 0, but oldest timestamp first at 2 and 4.
+        var ordered = sort is 0 or 3 or 5 ? values.OrderByDescending(x => x.key) : values.OrderBy(x => x.key);
+
+        return ordered.Take(Math.Clamp(count, 0, 10000)).Select(x => x.holder).ToArray();
+    }
+}

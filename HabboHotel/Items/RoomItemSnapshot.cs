@@ -1,0 +1,185 @@
+using Plus.Utilities;
+using System.Collections.Immutable;
+using System.Globalization;
+using Plus.HabboHotel.Items.DataFormat;
+
+namespace Plus.HabboHotel.Items;
+
+public abstract record FurnitureDataSnapshot(FurniDataStructure Structure)
+{
+    public sealed record Empty() : FurnitureDataSnapshot(FurniDataStructure.Empty);
+    public sealed record Legacy(string Value) : FurnitureDataSnapshot(FurniDataStructure.Legacy);
+    public sealed record Map(ImmutableArray<KeyValuePair<string, string>> Values) : FurnitureDataSnapshot(FurniDataStructure.Map);
+    public sealed record Strings(ImmutableArray<string> Values) : FurnitureDataSnapshot(FurniDataStructure.StringArray);
+    public sealed record Vote(string State, int Result) : FurnitureDataSnapshot(FurniDataStructure.VoteResult);
+    public sealed record Integers(ImmutableArray<int> Values) : FurnitureDataSnapshot(FurniDataStructure.IntArray);
+    public sealed record Highscore(string State, uint ScoreType, uint ClearType) : FurnitureDataSnapshot(FurniDataStructure.HighScore)
+    {
+        public ImmutableArray<HighscoreEntry> Entries { get; init; } = [];
+    }
+    public sealed record Crackable(string State, uint Hits, uint Target) : FurnitureDataSnapshot(FurniDataStructure.Crackable);
+
+    public static FurnitureDataSnapshot Capture(IFurniObjectData data) => data switch
+    {
+        EmptyDataFormat => new Empty(),
+        RecolorableDataFormat value => new Map(value.WireMap(value.Data)),
+        LegacyDataFormat value => new Legacy(value.Data),
+        MapDataFormat value => new Map(value.Data.ToImmutableArray()),
+        StringArrayDataFormat value => new Strings(value.Data.ToImmutableArray()),
+        VoteResultDataFormat value => new Vote(value.State, value.Result),
+        IntArrayDataFormat value => new Integers(value.Data.ToImmutableArray()),
+        HighscoreDataFormat value => new Highscore(value.State, value.ScoreType, value.ClearType) { Entries = value.CaptureEntries() },
+        CrackableDataFormat value => new Crackable(value.State, value.Hits, value.Target),
+        _ => throw new ArgumentOutOfRangeException(nameof(data), data.StructureType, "Unsupported furniture wire data.")
+    };
+}
+
+public static class FurnitureWireData
+{
+    /// <summary>
+    /// The data an ObjectDataUpdate carries for a state: legacy for ordinary furni, the full map for a recolorable, whose client
+    /// logic paints legacy data white.
+    /// </summary>
+    public static FurnitureDataSnapshot ForState(IFurniObjectData data, string state) => data switch
+    {
+        RecolorableDataFormat recolorable => new FurnitureDataSnapshot.Map(recolorable.WireMap(state)),
+        HighscoreDataFormat board => new FurnitureDataSnapshot.Highscore(state, board.ScoreType, board.ClearType) { Entries = board.CaptureEntries() },
+        _ => new FurnitureDataSnapshot.Legacy(state)
+    };
+}
+
+public sealed record GuildFurnitureAppearance(int GroupId, string Badge, string Colour1, string Colour2);
+
+public sealed record FurnitureMetadata(bool Stackable, bool IsSeat, bool IsBed, bool Walkable, int Width, int Length);
+
+public sealed record RoomItemSnapshot(
+    uint Id, int SpriteId, int X, int Y, int Rotation, string Z, string Height, int FloorExtra,
+    FurnitureDataSnapshot Data, uint UniqueNumber, uint UniqueSeries, string WallCoordinates,
+    string WallData, int UseButton, int UserId, string Username, FurnitureMetadata Metadata)
+{
+    public static RoomItemSnapshot Capture(Item item)
+    {
+        // Resolved before the lock: a group missing from the cache is loaded from the database.
+        var guild = FindGuild(item);
+
+        lock (item.NavSync) {
+            return CaptureLocked(item, guild);
+        }
+    }
+
+    /// <summary>
+    /// A user moving or rotating a Wired trigger box shows it at rest (state 0). Its flash state is kept, so the next flash
+    /// still flips from it.
+    /// </summary>
+    public static RoomItemSnapshot CaptureUserMove(Item item)
+    {
+        var snapshot = Capture(item);
+
+        return item.Definition.InteractionType == InteractionType.WiredTrigger
+            ? snapshot with { Data = new FurnitureDataSnapshot.Legacy("0") }
+            : snapshot;
+    }
+
+    private static GuildFurnitureAppearance? FindGuild(Item item) =>
+        item.Definition.InteractionType is InteractionType.GuildItem or InteractionType.GuildGate or InteractionType.GuildForum
+            ? item.GetRoom()?.FindGuildAppearance(item.GroupId)
+            : null;
+
+    // Usage policy: 0 nobody, 1 room controllers, 2 everybody. Wired boxes are always used (their editor opened) by
+    // those with rights, whatever states their furni definition declares.
+    private static int UsagePolicy(ItemDefinition definition) => definition.WiredDescriptor != null ? 1 : IsNeverUsed(definition) ? 0 : definition.InteractionType switch
+    {
+        // The other score board colours and Floor Switch 2 follow the same rule.
+        InteractionType.VendingMachine or InteractionType.WfFloorSwitch1 or InteractionType.WfFloorSwitch2 => 2,
+        InteractionType.Footballcounterred or InteractionType.Footballcounterblue or InteractionType.Footballcountergreen
+            or InteractionType.Footballcounteryellow => 0,
+        InteractionType.Counter or InteractionType.Recolorable => 1,
+        _ => definition.Modes > 1 ? 1 : 0
+    };
+
+    /// <summary>
+    /// Rollers, the game tiles, the pyramid, the blob, the box, three buttons and the plates have usage policy 0, whatever number of states they have.
+    /// </summary>
+    internal static bool IsNeverUsed(ItemDefinition definition) => definition.InteractionType == InteractionType.Roller
+        || definition.ItemName is "wf_tile1" or "wf_tile2" or "wf_pyramid" or "wf_box"
+        or "wf_arrowplate" or "wf_arrowplate_8dir" or "wf_pressureplate" or "wf_ringplate" or "wf_blob" or "wf_blob2"
+        or "wf_button" or "wf_button_red" or "wf_button_x";
+
+    /// <summary>
+    /// Usage policy 0 is not the same as ignoring a double-click: the blobs (wf_blob, wf_blob2) still change state when used in a running game.
+    /// </summary>
+    internal static bool IgnoresUse(ItemDefinition definition) => IsNeverUsed(definition) && definition.ItemName is not ("wf_blob" or "wf_blob2");
+
+    private static RoomItemSnapshot CaptureLocked(Item item, GuildFurnitureAppearance? guild)
+    {
+        var definition = item.Definition;
+        var type = definition.InteractionType;
+        var z = item.GetZ;
+        var legacy = item.LegacyDataString;
+        // Plain floor items carry extra 0.
+        var extra = 0;
+
+        if (type == InteractionType.WalkMagicTile) {
+            extra = legacy.Split(';').Skip(1).FirstOrDefault() == "1" ? 1 : 0;
+        }
+        else if (type == InteractionType.Gift) {
+            extra = GiftWrap.Style(legacy);
+        }
+        else if (type == InteractionType.Roller) {
+            extra = 1;
+        }
+        else if (type == InteractionType.MusicDisc) {
+            var fields = legacy.Split('\n');
+
+            if (fields.Length >= 7 && int.TryParse(fields[6], out var songId)) {
+                extra = songId;
+            }
+        }
+
+        // The client reads StringArray [state, groupId, badge, colour1, colour2]; it draws the badge
+        // and colours and links the forum terminal to groupforum/<groupId>. Without its group the stored data stays.
+        FurnitureDataSnapshot? guildData = guild == null ? null
+            : new FurnitureDataSnapshot.Strings([legacy, guild.GroupId.ToString(CultureInfo.InvariantCulture), guild.Badge, guild.Colour1, guild.Colour2]);
+        // A roller always shows state 1, whatever data it stores.
+        var data = item.IsWallItem ? new FurnitureDataSnapshot.Empty() : type == InteractionType.Roller ? new FurnitureDataSnapshot.Legacy("1") : MagicTileHeight.IsMagicTile(type)
+            ? new FurnitureDataSnapshot.Legacy(MagicTileHeight.ToWire(z).ToString(CultureInfo.InvariantCulture))
+            : guildData ?? FurnitureDataSnapshot.Capture(item.ExtraData);
+
+        return new(item.Id, definition.SpriteId, item.GetX, item.GetY, item.Rotation,
+            TextHandling.GetString(z), TextHandling.GetString(item.StateHeight), extra,
+            data, item.UniqueNumber, item.UniqueSeries, item.WallCoordinates ?? "",
+            type == InteractionType.Postit ? legacy.Split(' ')[0] : legacy,
+            UsagePolicy(definition), item.UserId, item.Username ?? "",
+            new(definition.Stackable, definition.IsSeat, type == InteractionType.Bed, definition.Walkable, definition.Width, definition.Length));
+    }
+}
+
+public sealed record FurnitureOwner(int Id, string Name);
+public sealed record RoomFurnitureSnapshot(ImmutableArray<RoomItemSnapshot> Items, ImmutableArray<FurnitureOwner> Owners)
+{
+    public static RoomFurnitureSnapshot Capture(IEnumerable<Item> items, int roomOwnerId, string? roomOwnerName)
+    {
+        var snapshots = items.Select(RoomItemSnapshot.Capture).ToImmutableArray();
+        var names = new Dictionary<int, string>();
+
+        foreach (var item in snapshots) {
+            var name = item.UserId == roomOwnerId ? roomOwnerName ?? "" : item.Username;
+
+            if (!names.TryGetValue(item.UserId, out var existing) || (existing.Length == 0 && name.Length > 0)) {
+                names[item.UserId] = name;
+            }
+        }
+
+        var owners = ImmutableArray.CreateBuilder<FurnitureOwner>();
+
+        if (names.Remove(roomOwnerId, out var ownerName)) {
+            owners.Add(new(roomOwnerId, ownerName));
+        }
+
+        foreach (var id in names.Keys.OrderBy(id => id)) {
+            owners.Add(new(id, names[id]));
+        }
+
+        return new(snapshots, owners.ToImmutable());
+    }
+}

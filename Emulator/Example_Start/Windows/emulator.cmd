@@ -1,1 +1,0 @@
-java -Dfile.encoding=UTF8 -Xmx4096m -jar /PATH_TO_YOUR_EMULATOR/Habbo-3.5.3-jar-with-dependencies.jar

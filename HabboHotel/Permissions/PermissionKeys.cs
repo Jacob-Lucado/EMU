@@ -103,6 +103,7 @@ public static class PermissionKeys
     public const string CommandTakerole = "command.takerole";
     public const string CommandTeleport = "command.teleport";
     public const string CommandTradeban = "command.tradeban";
+    public const string CommandTv = "command.tv";
     public const string CommandUnfreeze = "command.unfreeze";
     public const string CommandUnload = "command.unload";
     public const string CommandUnmute = "command.unmute";

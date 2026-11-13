@@ -110,6 +110,13 @@ public class TelevisionPresentationTests
         Assert.Equal(expected, Plus.HabboHotel.Rooms.Chat.Commands.User.TvCommand.VideoIdOf(text));
 
     [Fact]
+    public void TvCommandTakesTheLinkAsItsFirstParameter()
+    {
+        Assert.Equal("dQw4w9WgXcQ", Plus.HabboHotel.Rooms.Chat.Commands.User.TvCommand.VideoIdFrom(["https://youtu.be/dQw4w9WgXcQ"]));
+        Assert.Null(Plus.HabboHotel.Rooms.Chat.Commands.User.TvCommand.VideoIdFrom([]));
+    }
+
+    [Fact]
     public void ServiceSendsARandomVideoBeforeThePlaylist()
     {
         var televisions = Televisions(Video(1, "aaa", "Title A"), Video(2, "bbb", "Title B"));

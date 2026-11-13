@@ -25,7 +25,7 @@ public class RconSocket : IRconSocket
         try {
             var listener = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
             listener.Bind(new IPEndPoint(IPAddress.Parse(host), port));
-            listener.Listen(0);
+            listener.Listen(16);
             listener.BeginAccept(OnCallBack, listener);
         }
         catch (Exception e) {

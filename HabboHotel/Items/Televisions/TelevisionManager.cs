@@ -21,6 +21,8 @@ public class TelevisionManager : ITelevisionManager, IStartable
 
     public Dictionary<int, TelevisionItem> Televisions { get; } = new();
 
+    public System.Collections.Concurrent.ConcurrentDictionary<int, string> NowShowing { get; } = new();
+
 
     public ICollection<TelevisionItem> TelevisionList => Televisions.Values;
 

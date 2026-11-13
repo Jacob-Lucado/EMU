@@ -53,9 +53,10 @@ public sealed class TelevisionPresentationService(ITelevisionManager televisions
             return;
         }
 
-        // A random video is shown first, then the whole playlist, as the client expects.
+        // The TV's own video is shown first, or a random one, then the whole playlist, as the client expects.
         var candidates = televisions.Televisions.Values.ToList();
-        session.Send(new GetYouTubeVideoComposer(itemId, candidates[Random.Shared.Next(candidates.Count)].YouTubeId));
+        var first = televisions.NowShowing.TryGetValue(itemId, out var chosen) ? chosen : candidates[Random.Shared.Next(candidates.Count)].YouTubeId;
+        session.Send(new GetYouTubeVideoComposer(itemId, first));
         session.Send(new GetYouTubePlaylistComposer(itemId, playlist));
     }
 }

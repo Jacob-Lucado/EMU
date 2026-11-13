@@ -64,11 +64,13 @@ internal partial class TvCommand : IChatCommand
 
         _televisions.Init();
 
+        // A TV shows its video when someone clicks it; anyone already watching switches now.
         foreach (var screen in screens) {
+            _televisions.NowShowing[(int)screen.Id] = videoId;
             room.SendPacket(new GetYouTubeVideoComposer((int)screen.Id, videoId));
         }
 
-        session.SendWhisper($"Now playing on {screens.Count} TV{(screens.Count == 1 ? "" : "s")}.");
+        session.SendWhisper($"Done! Click a TV to watch. It's set on {screens.Count} TV{(screens.Count == 1 ? "" : "s")} in this room.");
     }
 
     // A YouTube video ID is 11 letters, digits, '-' or '_'.

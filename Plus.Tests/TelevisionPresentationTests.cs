@@ -86,6 +86,30 @@ public class TelevisionPresentationTests
     }
 
     [Fact]
+    public void ServiceOpensATvOnTheVideoChosenForIt()
+    {
+        var televisions = Televisions(Video(1, "aaa", "Title A"), Video(2, "bbb", "Title B"));
+        televisions.NowShowing[7] = "bbb";
+        var (client, sent) = InRoom(new Habbo { Id = 7 });
+
+        new TelevisionPresentationService(televisions).ShowPlaylist(client, 7);
+
+        var video = new Plus.Communication.Flash.FlashIncomingPacket { Buffer = sent[0].Payload };
+        Assert.Equal(7, video.ReadInt());
+        Assert.Equal("bbb", video.ReadString());
+    }
+
+    [Theory]
+    [InlineData("https://youtu.be/dQw4w9WgXcQ", "dQw4w9WgXcQ")]
+    [InlineData("https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=10", "dQw4w9WgXcQ")]
+    [InlineData("youtube.com/shorts/dQw4w9WgXcQ", "dQw4w9WgXcQ")]
+    [InlineData("dQw4w9WgXcQ", "dQw4w9WgXcQ")]
+    [InlineData("https://example.com/watch?v=dQw4w9WgXcQ", null)]
+    [InlineData("hello", null)]
+    public void TvCommandReadsTheVideoFromALink(string text, string? expected) =>
+        Assert.Equal(expected, Plus.HabboHotel.Rooms.Chat.Commands.User.TvCommand.VideoIdOf(text));
+
+    [Fact]
     public void ServiceSendsARandomVideoBeforeThePlaylist()
     {
         var televisions = Televisions(Video(1, "aaa", "Title A"), Video(2, "bbb", "Title B"));
@@ -222,6 +246,7 @@ public class TelevisionPresentationTests
     private sealed class FakeTelevisions : ITelevisionManager
     {
         public Dictionary<int, TelevisionItem> Televisions { get; } = new();
+        public System.Collections.Concurrent.ConcurrentDictionary<int, string> NowShowing { get; } = new();
         public ICollection<TelevisionItem> TelevisionList => Televisions.Values;
         public void Init() { }
         public bool TryGet(int itemId, out TelevisionItem? televisionItem) => Televisions.TryGetValue(itemId, out televisionItem);

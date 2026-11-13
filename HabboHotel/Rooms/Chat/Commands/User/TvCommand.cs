@@ -33,7 +33,7 @@ internal partial class TvCommand : IChatCommand
             return;
         }
 
-        var videoId = parameters.Length > 1 ? VideoIdOf(parameters[1]) : null;
+        var videoId = VideoIdFrom(parameters);
 
         if (videoId == null) {
             session.SendWhisper("Paste a YouTube link, like :tv https://youtu.be/dQw4w9WgXcQ");
@@ -72,6 +72,9 @@ internal partial class TvCommand : IChatCommand
 
         session.SendWhisper($"Done! Click a TV to watch. It's set on {screens.Count} TV{(screens.Count == 1 ? "" : "s")} in this room.");
     }
+
+    // The command word is already gone when the command runs: the link is the first parameter.
+    internal static string? VideoIdFrom(string[] parameters) => parameters.Length > 0 ? VideoIdOf(parameters[0]) : null;
 
     // A YouTube video ID is 11 letters, digits, '-' or '_'.
     internal static string? VideoIdOf(string text)

@@ -659,9 +659,10 @@ public sealed class CatalogPurchaseServiceTests
     }
 
     [Fact]
-    public async Task CatalogHabbiconOnlyReconcilesAfterItsOwnershipHasCommitted()
+    public async Task CatalogHabbiconOnlyReconcilesAfterItsOwnershipHasCommittedAndBeenAnswered()
     {
         bool committed = false;
+        List<(uint Header, byte[] Payload)> sent = [];
         int reconciliations = 0;
         var snapshot = HabbiconTestSupport.Snapshot();
         var store = CatalogSnapshotTestSupport.Proxy<IHabbiconService>((method, args) =>
@@ -682,12 +683,14 @@ public sealed class CatalogPurchaseServiceTests
             Assert.Equal(nameof(IHabbiconAchievementService.Reconcile), method);
             Assert.True(committed);
             Assert.Same(snapshot, args![1]);
+            Assert.Contains(sent, packet => packet.Header == ServerPacketHeader.PurchaseOKComposer);
             reconciliations++;
 
             return null;
         });
         var context = Context(product: new CatalogProduct { Type = CatalogProductType.Habbicon, HabbiconId = 61 },
             habbicons: store, habbiconAchievements: achievements);
+        sent = context.Sent;
         await context.Service.Purchase(context.Client, new(1, 2, "", 1));
         Assert.Equal(1, reconciliations);
         Assert.Contains(context.Sent, packet => packet.Header == ServerPacketHeader.PurchaseOKComposer);

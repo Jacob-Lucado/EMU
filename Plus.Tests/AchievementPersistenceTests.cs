@@ -61,8 +61,9 @@ public sealed class AchievementPersistenceTests
         service.Reconcile(fixture.Client, snapshot);
         service.Reconcile(fixture.Client, snapshot);
         var owned = snapshot.Items.ToDictionary();
+        owned[62] = owned[62] with { State = HabbiconState.Owned };
         owned[71] = owned[71] with { State = HabbiconState.Owned };
-        snapshot = snapshot with { Items = owned, Collections = [snapshot.Collections[0] with { Completed = true }] };
+        snapshot = snapshot with { Items = owned, Collections = [snapshot.Collections[0] with { Completed = true, Items = [owned[61], owned[62]] }] };
         service.Reconcile(fixture.Client, snapshot);
         service.Reconcile(fixture.Client, snapshot);
         service.Used(fixture.Client);

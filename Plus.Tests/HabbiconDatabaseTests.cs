@@ -83,7 +83,7 @@ public class HabbiconDatabaseTests
     }
 
     [HabbiconDatabaseFact]
-    public void ClaimableMembersDoNotCompleteCollectionsUntilTheyAreOwned()
+    public void ClaimableMembersCompleteCollectionsAndUnlockTheRewardClaim()
     {
         Execute("UPDATE habbicons SET cost_credits = 0 WHERE collection_id = 6 AND id <> 71");
         var collection = _service.Load(UserId).Collections.Single(set => set.Id == 6);
@@ -92,14 +92,13 @@ public class HabbiconDatabaseTests
             _service.Change(UserId, HabbiconAction.Claim, item.Id);
         }
 
-        Assert.False(_service.Load(UserId).Collections.Single(set => set.Id == 6).Completed);
-        Assert.Equal(HabbiconState.Reward, _service.Load(UserId).RequireItem(71).State);
-        Assert.Throws<HabbiconRejected>(() => _service.Change(UserId, HabbiconAction.Claim, 71));
-        _service.Change(UserId, HabbiconAction.Claim, 61);
-        Assert.True(_service.Load(UserId).Collections.Single(set => set.Id == 6).Completed);
-        Assert.Equal(HabbiconState.Claimable, _service.Load(UserId).RequireItem(71).State);
+        var snapshot = _service.Load(UserId);
+        Assert.Equal(HabbiconState.Claimable, snapshot.RequireItem(61).State);
+        Assert.True(snapshot.Collections.Single(set => set.Id == 6).Completed);
+        Assert.Equal(HabbiconState.Claimable, snapshot.RequireItem(71).State);
         _service.Change(UserId, HabbiconAction.Claim, 71);
         Assert.Throws<HabbiconRejected>(() => _service.Change(UserId, HabbiconAction.Claim, 71));
+        Assert.Equal(HabbiconState.Owned, _service.Load(UserId).RequireItem(71).State);
         Assert.Equal(100, Scalar("SELECT credits FROM users WHERE id = 910001"));
     }
 
@@ -108,7 +107,7 @@ public class HabbiconDatabaseTests
     {
         _service.Change(UserId, HabbiconAction.Buy, 61);
         _service.Change(UserId, HabbiconAction.Favorite, 61);
-        Execute("RENAME TABLE user_currencies TO task_habbicons_unused_currencies");
+        Execute("RENAME TABLE user_currencies TO user_currencies_hidden");
 
         try {
             Assert.True(_service.Use(UserId, 61));
@@ -117,7 +116,7 @@ public class HabbiconDatabaseTests
             Assert.False(_service.Use(910002, 61));
         }
         finally {
-            Execute("RENAME TABLE task_habbicons_unused_currencies TO user_currencies");
+            Execute("RENAME TABLE user_currencies_hidden TO user_currencies");
         }
 
         var snapshot = _service.Load(UserId);

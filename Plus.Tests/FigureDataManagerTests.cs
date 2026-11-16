@@ -57,6 +57,20 @@ public class FigureDataManagerTests
         Assert.Contains("ch-215-66.", Manager().ProcessFigure("hd-180-1.ch-215-66.lg-270-82", "M", [], 0));
     }
 
+    // Habbo's Christmas 2026 and NFT 2026 clothes: a shirt, a coat, a hat and a hair set, each in a colour of its palette.
+    [Theory]
+    [InlineData("ch", 6626, 66)]
+    [InlineData("cc", 6653, 66)]
+    [InlineData("ha", 6640, 66)]
+    [InlineData("hr", 6629, 40)]
+    public void NewHabboClothesAreKeptOnceRedeemed(string type, int set, int colour)
+    {
+        var look = $"hd-180-1.ch-215-66.lg-270-82.{type}-{set}-{colour}";
+        var processed = Manager().ProcessFigure(look, "M", [new(1, set, "clothing")], 0);
+
+        Assert.Contains($"{type}-{set}-{colour}", processed);
+    }
+
     [Fact]
     public void CanonicalFiguresFollowSetTypeOrderAndKeepMissingColoursEmpty()
     {

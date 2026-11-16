@@ -152,9 +152,9 @@ public sealed class CatalogPurchaseService : ICatalogPurchaseService
                 }
 
                 var change = _habbicons.BuyCatalog(session.GetHabbo(), product.HabbiconId, offer.CostCredits, offer.CostPoints, offer.PointsType);
-                _habbiconAchievements?.Reconcile(session, change.Snapshot);
                 HabbiconMessages.Publish(session, change);
                 session.Send(new PurchaseOKComposer());
+                _habbiconAchievements?.Reconcile(session, change.Snapshot);
             }
             catch (HabbiconRejected rejected) {
                 session.Send(new PurchaseErrorComposer((PurchaseError)rejected.Code));

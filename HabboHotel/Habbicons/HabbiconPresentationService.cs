@@ -35,15 +35,11 @@ public sealed class HabbiconPresentationService(IHabbiconService habbicons,
         Execute(session, purchase, () =>
         {
             var change = habbicons.Change(session.GetHabbo(), action, id);
-
-            if (purchase) {
-                achievements?.Reconcile(session, change.Snapshot);
-            }
-
             HabbiconMessages.Publish(session, change);
 
             if (purchase) {
                 session.Send(new PurchaseOKComposer());
+                achievements?.Reconcile(session, change.Snapshot);
             }
         });
     }

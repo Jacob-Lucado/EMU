@@ -49,7 +49,8 @@ public sealed class HabbiconService(IDatabase database, TimeProvider clock) : IH
         foreach (var row in connection.Query("SELECT * FROM habbicon_collections ORDER BY id", transaction: transaction)) {
             int id = row.id, rewardId = row.reward_id;
             var members = items.Values.Where(item => item.CollectionId == id && item.Id != rewardId).ToArray();
-            bool complete = members.Length > 0 && members.All(item => item.Owned);
+            // A claimable member counts as collected, as in the client.
+            bool complete = members.Length > 0 && members.All(item => item.Collected);
             items.TryGetValue(rewardId, out var reward);
 
             if (reward != null && reward.CollectionId == id && complete && reward.State == HabbiconState.Reward) {
@@ -241,6 +242,7 @@ public sealed class HabbiconService(IDatabase database, TimeProvider clock) : IH
 
         return Transact(userId, (connection, transaction, _) =>
         {
+            // The collection join keeps the same icons that Load lists.
             var state = connection.QuerySingleOrDefault<int?>(
                 """
                 SELECT COALESCE(u.state, CASE WHEN h.default_owned <> 0 THEN 2 ELSE 0 END)

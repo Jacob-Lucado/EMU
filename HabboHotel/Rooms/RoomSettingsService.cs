@@ -17,7 +17,7 @@ namespace Plus.HabboHotel.Rooms;
 public sealed record RoomSettingsRequest(uint RoomId, string Name, string Description, int Access, string Password, int MaxUsers, int CategoryId,
     ImmutableArray<string> Tags, int TradeSettings, bool AllowPets, bool AllowPetsEat,
     bool RoomBlockingEnabled, bool Hidewall, int WallThickness, int FloorThickness, int WhoMute, int WhoKick, int WhoBan,
-    int ExtraFlood);
+    int ExtraFlood, RoomBehaviorSettings Behavior);
 
 public interface IRoomSettingsStore
 {

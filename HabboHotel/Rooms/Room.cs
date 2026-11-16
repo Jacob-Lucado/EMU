@@ -231,6 +231,7 @@ public class Room
     public bool ReverseRollers { get => Data.ReverseRollers; set => Data.ReverseRollers = value; }
     public bool LayEnabled { get => Data.LayEnabled; set => Data.LayEnabled = value; }
     public bool HideWired { get => Data.HideWired; set => Data.HideWired = value; }
+    public RoomBehaviorSettings Behavior { get => Data.Behavior; set => Data.Behavior = value; }
     public bool DiagonalSqueeze { get => Data.DiagonalSqueeze; set => Data.DiagonalSqueeze = value; }
     public RoomModel Model { get => Data.Model; set => Data.Model = value; }
     public RoomPromotion Promotion { get => Data.Promotion; set => Data.Promotion = value; }

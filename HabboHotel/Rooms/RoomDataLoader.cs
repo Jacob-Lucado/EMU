@@ -107,6 +107,12 @@ internal sealed class RoomDataRow
     public bool LayEnabled { get; set; }
     public bool HideWired { get; set; }
     public bool DiagonalSqueeze { get; set; }
+    public bool LeaveOnDoorTile { get; set; } = RoomBehaviorSettings.Default.LeaveOnDoorTile;
+    public bool IdleSleepEnabled { get; set; } = RoomBehaviorSettings.Default.IdleSleepEnabled;
+    public int IdleSleepTimeoutSeconds { get; set; } = RoomBehaviorSettings.Default.IdleSleepTimeoutSeconds;
+    public bool IdleAutokickEnabled { get; set; } = RoomBehaviorSettings.Default.IdleAutokickEnabled;
+    public int IdleAutokickTimeoutSeconds { get; set; } = RoomBehaviorSettings.Default.IdleAutokickTimeoutSeconds;
+    public bool MuteAllPets { get; set; } = RoomBehaviorSettings.Default.MuteAllPets;
     public uint Id { get; set; }
     public string Caption { get; set; } = string.Empty;
     public string ModelName { get; set; } = string.Empty;

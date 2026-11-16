@@ -44,7 +44,7 @@ internal sealed class SaveRoomSettingsEvent(IRoomSettingsService settings) : IPa
 
         settings.Save(session, new(roomId, name, description, access, password, maxUsers, category, tags.ToImmutable(),
             tradeSettings, allowPets, allowPetsEat, allowWalkthrough, hidewall, wallThickness, floorThickness,
-            whoMute, whoKick, whoBan, extraFlood));
+            whoMute, whoKick, whoBan, extraFlood, RoomBehaviorSettings.Default));
 
         return Task.CompletedTask;
     }

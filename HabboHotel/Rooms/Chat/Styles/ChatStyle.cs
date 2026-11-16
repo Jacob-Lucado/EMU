@@ -1,5 +1,6 @@
 using Plus.HabboHotel.Permissions;
 using Plus.HabboHotel.Subscriptions;
+using Plus.HabboHotel.Users;
 
 namespace Plus.HabboHotel.Rooms.Chat.Styles;
 
@@ -24,7 +25,7 @@ public sealed class ChatStyle
 
     public bool CanUse(UserAccess access) => !RequiresOwnership && Enabled && (!RequiresHc || ClubAccess.LevelFor(access) > 0) &&
         (RequiredPermission.Length == 0 || access.Can(RequiredPermission));
-    public bool CanUse(Plus.HabboHotel.Users.Habbo habbo) => RequiresOwnership
+    public bool CanUse(Habbo habbo) => RequiresOwnership
         ? Enabled && habbo.PurchasedChatStyles.ContainsKey(Id) && (!RequiresHc || ClubAccess.LevelFor(habbo.Access) > 0)
             && (RequiredPermission.Length == 0 || habbo.Access.Can(RequiredPermission))
         : CanUse(habbo.Access);

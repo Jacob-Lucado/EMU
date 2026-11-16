@@ -9,5 +9,10 @@ public sealed class RoomSettingsSaveErrorComposer(uint roomId, int code, string 
 
     public uint MessageId => ServerPacketHeader.RoomSettingsSaveErrorComposer;
 
-    public void Compose(IOutgoingPacket packet) => throw new NotImplementedException();
+    public void Compose(IOutgoingPacket packet)
+    {
+        packet.WriteUInteger(roomId);
+        packet.WriteInteger(code);
+        packet.WriteString(message);
+    }
 }

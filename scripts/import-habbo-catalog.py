@@ -61,11 +61,14 @@ def hab_logic(data):
     document = next(json.loads(content) for name, content in read_hab(data).items() if name.endswith('.json'))
     states = set()
     for visualization in document.get('visualizations') or []:
-        # Animation ids below 1000 are states; higher ids are transitions between them.
-        states.update(int(key) for key in (visualization.get('animations') or {}) if str(key).isdigit() and int(key) < 1000)
+        # A transition names the state it leads to or from; ids of 1000 and up are transitions too.
+        for key, animation in (visualization.get('animations') or {}).items():
+            if str(key).isdigit() and int(key) < 1000 and 'transitionTo' not in animation and 'transitionFrom' not in animation:
+                states.add(int(key))
     dimensions = ((document.get('logic') or {}).get('model') or {}).get('dimensions') or {}
+    # State 0 can be static, so the count runs up to the highest animated state.
     return {'logicType': document.get('logicType'), 'visualizationType': document.get('visualizationType'),
-            'height': dimensions.get('z'), 'states': len(states)}
+            'height': dimensions.get('z'), 'states': max(states) + 1 if states else 0}
 
 
 def library(classname):

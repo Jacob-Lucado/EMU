@@ -19,7 +19,7 @@ public sealed class RecyclerModernPrizeTests
         var counts = new Dictionary<int, int>();
 
         for (var draw = 0; draw < 10000; draw++) {
-            var service = new RecyclerService(null!, null!, TimeProvider.System, new RecyclerTestRandom([draw, 0]), TestLogging.For<RecyclerService>());
+            var service = new RecyclerService(null!, null!, TimeProvider.System, new RecyclerTestRandom([draw, 0]), TestLogging.For<RecyclerService>(), null!);
             var prize = service.Pick(config);
             counts[prize.Id] = counts.GetValueOrDefault(prize.Id) + 1;
         }

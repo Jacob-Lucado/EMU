@@ -40,6 +40,32 @@ public sealed class RecyclerAchievementServiceTests
         Assert.Equal(5, habbo.GetAchievementData("ACH_RecycledItems")!.Progress);
     }
 
+    [Fact]
+    public void OnlyChangedTotalsAreSentToTheClient()
+    {
+        var habbo = new Habbo
+        {
+            Id = 7,
+            Inventory = new InventoryComponent { Furniture = new FurnitureInventoryComponent([], []) },
+            HabboStats = new HabboStats(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, "", 0)
+        };
+        habbo.Achievements["ACH_RecycledItems"] = new("ACH_RecycledItems", 1, 7);
+        habbo.Achievements["ACH_RecycleBoxOpener"] = new("ACH_RecycleBoxOpener", 1, 2);
+        habbo.Achievements["ACH_RecyclerRarePrize"] = new("ACH_RecyclerRarePrize", 1, 3);
+        var (client, _) = HabbiconTestSupport.Client(habbo);
+        var calls = new List<string>();
+        var manager = CatalogSnapshotTestSupport.Proxy<IAchievementManager>((_, args) =>
+        {
+            calls.Add((string)args[1]!);
+
+            return false;
+        });
+        new RecyclerAchievementService(new ProgressStore(new(7, 2, 0, 2, 0)), manager, TestLogging.For<RecyclerAchievementService>()).Sync(client);
+        Assert.Empty(calls);
+        new RecyclerAchievementService(new ProgressStore(new(8, 2, 1, 2, 0)), manager, TestLogging.For<RecyclerAchievementService>()).Sync(client);
+        Assert.Equal(new[] { "ACH_RecycledItems", "ACH_RecycleEcoprizes" }, calls);
+    }
+
     private sealed class ProgressStore(RecyclerAchievementProgress totals) : IRecyclerAchievementStore
     {
         public RecyclerAchievementProgress? Initial { get; private set; }

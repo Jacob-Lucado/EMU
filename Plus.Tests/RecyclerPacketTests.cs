@@ -91,15 +91,15 @@ public sealed class RecyclerPacketTests
     {
         var configuration = new RecyclerConfiguration(true, 5, 0, [new(1, 1, [new(1, 10)]), new(2, 4, [new(2, 20), new(3, 21)]), new(5, 2000, [new(4, 50)])]);
         var random = new RecyclerTestRandom([0, 0]);
-        var service = new RecyclerService(null!, null!, TimeProvider.System, random, TestLogging.For<RecyclerService>());
+        var service = new RecyclerService(null!, null!, TimeProvider.System, random, TestLogging.For<RecyclerService>(), null!);
         Assert.Equal(50u, service.Pick(configuration).ItemId);
         Assert.Equal(new[] { 2000, 1 }, random.Bounds);
         random = new([1, 1]);
-        service = new(null!, null!, TimeProvider.System, random, TestLogging.For<RecyclerService>());
+        service = new(null!, null!, TimeProvider.System, random, TestLogging.For<RecyclerService>(), null!);
         Assert.Equal(21u, service.Pick(configuration).ItemId);
         Assert.Equal(new[] { 2000, 2 }, random.Bounds);
         random = new([501, 0]);
-        service = new(null!, null!, TimeProvider.System, random, TestLogging.For<RecyclerService>());
+        service = new(null!, null!, TimeProvider.System, random, TestLogging.For<RecyclerService>(), null!);
         Assert.Equal(10u, service.Pick(configuration).ItemId);
         Assert.Equal(new[] { 2000, 1 }, random.Bounds);
     }

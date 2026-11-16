@@ -351,6 +351,33 @@ public sealed class RecyclerDatabaseTests
     }
 
     [RecyclerDatabaseFact]
+    public void TheSavedLiveWalletPaysForAnExchangeTheStoredBalanceCouldNotPay()
+    {
+        using var fixture = new Fixture();
+        fixture.Connection.Execute("UPDATE recycler_settings SET cost_duckets=10; INSERT INTO user_currencies VALUES(7,0,5),(7,5,1),(8,0,50)");
+        var config = fixture.Store.Load();
+        var prize = Assert.Single(Assert.Single(config.Levels).Prizes);
+        fixture.Store.SaveWallet(7, 300, [new(0, 150), new(5, 7)]);
+        Assert.Equal(300, fixture.Connection.ExecuteScalar<int>("SELECT credits FROM users WHERE id=7"));
+        Assert.Equal(7, fixture.Connection.ExecuteScalar<int>("SELECT amount FROM user_currencies WHERE user_id=7 AND type=5"));
+        Assert.Equal(50, fixture.Connection.ExecuteScalar<int>("SELECT amount FROM user_currencies WHERE user_id=8 AND type=0"));
+        var box = Assert.IsType<RecycledBox>(fixture.Store.Recycle(7, 100, config, prize, [new(20, 101), new(21, 101)], Now, 150));
+        Assert.Equal(140, box.Duckets);
+        Assert.Equal(140, fixture.Connection.ExecuteScalar<int>("SELECT amount FROM user_currencies WHERE user_id=7 AND type=0"));
+        Assert.Equal(140, fixture.Connection.ExecuteScalar<int>("SELECT balance_after FROM recycler_operations"));
+    }
+
+    [RecyclerDatabaseFact]
+    public void OnlyRewardsWonFromBoxesCountAsRecycledPrizes()
+    {
+        using var fixture = new Fixture();
+        fixture.Connection.Execute("INSERT INTO items(id,user_id,room_id,base_item,extra_data) VALUES(300,7,0,102,'')");
+        var config = fixture.Store.Load();
+        Assert.NotNull(fixture.Store.Recycle(7, 100, config, config.Levels[0].Prizes[0], [new(20, 101), new(300, 102)], Now));
+        Assert.Equal(new RecyclerAchievementProgress(2, 0, 0, 0, 0), new RecyclerAchievementStore(fixture.Source).Read(7, new(0, 0, 0, 0, 0)));
+    }
+
+    [RecyclerDatabaseFact]
     public async Task ZeroCooldownRecyclesTwiceButChargesEachBox()
     {
         using var fixture = new Fixture();
@@ -588,7 +615,7 @@ public sealed class RecyclerDatabaseTests
                     Connection.Execute(dump[start..(dump.IndexOf(';', start) + 1)]);
                 }
 
-                Connection.Execute("CREATE TABLE users(id INT PRIMARY KEY,bubble_id TINYINT NOT NULL DEFAULT 0); INSERT INTO users(id) VALUES(7),(8)");
+                Connection.Execute("CREATE TABLE users(id INT PRIMARY KEY,bubble_id TINYINT NOT NULL DEFAULT 0,credits INT NOT NULL DEFAULT 0); INSERT INTO users(id) VALUES(7),(8)");
                 // The inventory loader also reads linked discs and Builders Club placements.
                 Connection.Execute(RoomMusicDatabaseTests.Fixture.SchemaSql);
                 Connection.Execute("CREATE TABLE items_builders_club(item_id INT UNSIGNED PRIMARY KEY,user_id INT NOT NULL)");

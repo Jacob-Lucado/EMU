@@ -2,8 +2,6 @@ namespace Plus.Communication.Packets.Outgoing;
 
 public static class ServerPacketHeader
 {
-    public const uint UserPurchasableChatStylesComposer = 470;
-    public const uint UserPurchasableChatStyleChangedComposer = 916;
     // Handshake
     public const uint SimplePollStartComposer = 688;
     public const uint SimplePollAnswerComposer = 3576;
@@ -69,6 +67,8 @@ public static class ServerPacketHeader
     public const uint AvatarEffectComposer = 1839;
 
     // Room Chat
+    public const uint UserPurchasableChatStylesComposer = 470;
+    public const uint UserPurchasableChatStyleChangedComposer = 916;
     public const uint ChatComposer = 3477;
     public const uint ShoutComposer = 1206;
     public const uint WhisperComposer = 2229;

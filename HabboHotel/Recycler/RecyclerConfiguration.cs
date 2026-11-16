@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Security.Cryptography;
 using Plus.Utilities.DependencyInjection;
 
 namespace Plus.HabboHotel.Recycler;
@@ -28,5 +29,5 @@ public interface IRecyclerRandom
 
 public sealed class RecyclerRandom : IRecyclerRandom
 {
-    public int Next(int exclusiveMaximum) => System.Security.Cryptography.RandomNumberGenerator.GetInt32(exclusiveMaximum);
+    public int Next(int exclusiveMaximum) => RandomNumberGenerator.GetInt32(exclusiveMaximum);
 }

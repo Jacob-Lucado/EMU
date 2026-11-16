@@ -9,6 +9,7 @@ using Plus.Communication.Packets.Outgoing.Rooms.Furni;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Items;
 using Plus.HabboHotel.Rooms;
+using Plus.HabboHotel.Rooms.Chat.Styles;
 using Plus.HabboHotel.Users;
 using Plus.Communication.Packets.Outgoing.Notifications;
 using Plus.Communication.Packets.Outgoing.Rooms.Session;
@@ -27,7 +28,7 @@ public interface IRecyclerService
 }
 
 public sealed class RecyclerService(IRecyclerStore store, IItemDataManager definitions, TimeProvider clock,
-    IRecyclerRandom random, ILogger<RecyclerService> logger, IRecyclerAchievementService? achievements = null) : IRecyclerService
+    IRecyclerRandom random, ILogger<RecyclerService> logger, IChatStyleManager styles, IRecyclerAchievementService? achievements = null) : IRecyclerService
 {
     public void GetStatus(GameClient session)
     {

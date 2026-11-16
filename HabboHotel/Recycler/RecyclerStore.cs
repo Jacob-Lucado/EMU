@@ -19,6 +19,7 @@ public interface IRecyclerStore
     GiftContent? FindBox(uint itemId, int ownerId, uint roomId, uint boxDefinitionId);
     uint? OpenBox(uint itemId, int ownerId, uint roomId, uint boxDefinitionId, GiftContent content);
     bool OpenChatStyleBox(uint itemId, int ownerId, uint roomId, uint boxDefinitionId, GiftContent content) => false;
+    void SaveWallet(int userId, int credits, IReadOnlyList<KeyValuePair<int, int>> currencies);
 }
 
 public sealed class RecyclerStore(IDatabase database, TimeProvider? clock = null) : IRecyclerStore
@@ -123,6 +124,8 @@ public sealed class RecyclerStore(IDatabase database, TimeProvider? clock = null
         return RecyclerCommit.Complete(connection, transaction, () => Committed(userId, reference, opening: false))
             ? new(id, extraData, duckets) : null;
     }
+
+    public void SaveWallet(int userId, int credits, IReadOnlyList<KeyValuePair<int, int>> currencies) => throw new NotImplementedException();
 
     public GiftContent? FindBox(uint itemId, int ownerId, uint roomId, uint boxDefinitionId)
     {

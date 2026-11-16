@@ -125,7 +125,15 @@ public sealed class RecyclerStore(IDatabase database, TimeProvider? clock = null
             ? new(id, extraData, duckets) : null;
     }
 
-    public void SaveWallet(int userId, int credits, IReadOnlyList<KeyValuePair<int, int>> currencies) => throw new NotImplementedException();
+    public void SaveWallet(int userId, int credits, IReadOnlyList<KeyValuePair<int, int>> currencies)
+    {
+        using var connection = database.Connection();
+        connection.Open();
+        using var transaction = connection.BeginTransaction();
+        connection.Execute("UPDATE users SET credits=@credits WHERE id=@userId", new { credits, userId }, transaction);
+        UserCurrencyStore.SetMany(connection, userId, currencies, transaction);
+        transaction.Commit();
+    }
 
     public GiftContent? FindBox(uint itemId, int ownerId, uint roomId, uint boxDefinitionId)
     {

@@ -1,8 +1,10 @@
 using System.Collections.Immutable;
+using System.Data;
 using System.Data.Common;
 using System.Globalization;
 using Microsoft.Extensions.Logging;
 using Plus.Communication.Packets.Outgoing.Catalog;
+using Plus.Communication.Packets.Outgoing.Handshake;
 using Plus.Communication.Packets.Outgoing;
 using Plus.Communication.Packets.Outgoing.Inventory.Furni;
 using Plus.Communication.Packets.Outgoing.Rooms.Furni;
@@ -34,6 +36,12 @@ public sealed class RecyclerService(IRecyclerStore store, IItemDataManager defin
     {
         var configuration = Configuration();
         var items = definitions.Items;
+
+        if (configuration.Enabled && configuration.Levels.Length > 0 && RecyclerPrizeDistribution.Build(configuration) is null) {
+            logger.LogError("Recycler level chances {Chances} do not form a valid draw, so the Furni-Matic stays closed. Level 1 needs chance 1, "
+                + "the other levels together must stay below 100% and the least common multiple of all chances must fit in a 32-bit integer.",
+                string.Join(",", configuration.Levels.Select(level => level.Id + ":" + level.Chance)));
+        }
 
         if (!Valid(configuration, items) || !SupportsPrizes(session, configuration) || session.GetHabbo() is not { } habbo) {
             session.Send(new RecyclerStatusComposer(2, 0));
@@ -120,6 +128,19 @@ public sealed class RecyclerService(IRecyclerStore store, IItemDataManager defin
                         }
                     }
 
+                    if (configuration.CostDuckets > 0) {
+                        // Saved first so that an unknown exchange outcome leaves only its own charge uncertain.
+                        try {
+                            store.SaveWallet(habbo.Id, habbo.Credits, habbo.Currencies.Snapshot(ActivityPointType.Duckets));
+                        }
+                        catch (DbException exception) {
+                            logger.LogError(exception, "Could not save the wallet before recycling for user {UserId}", habbo.Id);
+                            session.Send(new RecyclerFinishedComposer(2, 0));
+
+                            return;
+                        }
+                    }
+
                     var prize = Pick(configuration);
                     RecycledBox? committed;
 
@@ -128,11 +149,11 @@ public sealed class RecyclerService(IRecyclerStore store, IItemDataManager defin
                             reserved.Select(item => new RecyclerInput(item.Id, item.Definition.Id)).ToArray(), clock.GetUtcNow(), habbo.Duckets);
                     }
                     catch (RecyclerOutcomeUnknownException exception) {
-                        CloseUncertainSession(session, habbo, exception);
+                        CloseUncertainSession(session, habbo, exception, walletChanged: configuration.CostDuckets > 0);
 
                         return;
                     }
-                    catch (DbException exception) {
+                    catch (Exception exception) when (exception is DbException or DBConcurrencyException) {
                         logger.LogError(exception, "Could not recycle furniture for user {UserId}", habbo.Id);
                         session.Send(new RecyclerFinishedComposer(2, 0));
 
@@ -280,11 +301,11 @@ public sealed class RecyclerService(IRecyclerStore store, IItemDataManager defin
                     }
                 }
                 catch (RecyclerOutcomeUnknownException exception) {
-                    CloseUncertainSession(session, habbo, exception);
+                    CloseUncertainSession(session, habbo, exception, walletChanged: false);
 
                     return;
                 }
-                catch (DbException exception) {
+                catch (Exception exception) when (exception is DbException or DBConcurrencyException) {
                     logger.LogError(exception, "Could not open recycler box {ItemId} for user {UserId}", item.Id, habbo.Id);
 
                     return;
@@ -305,6 +326,7 @@ public sealed class RecyclerService(IRecyclerStore store, IItemDataManager defin
 
             if (addedStyle is { } styleId) {
                 session.Send(new UserPurchasableChatStyleChangedComposer(true, styleId));
+                session.Send(new AllowedChatStylesComposer(styles.GetAllowedStyleIds(habbo)));
             }
 
             if (reward is not null) {
@@ -336,9 +358,12 @@ public sealed class RecyclerService(IRecyclerStore store, IItemDataManager defin
         throw new InvalidOperationException("Recycler draw exceeded its distribution.");
     }
 
-    private void CloseUncertainSession(GameClient session, Habbo habbo, Exception exception)
+    private void CloseUncertainSession(GameClient session, Habbo habbo, Exception exception, bool walletChanged)
     {
-        habbo.CurrencyPersistenceUncertain = true;
+        if (walletChanged) {
+            habbo.CurrencyPersistenceUncertain = true;
+        }
+
         logger.LogError(exception, "Recycler outcome requires a fresh session for user {UserId}", habbo.Id);
         session.Disconnect();
     }

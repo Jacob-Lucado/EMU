@@ -99,7 +99,9 @@ public sealed class RecyclerAchievementService(IRecyclerAchievementStore store, 
             }
 
             foreach (var (group, total) in totals.Groups) {
-                achievements.ProgressAchievement(session, group, Math.Max(total, habbo.GetAchievementData(group)?.Progress ?? 0), fromBeginning: true);
+                if (total > (habbo.GetAchievementData(group)?.Progress ?? 0)) {
+                    achievements.ProgressAchievement(session, group, total, fromBeginning: true);
+                }
             }
         }
         catch (Exception exception) {

@@ -15,14 +15,15 @@ internal static class RecyclerReceiptStore
         var hash = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(json)));
         var level = configuration.Levels.Single(level => level.Prizes.Contains(prize)).Id;
         var ids = inputs.Select(input => input.Id).ToArray();
-        var definitions = inputs.Select(input => input.ItemId).Distinct().ToArray();
-        var historical = connection.Query<uint>("SELECT reward_item_id FROM recycler_openings WHERE reward_item_id IN @ids",
-            new { ids }, transaction).ToHashSet();
-        var current = connection.Query<uint>("SELECT DISTINCT item_id FROM recycler_prizes WHERE item_id IN @definitions",
-            new { definitions }, transaction).ToHashSet();
-        var recycledRewards = inputs.Count(input => historical.Contains(input.Id) || current.Contains(input.ItemId));
+        var recycledRewards = connection.ExecuteScalar<int>("SELECT COUNT(*) FROM recycler_openings WHERE reward_item_id IN @ids",
+            new { ids }, transaction);
+
+        if (connection.ExecuteScalar<int>("SELECT COUNT(*) FROM recycler_revisions WHERE hash=@hash", new { hash }, transaction) == 0) {
+            connection.Execute("INSERT IGNORE INTO recycler_revisions(hash,configuration_json,created_at) VALUES(@hash,@json,@now)",
+                new { hash, json, now = now.UtcDateTime }, transaction);
+        }
+
         connection.Execute("""
-            INSERT IGNORE INTO recycler_revisions(hash,configuration_json,created_at) VALUES(@hash,@json,@now);
             INSERT INTO recycler_operations(reference,user_id,box_item_id,configuration_hash,prize_id,prize_level,
                 prize_item_id,chat_style_id,inputs_json,cost_duckets,balance_after,created_at)
             VALUES(@reference,@userId,@boxId,@hash,@prizeId,@level,@itemId,@style,@inputs,@cost,@balance,@now);
@@ -31,7 +32,6 @@ internal static class RecyclerReceiptStore
             """, new
         {
             hash,
-            json,
             reference = reference.ToString(),
             userId,
             boxId,

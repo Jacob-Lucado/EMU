@@ -177,6 +177,21 @@ public sealed class GnomePackageServiceTests
     }
 
     [Fact]
+    public void NestKeepsTheStoredHeightOfARaisedPackage()
+    {
+        var world = World(package: true);
+        world.Item.SetState(1, 1, 1.5);
+
+        world.Service.Open(world.Room, world.Client, 7, "Smokey");
+
+        var request = Assert.Single(world.Store.PetRequests);
+        var nest = Assert.IsType<Item>(world.Room.GetRoomItemHandler().GetItem(13));
+        Assert.Equal(1.5, request.Z);
+        Assert.Equal(request.Z, nest.GetZ);
+        Assert.False(world.Client.GetHabbo().Inventory!.Furniture.HasItem(nest.Id));
+    }
+
+    [Fact]
     public void InvalidPetNameKeepsThePackageAndRepliesWithItsId()
     {
         var world = World(package: true);

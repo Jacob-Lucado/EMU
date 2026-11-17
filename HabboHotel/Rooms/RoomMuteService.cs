@@ -20,7 +20,7 @@ public sealed class RoomMuteService(IAchievementManager achievements, TimeProvid
 
         if (room.WhoCanMute == 0 && !room.CheckRights(session, true) && room.Group == null
             || room.WhoCanMute == 1 && !room.CheckRights(session) && room.Group == null
-            || room.Group != null && !room.CheckRights(session, false, true)) {
+            || room.Group != null && !room.CheckRights(session) && !room.IsGroupAdmin(session)) {
             return;
         }
 

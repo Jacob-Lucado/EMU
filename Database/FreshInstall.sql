@@ -1611,6 +1611,70 @@ CREATE TABLE `logs_client_trade` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
+-- Table structure for table `marketplace_daily_sales`
+--
+
+DROP TABLE IF EXISTS `marketplace_daily_sales`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `marketplace_daily_sales` (
+  `item_type` tinyint(3) unsigned NOT NULL,
+  `sprite_id` int(10) unsigned NOT NULL,
+  `sale_date` date NOT NULL,
+  `sold` bigint(20) unsigned NOT NULL,
+  `total_price` bigint(20) unsigned NOT NULL,
+  PRIMARY KEY (`item_type`,`sprite_id`,`sale_date`),
+  KEY `ix_marketplace_daily_date` (`sale_date`,`item_type`,`sprite_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `marketplace_operations`
+--
+
+DROP TABLE IF EXISTS `marketplace_operations`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `marketplace_operations` (
+  `operation_ref` char(36) NOT NULL,
+  `user_id` int(11) NOT NULL,
+  `kind` varchar(12) NOT NULL,
+  `created_at` datetime(6) NOT NULL,
+  PRIMARY KEY (`operation_ref`),
+  KEY `user_operations` (`user_id`,`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `marketplace_sales`
+--
+
+DROP TABLE IF EXISTS `marketplace_sales`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `marketplace_sales` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+  `offer_id` int(10) unsigned NOT NULL,
+  `buyer_id` int(10) unsigned NOT NULL,
+  `seller_id` int(10) unsigned NOT NULL,
+  `furni_id` int(10) unsigned NOT NULL,
+  `item_id` int(10) unsigned NOT NULL,
+  `limited_number` int(10) unsigned NOT NULL,
+  `limited_stack` int(10) unsigned NOT NULL,
+  `item_type` tinyint(3) unsigned NOT NULL,
+  `sprite_id` int(10) unsigned NOT NULL,
+  `total_price` int(10) unsigned NOT NULL,
+  `seller_amount` int(10) unsigned NOT NULL,
+  `sold_at` datetime(6) NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `ix_marketplace_sales_offer` (`offer_id`),
+  KEY `ix_marketplace_sales_item` (`item_type`,`sprite_id`,`sold_at`),
+  KEY `ix_marketplace_sales_buyer` (`buyer_id`,`sold_at`),
+  KEY `ix_marketplace_sales_seller` (`seller_id`,`sold_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- Table structure for table `messenger_friendships`
 --
 

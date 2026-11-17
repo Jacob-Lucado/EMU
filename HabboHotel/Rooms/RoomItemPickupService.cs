@@ -107,8 +107,7 @@ public sealed class RoomItemPickupService(
             var ownerId = (int)item.OwnerId;
             var mayTake = habbo.Access.Can(PermissionKeys.RoomItemTake);
 
-            if (ownerId != habbo.Id && !mayTake && !room.CheckRights(session, false) &&
-                !(room.Group != null && room.CheckRights(session, false, true))) {
+            if (ownerId != habbo.Id && !mayTake && !room.CheckRights(session, false) && !room.IsGroupAdmin(session)) {
                 handler.CancelUnstartedTransfer(transfer);
 
                 return false;

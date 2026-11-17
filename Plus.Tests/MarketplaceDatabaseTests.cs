@@ -44,6 +44,7 @@ public sealed class MarketplaceDatabaseTests
         Dapper.DefaultTypeMap.MatchNamesWithUnderscores = true;
         SqlMapper.AddTypeHandler(new Plus.Database.UtcDateTimeOffsetHandler());
         using var connection = new MySqlConnection(_connectionString);
+        connection.Execute("TRUNCATE marketplace_operations; TRUNCATE marketplace_sales; TRUNCATE marketplace_daily_sales;");
         connection.Execute("DELETE FROM `catalog_marketplace_offers`");
         connection.Execute("DELETE FROM `items`");
         connection.Execute("DELETE FROM `catalog_marketplace_data`");
@@ -60,9 +61,8 @@ public sealed class MarketplaceDatabaseTests
 
         var snapshot = Search(manager, -1, -1, 0);
 
-        Assert.Equal(new[] { 2, 1 }, manager.Keys);
-        Assert.Equal(new uint[] { 2, 1 }, manager.Items.Select(item => item.OfferId).ToArray());
-        Assert.Equal(2, manager.Items[0].ItemType);
+        Assert.Equal(new uint[] { 2, 1 }, snapshot.Offers.Select(item => item.OfferId).ToArray());
+        Assert.Equal(2, snapshot.Offers[0].ItemType);
         Assert.Equal(2, snapshot.Offers.Length);
     }
 
@@ -138,6 +138,56 @@ public sealed class MarketplaceDatabaseTests
     }
 
     [MarketplaceDatabaseFact]
+    public async Task ExpiredOffersStayListedWithTheirExpiryTimeUntilTheOwnerTakesThemBack()
+    {
+        Insert(1, sprite: 100, asking: 50, total: 55, state: "1", timestamp: Now.ToUnixTimeSeconds() - 172800 - 600, seller: SellerId, furniId: 77);
+        Insert(2, sprite: 200, asking: 30, total: 33, state: "1", timestamp: 0, seller: SellerId, furniId: 78);
+        var definitions = new Dictionary<uint, ItemDefinition> { [900] = new() { Id = 900, SpriteId = 100, PublicName = "Probe", ItemName = "probe", Type = ItemType.Floor } };
+        var items = CatalogSnapshotTestSupport.Proxy<IItemDataManager>((method, _) => method == "get_Items" ? definitions : throw new InvalidOperationException(method));
+        var manager = new MarketplaceManager(new MySqlDatabase(_connectionString), items, CatalogSnapshotTestSupport.Proxy<IItemFactory>((method, _) => throw new InvalidOperationException(method)), new FixedClock(Now));
+
+        var own = manager.OwnOffers(SellerId);
+
+        Assert.Equal(new[] { (1, 3, Now.AddSeconds(-600).ToUnixTimeMilliseconds()), (2, 3, 0L) },
+            own.Offers.Select(offer => (offer.OfferId, offer.State, offer.StatusTime)).ToArray());
+        var seller = new Habbo { Id = SellerId, Username = "seller", Inventory = new InventoryComponent { Furniture = new FurnitureInventoryComponent([], []) } };
+        Assert.True(await manager.TryCancelOffer(seller, 1));
+        Assert.NotNull(seller.Inventory.Furniture.GetItem(77));
+        Assert.Equal(new uint[] { 2 }, OfferIds("1 = 1"));
+    }
+
+    [MarketplaceDatabaseFact]
+    public void PurchaseCanSpendCreditsThatAreOnlyInTheLiveWallet()
+    {
+        Insert(1, sprite: 55, asking: 99, total: 100, state: "1", timestamp: Now.ToUnixTimeSeconds() - 1000, seller: SellerId, furniId: 77);
+        var buyer = Buyer(credits: 90);
+        buyer.Client.GetHabbo().Credits = 110;
+
+        Assert.Equal(MarketplacePurchaseOutcome.Bought, Purchase(buyer).Buy(buyer.Client, 1));
+
+        Assert.Equal(10, buyer.Client.GetHabbo().Credits);
+        Assert.Equal(10, StoredCredits(BuyerId));
+    }
+
+    [MarketplaceDatabaseFact]
+    public async Task OneSessionCannotSpendTheSameCreditsOnTwoOffersAtOnce()
+    {
+        Insert(1, sprite: 55, asking: 699, total: 700, state: "1", timestamp: Now.ToUnixTimeSeconds() - 1000, seller: SellerId, furniId: 77);
+        Insert(2, sprite: 55, asking: 699, total: 700, state: "1", timestamp: Now.ToUnixTimeSeconds() - 1000, seller: SellerId, furniId: 78);
+        var buyer = Buyer(credits: 1000);
+        var purchase = Purchase(buyer);
+        using var start = new Barrier(2);
+
+        var outcomes = await Task.WhenAll(Task.Run(() => { start.SignalAndWait(); return purchase.Buy(buyer.Client, 1); }),
+            Task.Run(() => { start.SignalAndWait(); return purchase.Buy(buyer.Client, 2); }));
+
+        Assert.Single(outcomes, outcome => outcome == MarketplacePurchaseOutcome.Bought);
+        Assert.Single(outcomes, outcome => outcome == MarketplacePurchaseOutcome.InsufficientCredits);
+        Assert.Equal(300, buyer.Client.GetHabbo().Credits);
+        Assert.Equal(300, StoredCredits(BuyerId));
+    }
+
+    [MarketplaceDatabaseFact]
     public void StagedMigrationConvertsLegacyEpochsAndKeepsZeroAndNegativeUnknown()
     {
         var table = "probe_legacy_offers";
@@ -205,9 +255,8 @@ public sealed class MarketplaceDatabaseTests
         Insert(3, sprite: 300, asking: 5, total: 6, state: "1", timestamp: Now.ToUnixTimeSeconds() - 1000);
         var manager = new Manager();
 
-        Search(manager, 10, 56, 1);
-
-        Assert.Equal(new uint[] { 1, 2 }, manager.Items.Select(item => item.OfferId).ToArray());
+        var snapshot = Search(manager, 10, 56, 1);
+        Assert.Equal(new uint[] { 1, 2 }, snapshot.Offers.Select(item => item.OfferId).ToArray());
     }
 
     [MarketplaceDatabaseFact]
@@ -372,6 +421,8 @@ public sealed class MarketplaceDatabaseTests
 
     private (GameClient Client, int Id) Buyer(int credits)
     {
+        using var connection = new MySqlConnection(_connectionString);
+        connection.Execute("INSERT INTO users(id,username,auth_ticket,credits) VALUES(8,'buyer','',@credits) ON DUPLICATE KEY UPDATE credits=@credits", new { credits });
         var habbo = new Habbo { Id = BuyerId, Username = "buyer", Credits = credits, Inventory = new InventoryComponent { Furniture = new FurnitureInventoryComponent([], []) } };
 
         return (HabbiconTestSupport.Client(habbo).Client, BuyerId);
@@ -567,7 +618,7 @@ public sealed class MarketplaceDatabaseTests
         using var connection = new MySqlConnection(_connectionString);
         connection.Execute("INSERT IGNORE INTO `users` (`id`,`username`,`auth_ticket`) VALUES (@owner, CONCAT('marketplace_', @owner), '')", new { owner });
         connection.Execute("INSERT IGNORE INTO `rooms` (`id`,`model_name`,`owner`) SELECT @roomId, 'model_a', @owner FROM DUAL WHERE @roomId <> 0", new { roomId, owner });
-        connection.Execute("INSERT INTO `items` (`id`,`user_id`,`room_id`,`base_item`,`extra_data`) VALUES (@id,@owner,@roomId,1,'')", new { id, owner, roomId });
+        connection.Execute("INSERT INTO `items` (`id`,`user_id`,`room_id`,`base_item`,`extra_data`) VALUES (@id,@owner,@roomId,900,'')", new { id, owner, roomId });
     }
 
     private int Count(string table)
@@ -617,8 +668,6 @@ public sealed class MarketplaceDatabaseTests
         public MarketplaceItemStats ItemStats(uint spriteId) => new(0, 0);
         public MarketplaceOwnOffers OwnOffers(int userId) => new(0, []);
         public Task<bool> TryCancelOffer(Habbo habbo, uint offerId) => Task.FromResult(false);
-        public Task<MarketOffer?> GetOffer(uint offerId) => Task.FromResult<MarketOffer?>(null);
-        public Task DeleteOffer(uint offerId) => Task.CompletedTask;
     }
 
     private sealed class FixedClock(DateTimeOffset now) : TimeProvider

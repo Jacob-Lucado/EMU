@@ -448,17 +448,35 @@ public partial class RoomUserManager
             return 4;
         }
 
-        if (_room.Group == null) {
-            return _room.CheckRights(session, false) ? 1 : 0;
+        if (_room.IsGroupAdmin(session)) {
+            return 3;
         }
 
-        var habboId = session.GetHabbo().Id;
-
-        if (!_room.Group.IsAdmin(habboId) && _room.UsersWithRights.Contains(habboId)) {
+        if (_room.CheckRights(session, false)) {
             return 1;
         }
 
-        return _room.CheckRights(session, false, true) ? 3 : 0;
+        return _room.CheckRights(session, false, true) ? 2 : 0;
+    }
+
+    public void RefreshControllerRights(GameClient session)
+    {
+        if (GetRoomUserByHabbo(session.GetHabbo().Id) is not { } user) {
+            return;
+        }
+
+        var level = ControllerLevel(session);
+        user.RemoveStatus("flatctrl");
+        user.RemoveStatus("flatctrl 1");
+        user.RemoveStatus("flatctrl 3");
+
+        if (level > 0) {
+            user.SetStatus("flatctrl", level.ToString());
+        }
+
+        user.UpdateNeeded = true;
+        session.Send(new YouAreControllerComposer(_room.Id, level));
+        _room.GetWired()?.SendPermissions(session);
     }
 
     // The entrant's controller level and Wired permissions follow the room's labels, then YouAreOwner for the owner.

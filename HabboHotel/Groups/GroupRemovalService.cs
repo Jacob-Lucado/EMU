@@ -152,8 +152,6 @@ public sealed class GroupRemovalService(
                     return Task.CompletedTask;
                 }
 
-                var wasAdmin = group.IsAdmin(userId);
-
                 if (!_store.RemoveMember(group.Id, userId, group.IsMember(userId),
                         stats.FavouriteGroupId == groupId)) {
                     return Task.CompletedTask;
@@ -163,32 +161,14 @@ public sealed class GroupRemovalService(
                     group.DeleteMember(userId);
                 }
 
-                if (wasAdmin && _roomManager.TryGetRoom(group.RoomId, out var adminRoom)) {
-                    var user = adminRoom.GetRoomUserManager().GetRoomUserByHabbo(session.GetHabbo().Id);
-
-                    if (user != null) {
-                        user.RemoveStatus("flatctrl 1");
-                        user.UpdateNeeded = true;
-
-                        user.GetClient()?.Send(new YouAreControllerComposer(adminRoom.Id, 0));
-                    }
+                if (_roomManager.TryGetRoom(group.RoomId, out var homeRoom)) {
+                    homeRoom.GetRoomUserManager().RefreshControllerRights(session);
                 }
 
                 session.Send(new GroupInfoComposer(_groupInfo.Capture(group, session.GetHabbo().Id)));
 
                 if (stats.FavouriteGroupId == groupId) {
                     stats.FavouriteGroupId = 0;
-
-                    if (group.AdminOnlyDeco == 0 && _roomManager.TryGetRoom(group.RoomId, out var room)) {
-                        var user = room.GetRoomUserManager().GetRoomUserByHabbo(session.GetHabbo().Id);
-
-                        if (user != null) {
-                            user.RemoveStatus("flatctrl 1");
-                            user.UpdateNeeded = true;
-
-                            user.GetClient()?.Send(new YouAreControllerComposer(room.Id, 0));
-                        }
-                    }
 
                     if (session.GetHabbo().InRoom && session.GetHabbo().CurrentRoom is { } currentRoom) {
                         var user = currentRoom.GetRoomUserManager()
@@ -231,13 +211,8 @@ public sealed class GroupRemovalService(
                 }
 
                 if (_roomManager.TryGetRoom(group.RoomId, out var room)) {
-                    var user = room.GetRoomUserManager().GetRoomUserByHabbo(userId);
-
-                    if (user != null) {
-                        user.RemoveStatus("flatctrl 1");
-                        user.RemoveStatus("flatctrl 3");
-                        user.UpdateNeeded = true;
-                        user.GetClient()?.Send(new YouAreControllerComposer(room.Id, 0));
+                    if (room.GetRoomUserManager().GetRoomUserByHabbo(userId)?.GetClient() is { } removed) {
+                        room.GetRoomUserManager().RefreshControllerRights(removed);
                     }
                 }
 

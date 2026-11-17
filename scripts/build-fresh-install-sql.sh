@@ -31,7 +31,7 @@ dump() {
     # The first line of a MariaDB 11 dump enables sandbox mode, which older
     # clients reject, so it is dropped.
     docker exec "$CONTAINER" sh -c 'MYSQL_PWD="$MARIADB_ROOT_PASSWORD" exec mariadb-dump -uroot --skip-dump-date "$@"' sh "$@" |
-        sed -E '/enable the sandbox mode/d; /^-- Host:/d; /^-- Dumping routines for database /d; s|/\*![0-9]+ DEFINER=`[^`]*`@`[^`]*`\*/||g'
+        sed -E '/enable the sandbox mode/d; /^-- Host:/d; /^-- Dumping routines for database /d; s|/\*![0-9]+ DEFINER=`[^`]*`@`[^`]*`\*/||g; s/[[:blank:]]+$//'
 }
 
 query() {

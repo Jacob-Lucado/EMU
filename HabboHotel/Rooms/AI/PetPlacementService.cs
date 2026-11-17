@@ -189,7 +189,7 @@ public sealed class PetPlacementService(
     private static void RestoreAvatarPet(Room room, GameClient session, int petId)
     {
         if (!room.CheckRights(session) && room.WhoCanKick != 2 && room.Group == null
-            || room.Group != null && !room.CheckRights(session, false, true)) {
+            || room.Group != null && !room.CheckRights(session) && !room.IsGroupAdmin(session)) {
             return;
         }
 

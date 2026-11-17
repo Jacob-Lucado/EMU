@@ -25,7 +25,7 @@ internal class DisableDiagonalCommand : IChatCommand
 
     public void Execute(GameClient session, Room room, string[] parameters)
     {
-        if (!room.CheckRights(session, false, true)) {
+        if (!room.CheckRights(session) && !room.IsGroupAdmin(session)) {
             session.SendWhisper("Oops, you need rights in this room to run this command!");
 
             return;

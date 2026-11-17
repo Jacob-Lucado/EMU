@@ -1,6 +1,5 @@
 using System.Globalization;
 using Dapper;
-using Plus.Communication.Packets.Outgoing.Catalog;
 using Plus.Communication.Packets.Outgoing.Inventory.Furni;
 using Plus.Communication.Packets.Outgoing.Rooms.AI.Pets;
 using Plus.Communication.Packets.Outgoing.Rooms.Engine;
@@ -86,16 +85,7 @@ public sealed class HorseCustomizationService(
         store.UpdatePet(petUser.PetData.PetId, "have_saddle", 0);
         petUser.PetData.Saddle = 0;
 
-        var item = itemFactory.CreateSingleItemNullable(itemData, habbo, "", "")?.ToInventoryItem();
-
-        if (item != null) {
-            inventory.Furniture.AddItem(item);
-            session.Send(new FurniListNotificationComposer(item.Id, 1));
-            session.Send(new PurchaseOKComposer());
-            session.Send(new FurniListAddComposer(InventoryItemSnapshot.Capture(item)));
-            session.Send(new FurniListUpdateComposer());
-        }
-
+        GiveBack(session, inventory.Furniture, itemData);
         room.SendUser(petUser);
         room.SendPacket(new PetHorseFigureInformationComposer(PetAppearanceSnapshots.Horse(petUser)));
     }
@@ -136,13 +126,29 @@ public sealed class HorseCustomizationService(
             return;
         }
 
+        var oldSaddle = style.Saddle != current.Saddle ? HorseProducts.SaddleProduct(itemDataManager.Items.Values, current.Saddle) : null;
         store.ConsumeItem(pet.PetId, style, item.Id, room.Id, session.GetHabbo().Id);
         pet.Race = style.Palette.ToString(CultureInfo.InvariantCulture);
         pet.PetHair = style.Hair;
         pet.HairDye = style.HairPalette;
         pet.Saddle = style.Saddle;
         room.GetRoomItemHandler().RemoveFurniture(session, item.Id);
+
+        if (oldSaddle != null && session.GetHabbo().Inventory is { } inventory) {
+            GiveBack(session, inventory.Furniture, oldSaddle);
+        }
+
         room.SendUser(petUser);
         room.SendPacket(new PetHorseFigureInformationComposer(PetAppearanceSnapshots.Horse(petUser)));
+    }
+
+    private void GiveBack(GameClient session, FurnitureInventoryComponent inventory, ItemDefinition saddle)
+    {
+        var item = itemFactory.CreateSingleItemNullable(saddle, session.GetHabbo(), "", "")?.ToInventoryItem();
+
+        if (item != null) {
+            inventory.AddItem(item);
+            session.Send(new FurniListAddComposer(InventoryItemSnapshot.Capture(item)));
+        }
     }
 }

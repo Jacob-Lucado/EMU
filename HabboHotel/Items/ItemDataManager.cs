@@ -181,6 +181,9 @@ public class ItemDataManager : IItemDataManager, IStartable
         return ids;
     }
 
+    /// <summary>Habbo writes a pet package's customparams as "pet type, furni name", such as "1 newbie_nest".</summary>
+    internal static PetPackage? ReadPetPackage(object? cell) => null;
+
     internal static WiredBoxType ReadWiredType(object cell)
     {
         if (cell is null or DBNull) {

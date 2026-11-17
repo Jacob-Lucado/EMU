@@ -43,6 +43,12 @@ public class ItemDefinition
     /// <summary>The figure set ids a purchasable clothing item unlocks: its Habbo furnidata customparams.</summary>
     public IReadOnlyList<int> FigureSetIds { get; set; } = [];
 
+    /// <summary>The pet a pet package holds and the furni it leaves behind, from its Habbo customparams; null for other furni.</summary>
+    public PetPackage? PetPackage { get; set; }
+
+    /// <summary>The furnidata revision of the furni's asset. Newer furni have higher revisions.</summary>
+    public int Revision { get; set; }
+
     public int Modes { get; set; }
     public List<int> VendingIds { get; set; } = new();
     public List<double> AdjustableHeights { get; set; } = new();

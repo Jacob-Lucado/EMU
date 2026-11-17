@@ -68,9 +68,11 @@ public class Freeze
     // A player without a team on the field when a game starts gets effect 4 and leaves through an exit.
     private void ClearField()
     {
+        var field = _freezeTiles.Values.Select(tile => tile.Coordinate).ToHashSet();
+
         foreach (var user in _room.GetRoomUserManager().GetUserList().ToList()) {
             if (!user.IsBot && user.Team == Team.None && user.FreezeExitTicks == 0
-                && _freezeTiles.Values.Any(tile => tile.GetX == user.X && tile.GetY == user.Y)) {
+                && field.Contains(user.Coordinate)) {
                 user.ApplyEffect(4);
                 user.FreezeExitTicks = 1;
             }

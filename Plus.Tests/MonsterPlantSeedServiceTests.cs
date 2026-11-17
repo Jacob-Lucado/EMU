@@ -3,7 +3,9 @@ using System.Reflection;
 using Plus.Communication.Packets.Incoming.Rooms.Engine;
 using Plus.Communication.Packets.Outgoing;
 using Plus.Communication.Packets.Outgoing.Rooms.Engine;
+using Plus.HabboHotel.Achievements;
 using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Quests;
 using Plus.HabboHotel.Items;
 using Plus.HabboHotel.Items.DataFormat;
 using Plus.HabboHotel.Rooms;
@@ -148,6 +150,76 @@ public sealed class MonsterPlantSeedServiceTests
     }
 
     [Fact]
+    public void TreatingAPlantFillsItsWellbeingWithoutUsingRespectPoints()
+    {
+        var clock = new MovingClock();
+        var world = World(time: clock);
+        world.Service.TryPlant(world.Room, world.Client, 7);
+        Assert.True(world.Room.GetRoomUserManager().TryGetPet(12, out var plant));
+        plant.PetData!.Plant = new MonsterPlant(12, 4, clock.Now.AddDays(-10), clock.Now.AddSeconds(249350), false, true);
+        plant.PetData.Respect = 47;
+        Assert.True(world.Room.GetRoomUserManager().AddAvatarToRoom(world.Client));
+        world.Client.GetHabbo().HabboStats = new HabboStats(0, 0, 0, 0, 0, 0, 0, 0, 0, "");
+        var achievements = new List<string>();
+        var saved = new List<MonsterPlant>();
+        world.Sent.Clear();
+
+        Respects(achievements, saved, clock).Respect(world.Room, world.Client, 12);
+
+        Assert.Equal(TimeSpan.FromSeconds(259200), plant.PetData.Plant.RemainingWellbeing(clock.Now));
+        Assert.Equal(48, plant.PetData.Respect);
+        Assert.Equal(0, world.Client.GetHabbo().HabboStats!.DailyPetRespectPoints);
+        Assert.Equal(["ACH_MonsterPlantTreater"], achievements);
+        Assert.Same(plant.PetData.Plant, Assert.Single(saved));
+        Assert.Contains(world.Sent, p => p.Header == ServerPacketHeader.RespectPetNotificationComposer);
+    }
+
+    [Fact]
+    public void ADeadPlantCannotBeTreated()
+    {
+        var clock = new MovingClock();
+        var world = World(time: clock);
+        world.Service.TryPlant(world.Room, world.Client, 7);
+        Assert.True(world.Room.GetRoomUserManager().TryGetPet(12, out var plant));
+        plant.PetData!.Plant = new MonsterPlant(12, 4, clock.Now.AddDays(-10), clock.Now.AddDays(-1), false, true);
+        Assert.True(world.Room.GetRoomUserManager().AddAvatarToRoom(world.Client));
+        world.Client.GetHabbo().HabboStats = new HabboStats(0, 0, 0, 0, 0, 3, 0, 0, 0, "");
+        var achievements = new List<string>();
+        var saved = new List<MonsterPlant>();
+        world.Sent.Clear();
+
+        Respects(achievements, saved, clock).Respect(world.Room, world.Client, 12);
+
+        Assert.Empty(achievements);
+        Assert.Empty(saved);
+        Assert.Equal(3, world.Client.GetHabbo().HabboStats!.DailyPetRespectPoints);
+        Assert.Empty(world.Sent);
+    }
+
+    [Fact]
+    public void ATreatedPlantIsAnnouncedInHabbosRespectLayout()
+    {
+        var packet = new HabbiconTestSupport.RecordingPacket();
+
+        new Plus.Communication.Packets.Outgoing.Pets.PetTreatedComposer(48, 64450688, 8217639, "Fulvus Wystique", 16, 0, "FFFFFF",
+            "5 1 10 9 3 9 8 4 2 1 2 10 6 0 -1 0", 7, 4).Compose(packet);
+
+        Assert.Equal(new object[] { 48, 64450688, 8217639, "Fulvus Wystique", 16, 0, "ffffff", 0,
+            5, 1, 10, 9, 3, 9, 8, 4, 2, 1, 2, 10, 6, 0, -1, 0, 7, 4 }, packet.Writes);
+    }
+
+    private static PetRespectService Respects(List<string> achievements, List<MonsterPlant> saved, TimeProvider clock) => new(
+        CatalogSnapshotTestSupport.Proxy<IAchievementManager>((method, args) =>
+        {
+            achievements.Add((string)args[1]!);
+
+            return true;
+        }),
+        CatalogSnapshotTestSupport.Proxy<IQuestManager>((_, _) => null),
+        CatalogSnapshotTestSupport.Proxy<IRewardTrackManager>((_, _) => null),
+        new SavingStore(saved), clock);
+
+    [Fact]
     public void ADeadGrownPlantShowsInTheUsersPacketLikeHabbo()
     {
         var world = World();
@@ -228,6 +300,12 @@ public sealed class MonsterPlantSeedServiceTests
         }
 
         public void Save(MonsterPlant plant) { }
+    }
+
+    private sealed class SavingStore(List<MonsterPlant> saved) : IMonsterPlantStore
+    {
+        public Pet? Plant(MonsterPlantSeedRequest request) => null;
+        public void Save(MonsterPlant plant) => saved.Add(plant);
     }
 
     private sealed class RecordingFurniture : IFurnitureUseService

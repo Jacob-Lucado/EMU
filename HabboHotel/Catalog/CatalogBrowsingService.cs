@@ -32,14 +32,18 @@ public sealed class CatalogBrowsingService(IItemDataManager items, IPetRaceManag
 {
     public void ShowPetPalettes(GameClient session, string type)
     {
-        var item = items.GetItemByName(type);
+        // The client asks with the localization key of the pet offer it shows.
+        var pet = catalog.Pages
+            .SelectMany(page => page.Offers.Values)
+            .Where(offer => offer.LocalizationKey == type)
+            .SelectMany(offer => offer.Products)
+            .FirstOrDefault(product => product.Type == CatalogProductType.Pet);
 
-        if (item == null) {
+        if (pet == null) {
             return;
         }
 
-        session.Send(new SellablePetBreedsComposer(PetPaletteSnapshot.Capture(type, item.BehaviourData,
-            races.GetRacesForRaceId(item.BehaviourData))));
+        session.Send(new SellablePetBreedsComposer(PetPaletteSnapshot.Capture(type, pet.PetType, races.GetRacesForRaceId(pet.PetType))));
     }
 
     public void ShowPromotableRooms(GameClient session) =>

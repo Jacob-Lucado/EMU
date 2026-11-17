@@ -1,6 +1,8 @@
+using System.Buffers.Binary;
 using System.Collections.Concurrent;
 using System.Data;
 using System.Reflection;
+using System.Text;
 using Dapper;
 using Microsoft.Extensions.Logging.Abstractions;
 using MySqlConnector;
@@ -16,6 +18,8 @@ using Plus.HabboHotel.Items;
 using Plus.HabboHotel.Items.DataFormat;
 using Plus.HabboHotel.Rooms;
 using Plus.HabboHotel.Rooms.AI;
+using Plus.HabboHotel.Rooms.AI.Types;
+using Plus.HabboHotel.Rooms.Chat.Pets.Locale;
 using Plus.HabboHotel.Rooms.PathFinding;
 using Plus.HabboHotel.Users;
 using Plus.HabboHotel.Users.Inventory;
@@ -177,6 +181,22 @@ public sealed class GnomePackageServiceTests
     }
 
     [Fact]
+    public void AnOpenedPetPackageGreetsItsOwnerAfterTheResult()
+    {
+        var world = World(package: true, greeting: "*wags tail at %owner%*");
+        var owner = new RoomUser(1, world.Room.RoomId, 100, world.Room, world.Client, TestChatEmotions.Unused, new TestRewardProgress());
+        var users = (ConcurrentDictionary<int, RoomUser>)typeof(RoomUserManager).GetField("_users", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(world.Room.GetRoomUserManager())!;
+        users.TryAdd(owner.VirtualId, owner);
+
+        world.Service.Open(world.Room, world.Client, 7, "Smokey");
+
+        var result = world.Packets.FindLastIndex(packet => packet.Header == ServerPacketHeader.CheckGnomeNameComposer);
+        var chat = world.Packets.FindIndex(packet => packet.Header == ServerPacketHeader.ChatComposer);
+        Assert.InRange(result, 0, chat - 1);
+        Assert.Equal("*wags tail at owner*", ChatText(world.Packets[chat].Payload));
+    }
+
+    [Fact]
     public void InvalidPetNameKeepsThePackageAndRepliesWithItsId()
     {
         var world = World(package: true);
@@ -272,14 +292,15 @@ public sealed class GnomePackageServiceTests
         }
     }
 
-    private static Fixture World(bool temporary = false, bool package = false, bool withNest = true)
+    private static Fixture World(bool temporary = false, bool package = false, bool withNest = true, string? greeting = null)
     {
         var model = new RoomModel("gnome-test", 0, 0, 0, 0, "000\r000\r000", 0, 0, false);
         var room = new Room(new RoomData { Id = 42, Model = model }, [], TestLogging.Navigation, TestLogging.Logger, TestRoomAchievements.Unused, TestRoomOwners.Unused);
         Set(room, "_interactionClock", TimeProvider.System);
         Set(room, "_roomItemHandling", new RoomItemHandling(room, TestRoomItemStore.Instance, TestRoomItemMetadataStore.Instance, TestGameClientManager.Empty, TestLanguageManager.RoomItems, TestItemRuntime.Interactors, TestItemRuntime.Travel, TestItemRuntime.Rewards));
         Set(room, "_gamemap", new Gamemap(room, model, TestLogging.Navigation, TestRoomSettings.Empty, TestGroupManager.Empty, TestNavigationDatabase.Instance, TestNavigationRewards.Instance));
-        Set(room, "_roomUserManager", new RoomUserManager(room, TestRoomUserStore.Instance, TimeProvider.System, new TestRewardProgress(), TestChatEmotions.Unused, TestBotAiFactory.Inert, TestGameClientManager.Empty, TestItemRuntime.Travel, TestItemRuntime.Settings));
+        var bots = greeting == null ? TestBotAiFactory.Inert : new TestBotAiFactory((_, virtualId) => new PetBot(virtualId, new GreetingLocale(greeting), null!));
+        Set(room, "_roomUserManager", new RoomUserManager(room, TestRoomUserStore.Instance, TimeProvider.System, new TestRewardProgress(), TestChatEmotions.Unused, bots, TestGameClientManager.Empty, TestItemRuntime.Travel, TestItemRuntime.Settings));
         Set(room, "_userSnapshots", CatalogSnapshotTestSupport.Proxy<IRoomUserSnapshotService>((_, _) => null));
         var item = new Item
         {
@@ -330,6 +351,13 @@ public sealed class GnomePackageServiceTests
         public void Open(Room room, GameClient session, uint itemId, string petName) => Request = (itemId, petName);
     }
     private static byte[] Bytes(params object[] values) => HabbiconTestSupport.Incoming(values).Buffer.ToArray();
+    private static string ChatText(byte[] payload) => Encoding.UTF8.GetString(payload, 6, BinaryPrimitives.ReadUInt16BigEndian(payload.AsSpan(4, 2)));
+
+    private sealed class GreetingLocale(string line) : IPetLocale
+    {
+        public void Init() { }
+        public string[] GetValue(string key) => key.StartsWith("welcome.speech.pet", StringComparison.Ordinal) ? [line] : [];
+    }
 
     private sealed class RecordingStore : IGnomePackageStore
     {

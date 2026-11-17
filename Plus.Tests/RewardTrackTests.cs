@@ -110,6 +110,7 @@ public class RewardTrackTests
         Assert.Equal(new RewardTrackCurrencyGrant(5, 25), RewardTrackRules.Grant(Prize(8, "5", "", 25)));
         Assert.Equal(new RewardTrackCurrencyGrant(104, 100), RewardTrackRules.Grant(Prize(8, "104", "", 100)));
         Assert.Equal(new RewardTrackCurrencyGrant(-1, 5), RewardTrackRules.Grant(Prize(8, "-1", "", 5)));
+        Assert.Equal(new RewardTrackHabbiconGrant(32), RewardTrackRules.Grant(Prize(12, "32", "", 1)));
     }
 
     [Fact]
@@ -133,6 +134,8 @@ public class RewardTrackTests
     [InlineData(8, "-2", "", 5)]
     [InlineData(8, "duckets", "", 5)]
     [InlineData(4, " ", "", 1)]
+    [InlineData(12, "abc", "", 1)]
+    [InlineData(12, "0", "", 1)]
     public void PrizesTheServerCannotGrantAreUnknown(int productType, string rewardType, string extraParams, int amount)
     {
         var track = ChatTrack();

@@ -4,7 +4,7 @@ namespace Plus.HabboHotel.Quests;
 
 /// <summary>
 /// Habbo's product type ids, as the client's product icon widget reads them. A prize's reward type holds the id or code
-/// of the product: the furni sprite id, the badge code or the currency type.
+/// of the product: the furni sprite id, the badge code, the currency type or the habbicon id.
 /// </summary>
 public static class ProductItemType
 {
@@ -14,6 +14,7 @@ public static class ProductItemType
     public const short Bot = 6;
     public const short Currency = 8;
     public const short Pet = 10;
+    public const short Habbicon = 12;
 
     /// <summary>The currency type of credits. Every other currency type is an activity point type.</summary>
     public const int Credits = -1;
@@ -34,3 +35,4 @@ public sealed record RewardTrackPetGrant(int PetType, string Figure, int Amount)
 
 /// <summary>A bot prize: <paramref name="AiType"/> is the bot preset's AI type, such as generic.</summary>
 public sealed record RewardTrackBotGrant(string AiType, string Figure, int Amount) : RewardTrackGrant;
+public sealed record RewardTrackHabbiconGrant(int Id) : RewardTrackGrant;

@@ -93,6 +93,7 @@ public static class RewardTrackRules
             ProductItemType.Pet when id >= 0 && figure.Split(' ')[0] == code => new RewardTrackPetGrant(id.Value, figure, prize.RewardAmount),
             ProductItemType.Bot when BotAiTypes.Contains(code.ToLowerInvariant()) && figure.Length > 0 =>
                 new RewardTrackBotGrant(code.ToLowerInvariant(), figure, prize.RewardAmount),
+            ProductItemType.Habbicon when id > 0 => new RewardTrackHabbiconGrant(id.Value),
             _ => null
         };
     }

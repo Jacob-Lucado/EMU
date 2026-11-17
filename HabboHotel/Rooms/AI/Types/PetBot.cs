@@ -95,7 +95,7 @@ public class PetBot : BotAi
     {
         if (GetRoomUser() is { PetData: { } petData } pet) {
             var speech = _locale.GetValue($"welcome.speech.pet{petData.Type}");
-            pet.Chat(speech[Random.Shared.Next(0, speech.Length)]);
+            pet.Chat(speech[Random.Shared.Next(0, speech.Length)].Replace("%owner%", petData.OwnerName, StringComparison.Ordinal));
         }
     }
 

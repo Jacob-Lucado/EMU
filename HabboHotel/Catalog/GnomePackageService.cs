@@ -6,6 +6,7 @@ using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Items;
 using Plus.HabboHotel.Rooms;
 using Plus.HabboHotel.Rooms.AI.Speech;
+using Plus.HabboHotel.Rooms.AI.Types;
 using Plus.HabboHotel.Users.Inventory.Furniture;
 using Plus.Utilities.DependencyInjection;
 
@@ -133,9 +134,10 @@ public sealed class GnomePackageService(
 
         var pet = opened.Pet;
         var speeches = new List<RandomSpeech>();
-        room.GetRoomUserManager().DeployBot(new(pet.PetId, pet.RoomId, "pet", "freeroam", pet.Name, "", pet.Look,
+        var placedPet = room.GetRoomUserManager().DeployBot(new(pet.PetId, pet.RoomId, "pet", "freeroam", pet.Name, "", pet.Look,
             pet.X, pet.Y, pet.Z, 0, 0, 0, 0, 0, ref speeches, "", 0, pet.OwnerId, false, 0, false, 0), pet);
         session.Send(new CheckGnomeNameComposer(item.Id, petName, PetPackageNameError.None));
+        (placedPet.BotAi as PetBot)?.Greet();
     }
 
     private const int PetPackageFurniRotation = 4;

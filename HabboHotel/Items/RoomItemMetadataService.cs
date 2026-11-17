@@ -136,7 +136,8 @@ public sealed class RoomItemMetadataStore(IDatabase database) : IRoomItemMetadat
         var row = FirstToner(connection, transaction, itemId);
 
         if (row == null) {
-            connection.Execute("INSERT INTO room_items_toner (id,enabled,data1,data2,data3) VALUES (@itemId,FALSE,0,0,0)", new { itemId }, transaction);
+            connection.Execute("INSERT INTO room_items_toner (id,enabled,data1,data2,data3) VALUES (@itemId,@Enabled,@Hue,@Saturation,@Lightness)",
+                new { itemId, TonerRecord.New.Enabled, TonerRecord.New.Hue, TonerRecord.New.Saturation, TonerRecord.New.Lightness }, transaction);
             row = FirstToner(connection, transaction, itemId) ?? throw new InvalidOperationException("Toner defaults were not persisted.");
         }
 

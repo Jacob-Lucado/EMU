@@ -94,6 +94,24 @@ public partial class PlacedFurniRoomTests
     }
 
     [Fact]
+    public void AnIdleKickClosesTheRoomWithReasonTwoAndNoGenericError()
+    {
+        _room.Behavior = RoomBehaviorSettings.Default with { IdleAutokickTimeoutSeconds = 60 };
+        var actor = ExecutorActor(0, 1);
+        _room.OwnerId = 99;
+        actor.IdleTime = 120;
+
+        ExecutorTick();
+
+        var headers = _client.Packets.Select(packet => packet.Header).ToList();
+        Assert.DoesNotContain(ServerPacketHeader.GenericErrorComposer, headers);
+        var playing = headers.IndexOf(ServerPacketHeader.YouArePlayingGameComposer);
+        var close = headers.IndexOf(ServerPacketHeader.CloseConnectionComposer);
+        Assert.True(playing >= 0 && close > playing, string.Join(",", headers));
+        Assert.Equal(new byte[] { 0, 2 }, _client.Packets[close].Body);
+    }
+
+    [Fact]
     public void WithIdleAutokickOffAnIdleVisitorStays()
     {
         _room.Behavior = RoomBehaviorSettings.Default with { IdleAutokickEnabled = false };

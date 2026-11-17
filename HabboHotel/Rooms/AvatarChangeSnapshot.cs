@@ -1,14 +1,16 @@
+using Plus.HabboHotel.Badges.Rarity;
 using Plus.HabboHotel.Rooms.AI;
 
 namespace Plus.HabboHotel.Rooms;
 
-public sealed record AvatarChangeSnapshot(int VirtualId, string Look, string Gender, string Motto, int AchievementPoints)
+public sealed record AvatarChangeSnapshot(int VirtualId, string Look, string Gender, string Motto, int AchievementPoints, int BadgesRank = -1)
 {
-    public static AvatarChangeSnapshot Capture(RoomUser user, bool self)
+    public static AvatarChangeSnapshot Capture(RoomUser user, bool self, BadgeLeaderboardSnapshot? leaderboard = null)
     {
         var habbo = user.GetClient()?.GetHabbo() ?? throw new InvalidOperationException("Room user has no active account.");
 
-        return new(self ? -1 : user.VirtualId, user.LookFor(habbo), habbo.Gender, habbo.Motto, habbo.HabboStats?.AchievementPoints ?? 0);
+        return new(self ? -1 : user.VirtualId, user.LookFor(habbo), habbo.Gender, habbo.Motto, habbo.HabboStats?.AchievementPoints ?? 0,
+            (leaderboard ?? BadgeLeaderboardSnapshot.Current).BadgesRank(habbo.Id));
     }
 
     // A bot's UserChange carries its gender in lower case ("m"), as in Users.

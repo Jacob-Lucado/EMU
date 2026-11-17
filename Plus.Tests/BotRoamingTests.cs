@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using System.Diagnostics;
 using System.Drawing;
 using System.Reflection;
 using System.Runtime.CompilerServices;
@@ -417,18 +416,28 @@ public class BotRoamingTests
         var squares = map.WalkableSquares();
         Assert.Equal(64 * 64 - 1, squares.Length);
         Assert.Same(squares, map.WalkableSquares());
+        Assert.True(map.TryGetRandomWalkableSquare(true, out _));
+        var picks = new Point[500];
+        var picked = 0;
+        var allocated = GC.GetAllocatedBytesForCurrentThread();
 
-        var clock = Stopwatch.StartNew();
+        for (var i = 0; i < picks.Length; i++) {
+            if (map.TryGetRandomWalkableSquare(true, out picks[i])) {
+                picked++;
+            }
+        }
 
-        for (var i = 0; i < 500; i++) {
-            Assert.True(map.TryGetRandomWalkableSquare(true, out var square));
+        allocated = GC.GetAllocatedBytesForCurrentThread() - allocated;
+        // Rebuilding the target list allocates at least one copy of the floor.
+        Assert.True(allocated < squares.Length * Unsafe.SizeOf<Point>(), $"500 picks allocated {allocated} bytes");
+        Assert.Same(squares, map.WalkableSquares());
+        Assert.Equal(picks.Length, picked);
+        Assert.All(picks, square =>
+        {
             Assert.NotEqual(new Point(0, 0), square);
             Assert.InRange(square.X, 0, 63);
             Assert.InRange(square.Y, 0, 63);
-        }
-
-        clock.Stop();
-        Assert.True(clock.ElapsedMilliseconds < 200, $"500 cached picks took {clock.ElapsedMilliseconds}ms");
+        });
     }
 
     private static RoomUser Bot(Room room, bool allowOverride, bool temporary = true)

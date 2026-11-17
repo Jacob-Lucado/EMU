@@ -28,5 +28,37 @@ public interface IMonsterPlantSeedService
 public sealed class MonsterPlantSeedService(IMonsterPlantStore store, IMonsterPlantGenetics genetics, TimeProvider clock)
     : IMonsterPlantSeedService
 {
-    public bool TryPlant(Room room, GameClient session, uint itemId) => throw new NotImplementedException();
+    public bool TryPlant(Room room, GameClient session, uint itemId)
+    {
+        var item = room.GetRoomItemHandler().GetItem(itemId);
+
+        if (item?.Definition?.SpecialType != (int)FurniCategory.MonsterplantSeed) {
+            return false;
+        }
+
+        var habbo = session.GetHabbo();
+
+        lock (item) {
+            if (!ReferenceEquals(habbo.CurrentRoom, room)
+                || !ReferenceEquals(room.GetRoomItemHandler().GetItem(itemId), item)
+                || item.IsTemporary || item.RoomId != room.RoomId || item.OwnerId != habbo.Id) {
+                return true;
+            }
+
+            var seedling = genetics.Roll(item.Definition);
+            var pet = store.Plant(new(item.Id, item.Definition.Id, habbo.Id, habbo.Username, room.RoomId,
+                item.GetX, item.GetY, item.GetZ, seedling.Name, seedling.Look, seedling.Rarity, clock.GetUtcNow()));
+
+            if (pet == null) {
+                return true;
+            }
+
+            room.GetRoomItemHandler().RemoveFurniture(session, item.Id);
+            var speeches = new List<RandomSpeech>();
+            room.GetRoomUserManager().DeployBot(new(pet.PetId, pet.RoomId, "pet", "stand", pet.Name, "", pet.Look,
+                pet.X, pet.Y, pet.Z, 0, 0, 0, 0, 0, ref speeches, "", 0, pet.OwnerId, false, 0, false, 0), pet);
+        }
+
+        return true;
+    }
 }

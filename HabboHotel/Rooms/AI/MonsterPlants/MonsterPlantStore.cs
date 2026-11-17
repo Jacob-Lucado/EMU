@@ -21,13 +21,68 @@ public interface IMonsterPlantStore
 
 public sealed class MonsterPlantStore(IDatabase database, ILogger<MonsterPlantStore> logger) : IMonsterPlantStore
 {
-    public Pet? Plant(MonsterPlantSeedRequest request) => throw new NotImplementedException();
+    public Pet? Plant(MonsterPlantSeedRequest request)
+    {
+        try {
+            using var connection = database.Connection();
+            connection.Open();
+            using var transaction = connection.BeginTransaction();
+            var pet = PetUtility.CreatePet(connection, transaction, request.PlantedAt, request.OwnerName,
+                request.OwnerId, request.Name, MonsterPlant.PetType, request.Look.Race.ToString(), request.Look.Color,
+                new(request.ItemId, request.BaseItem, request.RoomId, request.X, request.Y, request.Z), request.Look.Parts);
 
-    public void Save(MonsterPlant plant) => throw new NotImplementedException();
+            if (pet == null) {
+                return null;
+            }
 
-    internal static void Insert(IDbConnection connection, IDbTransaction? transaction, MonsterPlant plant) => throw new NotImplementedException();
+            var plant = MonsterPlant.Seeded(pet.PetId, request.Rarity, request.PlantedAt);
+            Insert(connection, transaction, plant);
+            transaction.Commit();
+            pet.Plant = plant;
 
-    internal static MonsterPlant? Load(IDbConnection connection, int petId) => throw new NotImplementedException();
+            return pet;
+        }
+        catch (Exception exception) {
+            logger.LogError(exception, "Could not plant seed {ItemId} for user {OwnerId} in room {RoomId}",
+                request.ItemId, request.OwnerId, request.RoomId);
+
+            return null;
+        }
+    }
+
+    public void Save(MonsterPlant plant)
+    {
+        try {
+            using var connection = database.Connection();
+            connection.Execute("""
+                UPDATE bots_monsterplants
+                SET growth_started_at = @GrowthStartedAt, wellbeing_until = @WellbeingUntil,
+                    can_breed = @CanBreed, breeding_permission = @BreedingPermission
+                WHERE pet_id = @PetId LIMIT 1
+                """, Row(plant));
+        }
+        catch (Exception exception) {
+            logger.LogError(exception, "Could not save monster plant {PetId}", plant.PetId);
+        }
+    }
+
+    internal static void Insert(IDbConnection connection, IDbTransaction? transaction, MonsterPlant plant) => connection.Execute("""
+        INSERT INTO bots_monsterplants (pet_id, rarity, growth_started_at, wellbeing_until, can_breed, breeding_permission)
+        VALUES (@PetId, @Rarity, @GrowthStartedAt, @WellbeingUntil, @CanBreed, @BreedingPermission)
+        """, Row(plant), transaction);
+
+    internal static MonsterPlant? Load(IDbConnection connection, int petId)
+    {
+        var row = connection.QuerySingleOrDefault<PlantRow>("""
+            SELECT pet_id AS PetId, rarity, growth_started_at AS GrowthStartedAt, wellbeing_until AS WellbeingUntil,
+                   can_breed AS CanBreed, breeding_permission AS BreedingPermission
+            FROM bots_monsterplants WHERE pet_id = @petId LIMIT 1
+            """, new { petId });
+
+        return row == null
+            ? null
+            : new MonsterPlant(petId, row.Rarity, Utc(row.GrowthStartedAt), Utc(row.WellbeingUntil), row.CanBreed, row.BreedingPermission);
+    }
 
     private static DateTimeOffset Utc(DateTime value) => new(DateTime.SpecifyKind(value, DateTimeKind.Utc));
 

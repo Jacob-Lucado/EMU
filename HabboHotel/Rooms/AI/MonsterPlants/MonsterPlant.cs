@@ -27,31 +27,47 @@ public sealed class MonsterPlant(int petId, int rarity, DateTimeOffset growthSta
     public bool BreedingPermission { get; private set; } = breedingPermission;
 
     /// <summary>A freshly planted seed.</summary>
-    public static MonsterPlant Seeded(int petId, int rarity, DateTimeOffset plantedAt) => throw new NotImplementedException();
+    public static MonsterPlant Seeded(int petId, int rarity, DateTimeOffset plantedAt) =>
+        new(petId, rarity, plantedAt, plantedAt + SeedlingMaxWellbeing, true, false);
 
-    public bool IsDead(DateTimeOffset now) => throw new NotImplementedException();
+    public bool IsDead(DateTimeOffset now) => now >= WellbeingUntil;
 
-    public bool IsGrown(DateTimeOffset now) => throw new NotImplementedException();
+    public bool IsGrown(DateTimeOffset now) => now >= GrowthStartedAt + GrowthTime;
 
     /// <summary>Growth progress from 0 to 120; every 20 is one level.</summary>
-    public int Experience(DateTimeOffset now) => throw new NotImplementedException();
+    public int Experience(DateTimeOffset now)
+    {
+        var grown = Math.Clamp((now - GrowthStartedAt) / GrowthTime, 0, 1);
 
-    public int Level(DateTimeOffset now) => throw new NotImplementedException();
+        return (int)Math.Floor(grown * BarMaximum);
+    }
 
-    public int ExperienceGoal(DateTimeOffset now) => throw new NotImplementedException();
+    public int Level(DateTimeOffset now) => Math.Min(AdultLevel, 1 + Experience(now) / ExperiencePerLevel);
 
-    public TimeSpan RemainingGrowth(DateTimeOffset now) => throw new NotImplementedException();
+    public int ExperienceGoal(DateTimeOffset now) => Math.Min(BarMaximum, Level(now) * ExperiencePerLevel);
 
-    public TimeSpan MaxWellbeing(DateTimeOffset now) => throw new NotImplementedException();
+    public TimeSpan RemainingGrowth(DateTimeOffset now) => IsGrown(now) ? TimeSpan.Zero : GrowthStartedAt + GrowthTime - now;
 
-    public TimeSpan RemainingWellbeing(DateTimeOffset now) => throw new NotImplementedException();
+    public TimeSpan MaxWellbeing(DateTimeOffset now) => IsGrown(now) ? GrownMaxWellbeing : SeedlingMaxWellbeing;
+
+    public TimeSpan RemainingWellbeing(DateTimeOffset now) => IsDead(now) ? TimeSpan.Zero : WellbeingUntil - now;
 
     /// <summary>Wellbeing shown as an energy bar out of 120.</summary>
-    public int Energy(DateTimeOffset now) => throw new NotImplementedException();
+    public int Energy(DateTimeOffset now) =>
+        (int)Math.Floor(Math.Min(1, RemainingWellbeing(now) / MaxWellbeing(now)) * BarMaximum);
 
     /// <summary>A plant can breed once it is fully grown and alive, until it has bred.</summary>
-    public bool CanBreedNow(DateTimeOffset now) => throw new NotImplementedException();
+    public bool CanBreedNow(DateTimeOffset now) => CanBreed && !IsDead(now) && IsGrown(now);
 
     /// <summary>The room posture: <c>rip</c> when dead, <c>grw1</c> to <c>grw6</c> while growing, <c>std</c> when grown.</summary>
-    public string Posture(DateTimeOffset now) => throw new NotImplementedException();
+    public string Posture(DateTimeOffset now)
+    {
+        if (IsDead(now)) {
+            return "rip";
+        }
+
+        var level = Level(now);
+
+        return level < AdultLevel ? $"grw{level}" : "std";
+    }
 }

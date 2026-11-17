@@ -24,5 +24,13 @@ public sealed class MonsterPlantGenetics(Func<int, int> roll) : IMonsterPlantGen
 
     public MonsterPlantGenetics() : this(Random.Shared.Next) { }
 
-    public MonsterPlantSeedling Roll(ItemDefinition seed) => throw new NotImplementedException();
+    public MonsterPlantSeedling Roll(ItemDefinition seed)
+    {
+        var color = Colors[roll(Colors.Count)];
+        var shape = Shapes[roll(Shapes.Count)];
+        var basePalette = roll(BasePalettes);
+
+        return new($"{color.Name} {shape.Name}", new(0, "ffffff", $"2 0 -1 {basePalette} 1 {shape.Part} {color.Palette}"),
+            shape.Rarity + color.Rarity);
+    }
 }

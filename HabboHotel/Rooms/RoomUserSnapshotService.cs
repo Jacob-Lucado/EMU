@@ -14,7 +14,10 @@ namespace Plus.HabboHotel.Rooms;
 public sealed record RoomUserSnapshot(int Id, string Name, string Motto, string Look, int VirtualId, int X, int Y,
     string Z, int Rotation, int Kind, string Gender, int GroupId, string GroupName, int AchievementPoints,
     bool IsPet, int PetType, int OwnerId, string OwnerName, bool HasSaddle, bool IsRidden, int PetLevel = 0, IReadOnlyList<short>? BotSkills = null,
-    int BadgesRank = -1);
+    int BadgesRank = -1, RoomUserPlantState? Plant = null);
+
+/// <summary>The monster plant part of a pet's Users entry.</summary>
+public sealed record RoomUserPlantState(int Rarity, bool CanBreed, bool CanRevive, bool BreedingPermission, string Posture);
 
 [Scoped]
 public interface IRoomUserSnapshotService
@@ -66,10 +69,15 @@ public sealed class RoomUserSnapshotService(IGroupManager groups, IGameClientMan
         if (user.IsPet) {
             var pet = user.PetData ?? throw new InvalidOperationException("A placed pet has no pet data.");
 
+            var now = (clock ?? TimeProvider.System).GetUtcNow();
+            var plant = pet.Plant is { } p
+                ? new RoomUserPlantState(p.Rarity, p.CanBreedNow(now), p.IsDead(now), p.BreedingPermission, p.Posture(now))
+                : null;
+
             return new(ai.BaseId, user.BotData.Name, user.BotData.Motto, pet.Look.ToLowerInvariant(),
                 user.VirtualId, user.X, user.Y, TextHandling.GetString(user.Z), 0, kind, "", 0, "", 0,
                 true, pet.Type, pet.OwnerId, pet.OwnerName, pet.Saddle > 0,
-                user.RidingHorse, pet.Level);
+                user.RidingHorse, pet.Plant?.Level(now) ?? pet.Level, Plant: plant);
         }
 
         // A bot's entry carries the direction it faces.

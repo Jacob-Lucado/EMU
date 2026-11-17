@@ -9,7 +9,14 @@ internal sealed class UseFurnitureEvent(IFurnitureUseService furniture, IMonster
 {
     public override Task Parse(Room room, GameClient session, IIncomingPacket packet)
     {
-        furniture.Use(room, session, new(BuildersClubItemIds.FromWire(packet.ReadUInt()), packet.ReadInt()));
+        var itemId = BuildersClubItemIds.FromWire(packet.ReadUInt());
+        var parameter = packet.ReadInt();
+
+        if (seeds?.TryPlant(room, session, itemId) == true) {
+            return Task.CompletedTask;
+        }
+
+        furniture.Use(room, session, new(itemId, parameter));
 
         return Task.CompletedTask;
     }

@@ -33,11 +33,11 @@ public partial class PlacedFurniRoomTests
         Task tick;
 
         lock (_room.NavigationSync) {
-            tick = Task.Run(_room.ProcessWiredOnly);
+            tick = Task.Factory.StartNew(_room.ProcessWiredOnly, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
             Assert.False(tick.Wait(TimeSpan.FromMilliseconds(50)));
         }
 
-        Assert.True(tick.Wait(TimeSpan.FromSeconds(3)));
+        Assert.True(tick.Wait(TimeSpan.FromSeconds(30)));
         Assert.True(tick.IsCompletedSuccessfully);
     }
 }

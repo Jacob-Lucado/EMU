@@ -949,9 +949,10 @@ public class Room
     }
 
     // Clients whose revision does not map the data composer get the full update instead; the mapping is checked before anything is sent to a client.
-    internal void SendObjectData(Item item, string data, bool batch)
+    internal void SendObjectData(Item item, string data, bool batch) => SendObjectData(item, FurnitureWireData.ForState(item.ExtraData, data), batch);
+
+    internal void SendObjectData(Item item, FurnitureDataSnapshot wire, bool batch)
     {
-        var wire = FurnitureWireData.ForState(item.ExtraData, data);
         IServerPacket packet = batch ? new ObjectsDataUpdateComposer([(item.Id, wire)]) : new ObjectDataUpdateComposer(item.Id, wire);
 
         try {

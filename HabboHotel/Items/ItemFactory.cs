@@ -1,6 +1,7 @@
 using System.Data;
 using Dapper;
 using Plus.Database;
+using Plus.HabboHotel.Items.Data.Toner;
 using Plus.HabboHotel.Items.DataFormat;
 using Plus.HabboHotel.Users;
 
@@ -167,7 +168,8 @@ public class ItemFactory : IItemFactory
             new { itemId = item.Id, preset = "#000000,255,0" }, transaction);
 
     public void CreateTonerData(IDbConnection connection, IDbTransaction transaction, Item item) =>
-        connection.Execute("INSERT INTO `room_items_toner` (`id`, `data1`, `data2`, `data3`, `enabled`) VALUES (@id,0,0,0,FALSE)", new { id = item.Id }, transaction);
+        connection.Execute("INSERT INTO `room_items_toner` (`id`, `data1`, `data2`, `data3`, `enabled`) VALUES (@id,@Hue,@Saturation,@Lightness,@Enabled)",
+            new { id = item.Id, TonerRecord.New.Hue, TonerRecord.New.Saturation, TonerRecord.New.Lightness, TonerRecord.New.Enabled }, transaction);
 
     private T InTransaction<T>(Func<IDbConnection, IDbTransaction, T> write)
     {

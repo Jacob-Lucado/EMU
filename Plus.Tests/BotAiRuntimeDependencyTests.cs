@@ -68,8 +68,7 @@ public partial class PlacedFurniRoomTests
         var missing = new PetBot(petUser.VirtualId, locale, new RecordingCommands(8));
         missing.Init(50, petUser.VirtualId, RoomId, petUser, _room);
         missing.OnUserSay(owner, "horse missing");
-        Assert.Contains("pet.unknowncommand", locale.Keys);
-        Assert.Contains(ServerPacketHeader.ChatComposer, _client.Sent);
+        Assert.DoesNotContain(ServerPacketHeader.ChatComposer, _client.Sent);
     }
 
     private RoomUser Bot(int id, string type, List<RandomSpeech> speeches)

@@ -825,7 +825,9 @@ public class RoomUser
     }
 
 
-    public void ApplyEffect(int effectId)
+    public void ApplyEffect(int effectId) => ApplyEffect(effectId, 0);
+
+    public void ApplyEffect(int effectId, int delay)
     {
         var room = GetRoom();
 
@@ -835,7 +837,7 @@ public class RoomUser
 
         if (IsBot || Stress != null) {
             _botEffect = effectId;
-            room.SendPacket(new AvatarEffectComposer(VirtualId, effectId));
+            room.SendPacket(new AvatarEffectComposer(VirtualId, effectId, delay));
 
             return;
         }
@@ -846,7 +848,7 @@ public class RoomUser
             return;
         }
 
-        effects.ApplyEffect(effectId);
+        effects.ApplyEffect(effectId, delay);
     }
 
 

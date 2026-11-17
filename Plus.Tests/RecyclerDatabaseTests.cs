@@ -646,6 +646,56 @@ public sealed class RecyclerDatabaseTests
     }
 
     [RecyclerDatabaseFact]
+    public void AnEmptyClosedFurniMaticWithoutThePrizeFurnitureStillGetsHabbosEightSlots()
+    {
+        using var fixture = new Fixture();
+        ResetToUntouchedRecycler(fixture);
+
+        fixture.Connection.Execute(HabboDefaultsMigration);
+
+        var config = fixture.Store.Load();
+        Assert.False(config.Enabled);
+        Assert.Equal(8, config.Slots);
+    }
+
+    [RecyclerDatabaseFact]
+    public void AHotelsOwnSlotCountIsKeptWhetherItsFurniMaticIsOpenOrClosed()
+    {
+        using var fixture = new Fixture();
+        AddHabboPrizeFurniture(fixture);
+        fixture.Connection.Execute("UPDATE recycler_settings SET slots=5");
+
+        fixture.Connection.Execute(HabboDefaultsMigration);
+        Assert.Equal(5, fixture.Store.Load().Slots);
+
+        fixture.Connection.Execute("UPDATE recycler_settings SET enabled=FALSE");
+        fixture.Connection.Execute(HabboDefaultsMigration);
+        Assert.Equal(5, fixture.Store.Load().Slots);
+    }
+
+    [RecyclerDatabaseFact]
+    public void ASettingsRowCreatedWithoutASlotCountGetsEightSlots()
+    {
+        using var fixture = new Fixture();
+        fixture.Connection.Execute(HabboDefaultsMigration);
+        fixture.Connection.Execute("DELETE FROM recycler_settings; INSERT INTO recycler_settings(id) VALUES(1)");
+
+        Assert.Equal(8, fixture.Store.Load().Slots);
+    }
+
+    [RecyclerDatabaseFact]
+    public void AMissingSettingsRowLoadsAsAClosedFurniMaticWithEightSlots()
+    {
+        using var fixture = new Fixture();
+        fixture.Connection.Execute("DELETE FROM recycler_settings");
+
+        var config = fixture.Store.Load();
+
+        Assert.False(config.Enabled);
+        Assert.Equal(8, config.Slots);
+    }
+
+    [RecyclerDatabaseFact]
     public void RunningTheHabboDefaultsTwiceChangesNothingTheSecondTime()
     {
         using var fixture = new Fixture();

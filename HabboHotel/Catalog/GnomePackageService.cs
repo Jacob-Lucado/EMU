@@ -51,8 +51,10 @@ public sealed class GnomePackageService(
                 return;
             }
 
-            if (!PetUtility.CheckPetName(petName)) {
-                session.Send(new CheckGnomeNameComposer(itemId, petName, PetPackageNameError.InvalidName));
+            var (nameError, nameInfo) = PetUtility.CheckPackageName(petName);
+
+            if (nameError != PetPackageNameError.None) {
+                session.Send(new CheckGnomeNameComposer(itemId, nameInfo, nameError));
 
                 return;
             }

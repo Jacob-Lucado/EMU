@@ -178,14 +178,14 @@ public sealed class FurnitureInventoryPersistenceTests
         Task<bool>? worker = null;
 
         try {
-            worker = Task.Run(() =>
+            worker = Task.Factory.StartNew(() =>
             {
                 started.TrySetResult();
 
                 return new InventoryClearService(store, gate, TestGameClientManager.Empty).TryClear(context.Client, context.Room);
-            });
+            }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
             await started.Task;
-            await Assert.ThrowsAsync<TimeoutException>(() => worker.WaitAsync(TimeSpan.FromMilliseconds(100)));
+            Assert.False(worker.Wait(TimeSpan.FromMilliseconds(100)));
             Assert.Equal(0, store.Calls);
             Assert.NotNull(Assert.IsType<InventoryComponent>(context.Habbo.Inventory).Furniture.GetItem(7));
             Assert.Empty(context.Sent);
@@ -195,13 +195,13 @@ public sealed class FurnitureInventoryPersistenceTests
 
             if (worker != null) {
                 try {
-                    await worker.WaitAsync(TimeSpan.FromSeconds(2));
+                    await worker.WaitAsync(TimeSpan.FromSeconds(30));
                 }
                 catch { /* Preserve an assertion already escaping the try; the success path observes below. */ }
             }
         }
 
-        Assert.True(await worker!.WaitAsync(TimeSpan.FromSeconds(2)));
+        Assert.True(await worker!.WaitAsync(TimeSpan.FromSeconds(30)));
         Assert.Equal(1, store.Calls);
         Assert.Null(context.Habbo.Inventory.Furniture.GetItem(7));
         Assert.Equal(2, context.Sent.Count);

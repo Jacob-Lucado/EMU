@@ -31,6 +31,8 @@ public sealed class RewardTrackManager : IRewardTrackManager, IStartable
     private readonly IDailyTaskManager? _dailyTasks;
     private readonly IItemDataManager? _items;
     private readonly IItemFactory? _itemFactory;
+    private readonly IHabbiconService? _habbicons;
+    private readonly IHabbiconAchievementService? _habbiconAchievements;
     private readonly object _definitions = new();
     private readonly object _gates = new();
     private readonly Dictionary<int, object> _userGates = new();
@@ -50,6 +52,8 @@ public sealed class RewardTrackManager : IRewardTrackManager, IStartable
         _dailyTasks = dailyTasks;
         _items = items;
         _itemFactory = itemFactory;
+        _habbicons = habbicons;
+        _habbiconAchievements = habbiconAchievements;
 
         if (dailyTasks != null) {
             dailyTasks.TaskClaimed += session => Progress(session, RewardTrackActions.ClaimDailyTask);
@@ -332,6 +336,7 @@ public sealed class RewardTrackManager : IRewardTrackManager, IStartable
         RewardTrackBadgeGrant badge when habbo.Inventory != null && TryResolveBadge(habbo, badge.Code, out var code) => new RewardTrackBadgeGrant(code),
         RewardTrackFurniGrant furni when habbo.Inventory != null && _itemFactory != null && FindFurni(furni) is { } definition =>
             new FurniDefinitionGrant(definition, furni.Amount),
+        RewardTrackHabbiconGrant when _habbicons != null => grant,
         _ => null
     };
 
@@ -381,7 +386,7 @@ public sealed class RewardTrackManager : IRewardTrackManager, IStartable
             connection.Execute(
                 "INSERT INTO users_reward_track_prizes (user_id, track_id, prize_id, claimed_at) VALUES (@userId, @trackId, @prizeId, @claimedAt)",
                 new { userId, trackId, prizeId, claimedAt = claimedAt.UtcDateTime }, transaction);
-            var delivered = new Delivered([]);
+            var delivered = new Delivered([], null);
 
             switch (grant) {
                 case RewardTrackCurrencyGrant { Type: ProductItemType.Credits } credits:
@@ -403,6 +408,9 @@ public sealed class RewardTrackManager : IRewardTrackManager, IStartable
                         return null;
                     }
 
+                    break;
+                case RewardTrackHabbiconGrant habbicon:
+                    delivered = delivered with { Habbicons = _habbicons!.Grant(connection, transaction, userId, habbicon.Id) };
                     break;
             }
 
@@ -434,6 +442,10 @@ public sealed class RewardTrackManager : IRewardTrackManager, IStartable
                 }
 
                 session.Send(new FurniListUpdateComposer());
+                break;
+            case RewardTrackHabbiconGrant when delivered.Habbicons is { } change:
+                HabbiconMessages.Publish(session, change);
+                _habbiconAchievements?.Reconcile(session, change.Snapshot);
                 break;
         }
     }
@@ -754,5 +766,5 @@ public sealed class RewardTrackManager : IRewardTrackManager, IStartable
 
     private sealed record FurniDefinitionGrant(ItemDefinition Definition, int Amount) : RewardTrackGrant;
 
-    private sealed record Delivered(List<Item> Items);
+    private sealed record Delivered(List<Item> Items, HabbiconChange? Habbicons);
 }

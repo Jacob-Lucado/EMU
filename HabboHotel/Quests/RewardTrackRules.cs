@@ -86,6 +86,7 @@ public static class RewardTrackRules
             ProductItemType.Badge when code.Length > 0 => new RewardTrackBadgeGrant(code),
             ProductItemType.Currency when id is { } type && (type == ProductItemType.Credits || ActivityPointType.IsValid(type)) =>
                 new RewardTrackCurrencyGrant(type, prize.RewardAmount),
+            ProductItemType.Habbicon when id > 0 => new RewardTrackHabbiconGrant(id.Value),
             _ => null
         };
     }

@@ -155,7 +155,13 @@ public sealed class GnomePackageServiceTests
     [Fact]
     public void OpeningAPetPackageLeavesItsFurniWithTheNamedPetOnIt()
     {
-        var world = World(package: true);
+        var locale = CatalogSnapshotTestSupport.Proxy<Plus.HabboHotel.Rooms.Chat.Pets.Locale.IPetLocale>((_, _) => new[] { "Welcome home" });
+        var ai = new TestBotAiFactory((_, id) => new Plus.HabboHotel.Rooms.AI.Types.PetBot(id, locale, null!));
+        var world = World(package: true, botAi: ai);
+        TestRoomUserSnapshots.Install(world.Room);
+        var viewer = new RoomUser(1, 42, 100, world.Room, world.Client, TestChatEmotions.Unused, new TestRewardProgress());
+        var users = (ConcurrentDictionary<int, RoomUser>)typeof(RoomUserManager).GetField("_users", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(world.Room.GetRoomUserManager())!;
+        users.TryAdd(viewer.VirtualId, viewer);
 
         world.Service.Open(world.Room, world.Client, 7, "Smokey");
 
@@ -172,7 +178,9 @@ public sealed class GnomePackageServiceTests
         Assert.Equal(("Smokey", 1, "0", "ABABAB"), (pet.Name, pet.Type, pet.Race, pet.Color));
         var result = world.Packets.FindLastIndex(packet => packet.Header == ServerPacketHeader.CheckGnomeNameComposer);
         Assert.Equal(Bytes(7, 0, ""), world.Packets[result].Payload);
-        Assert.True(world.Packets.FindIndex(packet => packet.Header == ServerPacketHeader.UsersComposer) < result);
+        var order = new[] { ServerPacketHeader.ObjectAddComposer, ServerPacketHeader.ObjectRemoveComposer, ServerPacketHeader.UsersComposer,
+            ServerPacketHeader.CheckGnomeNameComposer, ServerPacketHeader.ChatComposer };
+        Assert.Equal(order, world.Packets.Select(packet => packet.Header).Where(order.Contains).ToArray());
         Assert.DoesNotContain(world.Packets, packet => packet.Header == ServerPacketHeader.FurniListNotificationComposer);
     }
 
@@ -299,14 +307,14 @@ public sealed class GnomePackageServiceTests
         }
     }
 
-    private static Fixture World(bool temporary = false, bool package = false, bool withNest = true, int nestWidth = 1)
+    private static Fixture World(bool temporary = false, bool package = false, bool withNest = true, int nestWidth = 1, IBotAiFactory? botAi = null)
     {
         var model = new RoomModel("gnome-test", 0, 0, 0, 0, "000\r000\r000", 0, 0, false);
         var room = new Room(new RoomData { Id = 42, Model = model }, [], TestLogging.Navigation, TestLogging.Logger, TestRoomAchievements.Unused, TestRoomOwners.Unused);
         Set(room, "_interactionClock", TimeProvider.System);
         Set(room, "_roomItemHandling", new RoomItemHandling(room, TestRoomItemStore.Instance, TestRoomItemMetadataStore.Instance, TestGameClientManager.Empty, TestLanguageManager.RoomItems, TestItemRuntime.Interactors, TestItemRuntime.Travel, TestItemRuntime.Rewards));
         Set(room, "_gamemap", new Gamemap(room, model, TestLogging.Navigation, TestRoomSettings.Empty, TestGroupManager.Empty, TestNavigationDatabase.Instance, TestNavigationRewards.Instance));
-        Set(room, "_roomUserManager", new RoomUserManager(room, TestRoomUserStore.Instance, TimeProvider.System, new TestRewardProgress(), TestChatEmotions.Unused, TestBotAiFactory.Inert, TestGameClientManager.Empty, TestItemRuntime.Travel, TestItemRuntime.Settings));
+        Set(room, "_roomUserManager", new RoomUserManager(room, TestRoomUserStore.Instance, TimeProvider.System, new TestRewardProgress(), TestChatEmotions.Unused, botAi ?? TestBotAiFactory.Inert, TestGameClientManager.Empty, TestItemRuntime.Travel, TestItemRuntime.Settings));
         Set(room, "_userSnapshots", CatalogSnapshotTestSupport.Proxy<IRoomUserSnapshotService>((_, _) => null));
         var item = new Item
         {

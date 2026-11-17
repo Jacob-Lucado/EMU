@@ -240,6 +240,8 @@ public class Habbo
     [System.Diagnostics.CodeAnalysis.MemberNotNullWhen(true, nameof(CurrentRoom))]
     public bool InRoom => CurrentRoom != null;
 
+    public ConcurrentDictionary<int, byte> PurchasedChatStyles { get; } = new();
+
     public Room? CurrentRoom { get; set; }
 
     internal void Save()

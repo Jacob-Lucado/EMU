@@ -91,7 +91,7 @@ public class WiredTemporaryPacketGuardTests
                 : parameter.ParameterType == typeof(IGiftOpeningService)
                     ? new GiftOpeningService(new GiftStore(database), null!, null!, Microsoft.Extensions.Logging.Abstractions.NullLogger<GiftOpeningService>.Instance)
                 : parameter.ParameterType == typeof(Plus.HabboHotel.Recycler.IRecyclerService)
-                    ? new Plus.HabboHotel.Recycler.RecyclerService(new Plus.HabboHotel.Recycler.RecyclerStore(database), null!, TimeProvider.System, null!, TestLogging.For<Plus.HabboHotel.Recycler.RecyclerService>())
+                    ? new Plus.HabboHotel.Recycler.RecyclerService(new Plus.HabboHotel.Recycler.RecyclerStore(database), null!, TimeProvider.System, null!, TestLogging.For<Plus.HabboHotel.Recycler.RecyclerService>(), null!)
                 : parameter.ParameterType == typeof(IRoomItemMetadataService)
                     ? new RoomItemMetadataService(new RoomItemMetadataStore(database), null!)
                 : parameter.ParameterType == typeof(IMoodlightService)

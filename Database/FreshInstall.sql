@@ -1985,6 +1985,128 @@ CREATE TABLE `recycler_levels` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
+-- Table structure for table `recycler_openings`
+--
+
+DROP TABLE IF EXISTS `recycler_openings`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `recycler_openings` (
+  `reference` char(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  `operation_reference` char(36) CHARACTER SET ascii COLLATE ascii_bin DEFAULT NULL,
+  `box_item_id` int(10) unsigned NOT NULL,
+  `user_id` int(11) NOT NULL,
+  `prize_level` int(11) NOT NULL,
+  `reward_item_id` int(10) unsigned DEFAULT NULL,
+  `reward_definition_id` int(10) unsigned NOT NULL,
+  `chat_style_id` int(11) NOT NULL DEFAULT 0,
+  `opened_at` datetime(6) NOT NULL,
+  PRIMARY KEY (`reference`),
+  UNIQUE KEY `box_item_id` (`box_item_id`),
+  UNIQUE KEY `reward_item_id` (`reward_item_id`),
+  KEY `user_history` (`user_id`,`opened_at`),
+  KEY `recycler_opening_operation` (`operation_reference`),
+  CONSTRAINT `recycler_opening_operation` FOREIGN KEY (`operation_reference`) REFERENCES `recycler_operations` (`reference`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_unicode_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+/*!50003 CREATE*/  /*!50003 TRIGGER recycler_openings_no_update BEFORE UPDATE ON recycler_openings FOR EACH ROW
+SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Recycler openings cannot be changed'
+*/;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_unicode_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+/*!50003 CREATE*/  /*!50003 TRIGGER recycler_openings_no_delete BEFORE DELETE ON recycler_openings FOR EACH ROW
+SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Recycler openings cannot be deleted'
+*/;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+
+--
+-- Table structure for table `recycler_operations`
+--
+
+DROP TABLE IF EXISTS `recycler_operations`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `recycler_operations` (
+  `reference` char(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  `user_id` int(11) NOT NULL,
+  `box_item_id` int(10) unsigned NOT NULL,
+  `configuration_hash` char(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  `prize_id` int(11) NOT NULL,
+  `prize_level` int(11) NOT NULL,
+  `prize_item_id` int(10) unsigned NOT NULL,
+  `chat_style_id` int(11) NOT NULL DEFAULT 0,
+  `inputs_json` longtext NOT NULL CHECK (json_valid(`inputs_json`)),
+  `cost_duckets` int(11) NOT NULL CHECK (`cost_duckets` >= 0),
+  `balance_after` int(11) DEFAULT NULL,
+  `created_at` datetime(6) NOT NULL,
+  PRIMARY KEY (`reference`),
+  UNIQUE KEY `box_item_id` (`box_item_id`),
+  KEY `user_history` (`user_id`,`created_at`),
+  KEY `recycler_operation_revision` (`configuration_hash`),
+  CONSTRAINT `recycler_operation_revision` FOREIGN KEY (`configuration_hash`) REFERENCES `recycler_revisions` (`hash`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_unicode_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+/*!50003 CREATE*/  /*!50003 TRIGGER recycler_operations_no_update BEFORE UPDATE ON recycler_operations FOR EACH ROW
+SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Recycler receipts cannot be changed'
+*/;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_unicode_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+/*!50003 CREATE*/  /*!50003 TRIGGER recycler_operations_no_delete BEFORE DELETE ON recycler_operations FOR EACH ROW
+SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Recycler receipts cannot be deleted'
+*/;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+
+--
 -- Table structure for table `recycler_prizes`
 --
 
@@ -1994,14 +2116,88 @@ DROP TABLE IF EXISTS `recycler_prizes`;
 CREATE TABLE `recycler_prizes` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `level` int(11) NOT NULL,
-  `item_id` int(10) unsigned NOT NULL,
+  `item_id` int(10) unsigned DEFAULT NULL,
+  `chat_style_id` int(11) DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `recycler_level_item` (`level`,`item_id`),
+  UNIQUE KEY `recycler_level_style` (`level`,`chat_style_id`),
   KEY `fk_recycler_prizes_item_id` (`item_id`),
   CONSTRAINT `fk_recycler_prizes_item_id` FOREIGN KEY (`item_id`) REFERENCES `furniture` (`id`),
   CONSTRAINT `fk_recycler_prizes_level` FOREIGN KEY (`level`) REFERENCES `recycler_levels` (`level`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `recycler_progress`
+--
+
+DROP TABLE IF EXISTS `recycler_progress`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `recycler_progress` (
+  `user_id` int(11) NOT NULL,
+  `recycled_items` bigint(20) unsigned NOT NULL DEFAULT 0,
+  `boxes_opened` bigint(20) unsigned NOT NULL DEFAULT 0,
+  `recycled_rewards` bigint(20) unsigned NOT NULL DEFAULT 0,
+  `rare_prizes` bigint(20) unsigned NOT NULL DEFAULT 0,
+  `grand_prizes` bigint(20) unsigned NOT NULL DEFAULT 0,
+  `initial_recycled_items` int(10) unsigned DEFAULT NULL,
+  `initial_boxes_opened` int(10) unsigned DEFAULT NULL,
+  `initial_recycled_rewards` int(10) unsigned DEFAULT NULL,
+  `initial_rare_prizes` int(10) unsigned DEFAULT NULL,
+  `initial_grand_prizes` int(10) unsigned DEFAULT NULL,
+  PRIMARY KEY (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `recycler_revisions`
+--
+
+DROP TABLE IF EXISTS `recycler_revisions`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `recycler_revisions` (
+  `hash` char(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  `configuration_json` longtext NOT NULL CHECK (json_valid(`configuration_json`)),
+  `created_at` datetime(6) NOT NULL,
+  PRIMARY KEY (`hash`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_unicode_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+/*!50003 CREATE*/  /*!50003 TRIGGER recycler_revisions_no_update BEFORE UPDATE ON recycler_revisions FOR EACH ROW
+SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Recycler revisions cannot be changed'
+*/;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
+/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
+/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
+/*!50003 SET @saved_col_connection = @@collation_connection */ ;
+/*!50003 SET character_set_client  = utf8mb4 */ ;
+/*!50003 SET character_set_results = utf8mb4 */ ;
+/*!50003 SET collation_connection  = utf8mb4_unicode_ci */ ;
+/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
+/*!50003 SET sql_mode              = 'STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION' */ ;
+DELIMITER ;;
+/*!50003 CREATE*/  /*!50003 TRIGGER recycler_revisions_no_delete BEFORE DELETE ON recycler_revisions FOR EACH ROW
+SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Recycler revisions cannot be deleted'
+*/;;
+DELIMITER ;
+/*!50003 SET sql_mode              = @saved_sql_mode */ ;
+/*!50003 SET character_set_client  = @saved_cs_client */ ;
+/*!50003 SET character_set_results = @saved_cs_results */ ;
+/*!50003 SET collation_connection  = @saved_col_connection */ ;
 
 --
 -- Table structure for table `recycler_settings`
@@ -2015,6 +2211,7 @@ CREATE TABLE `recycler_settings` (
   `enabled` tinyint(1) NOT NULL DEFAULT 0,
   `slots` int(11) NOT NULL DEFAULT 5,
   `cooldown_seconds` int(11) NOT NULL DEFAULT 0,
+  `cost_duckets` int(11) NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
@@ -2188,6 +2385,7 @@ CREATE TABLE `room_chat_styles` (
   `required_permission` varchar(191) DEFAULT '',
   `requires_hc` tinyint(1) NOT NULL DEFAULT 0,
   `enabled` tinyint(1) NOT NULL DEFAULT 1,
+  `requires_ownership` tinyint(1) NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
@@ -3201,12 +3399,30 @@ DROP TABLE IF EXISTS `user_presents`;
 /*!40101 SET character_set_client = utf8mb4 */;
 CREATE TABLE `user_presents` (
   `item_id` int(10) unsigned NOT NULL,
-  `base_id` int(10) unsigned NOT NULL,
+  `base_id` int(10) unsigned DEFAULT NULL,
   `extra_data` text NOT NULL,
+  `chat_style_id` int(11) DEFAULT NULL,
   PRIMARY KEY (`item_id`),
   KEY `fk_user_presents_base_id` (`base_id`),
   CONSTRAINT `fk_user_presents_base_id` FOREIGN KEY (`base_id`) REFERENCES `furniture` (`id`),
   CONSTRAINT `fk_user_presents_item_id` FOREIGN KEY (`item_id`) REFERENCES `items` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `user_purchased_chat_styles`
+--
+
+DROP TABLE IF EXISTS `user_purchased_chat_styles`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `user_purchased_chat_styles` (
+  `user_id` int(11) NOT NULL,
+  `style_id` int(11) NOT NULL,
+  PRIMARY KEY (`user_id`,`style_id`),
+  KEY `fk_purchased_chat_style` (`style_id`),
+  CONSTRAINT `fk_purchased_chat_style` FOREIGN KEY (`style_id`) REFERENCES `room_chat_styles` (`id`),
+  CONSTRAINT `fk_purchased_chat_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
@@ -3483,7 +3699,7 @@ CREATE TABLE `users` (
   `ip_reg` varchar(45) DEFAULT NULL,
   `vip` tinyint(1) DEFAULT 1,
   `time_muted` double DEFAULT 0,
-  `bubble_id` tinyint(4) NOT NULL DEFAULT 0,
+  `bubble_id` int(11) NOT NULL DEFAULT 0,
   `credential_generation` int(11) unsigned NOT NULL DEFAULT 0,
   `auth_ticket_session` char(32) DEFAULT NULL,
   `account_created` datetime DEFAULT NULL,
@@ -104365,7 +104581,7 @@ SET @OLD_AUTOCOMMIT=@@AUTOCOMMIT, @@AUTOCOMMIT=0;
 LOCK TABLES `recycler_settings` WRITE;
 /*!40000 ALTER TABLE `recycler_settings` DISABLE KEYS */;
 INSERT INTO `recycler_settings` VALUES
-(1,0,5,0);
+(1,0,5,0,0);
 /*!40000 ALTER TABLE `recycler_settings` ENABLE KEYS */;
 UNLOCK TABLES;
 COMMIT;
@@ -105784,60 +106000,60 @@ SET @OLD_AUTOCOMMIT=@@AUTOCOMMIT, @@AUTOCOMMIT=0;
 LOCK TABLES `room_chat_styles` WRITE;
 /*!40000 ALTER TABLE `room_chat_styles` DISABLE KEYS */;
 INSERT INTO `room_chat_styles` VALUES
-(0,'normal_chat',NULL,0,1),
-(1,'','chat.style.staff',0,1),
-(2,'','chat.style.staff',0,1),
-(3,'',NULL,0,1),
-(4,'',NULL,0,1),
-(5,'',NULL,0,1),
-(6,'',NULL,0,1),
-(7,'',NULL,0,1),
-(8,'','chat.style.staff',0,1),
-(9,'zombie_hand',NULL,1,1),
-(10,'skeleton',NULL,1,1),
-(11,'',NULL,1,1),
-(12,'',NULL,1,1),
-(13,'',NULL,1,1),
-(14,'',NULL,1,1),
-(15,'',NULL,1,1),
-(16,'',NULL,1,1),
-(17,'',NULL,1,1),
-(18,'','chat.style.staff',0,1),
-(19,'piglet',NULL,1,1),
-(20,'sausagedog',NULL,1,1),
-(21,'firingmylazer',NULL,1,1),
-(22,'dragon',NULL,1,1),
-(23,'staff','chat.style.staff',0,1),
-(24,'bats',NULL,1,1),
-(25,'console',NULL,1,1),
-(26,'',NULL,1,1),
-(27,'storm',NULL,1,1),
-(28,'parrot','chat.style.staff',0,1),
-(29,'pirate',NULL,1,1),
-(30,'bot_guide','chat.style.staff',0,1),
-(31,'bot_rentable','chat.style.staff',0,1),
-(32,'skelestock','chat.style.staff',0,1),
-(33,'bot_frank','chat.style.staff',0,1),
-(34,'notification','chat.style.staff',0,1),
-(35,'goat','chat.style.staff',0,1),
-(36,'santa','chat.style.staff',0,1),
-(37,'','chat.style.staff',0,1),
-(38,'','chat.style.staff',0,1),
-(39,'','chat.style.staff',0,1),
-(40,'','chat.style.staff',0,1),
-(41,'','chat.style.staff',0,1),
-(42,'','chat.style.staff',0,1),
-(43,'','chat.style.staff',0,1),
-(44,'','chat.style.staff',0,1),
-(45,'','chat.style.staff',0,1),
-(46,'','chat.style.staff',0,1),
-(47,'','chat.style.staff',0,1),
-(48,'','chat.style.staff',0,1),
-(49,'','chat.style.staff',0,1),
-(50,'','chat.style.staff',0,1),
-(51,'','chat.style.staff',0,1),
-(52,'','chat.style.staff',0,1),
-(53,'','chat.style.staff',0,1);
+(0,'normal_chat',NULL,0,1,0),
+(1,'','chat.style.staff',0,1,0),
+(2,'','chat.style.staff',0,1,0),
+(3,'',NULL,0,1,0),
+(4,'',NULL,0,1,0),
+(5,'',NULL,0,1,0),
+(6,'',NULL,0,1,0),
+(7,'',NULL,0,1,0),
+(8,'','chat.style.staff',0,1,0),
+(9,'zombie_hand',NULL,1,1,0),
+(10,'skeleton',NULL,1,1,0),
+(11,'',NULL,1,1,0),
+(12,'',NULL,1,1,0),
+(13,'',NULL,1,1,0),
+(14,'',NULL,1,1,0),
+(15,'',NULL,1,1,0),
+(16,'',NULL,1,1,0),
+(17,'',NULL,1,1,0),
+(18,'','chat.style.staff',0,1,0),
+(19,'piglet',NULL,1,1,0),
+(20,'sausagedog',NULL,1,1,0),
+(21,'firingmylazer',NULL,1,1,0),
+(22,'dragon',NULL,1,1,0),
+(23,'staff','chat.style.staff',0,1,0),
+(24,'bats',NULL,1,1,0),
+(25,'console',NULL,1,1,0),
+(26,'',NULL,1,1,0),
+(27,'storm',NULL,1,1,0),
+(28,'parrot','chat.style.staff',0,1,0),
+(29,'pirate',NULL,1,1,0),
+(30,'bot_guide','chat.style.staff',0,1,0),
+(31,'bot_rentable','chat.style.staff',0,1,0),
+(32,'skelestock','chat.style.staff',0,1,0),
+(33,'bot_frank','chat.style.staff',0,1,0),
+(34,'notification','chat.style.staff',0,1,0),
+(35,'goat','chat.style.staff',0,1,0),
+(36,'santa','chat.style.staff',0,1,0),
+(37,'','chat.style.staff',0,1,0),
+(38,'','chat.style.staff',0,1,0),
+(39,'','chat.style.staff',0,1,0),
+(40,'','chat.style.staff',0,1,0),
+(41,'','chat.style.staff',0,1,0),
+(42,'','chat.style.staff',0,1,0),
+(43,'','chat.style.staff',0,1,0),
+(44,'','chat.style.staff',0,1,0),
+(45,'','chat.style.staff',0,1,0),
+(46,'','chat.style.staff',0,1,0),
+(47,'','chat.style.staff',0,1,0),
+(48,'','chat.style.staff',0,1,0),
+(49,'','chat.style.staff',0,1,0),
+(50,'','chat.style.staff',0,1,0),
+(51,'','chat.style.staff',0,1,0),
+(52,'','chat.style.staff',0,1,0),
+(53,'','chat.style.staff',0,1,0);
 /*!40000 ALTER TABLE `room_chat_styles` ENABLE KEYS */;
 UNLOCK TABLES;
 COMMIT;
@@ -106081,6 +106297,7 @@ INSERT INTO `server_settings` VALUES
 ('gamecenter.snowwar.queue.match.max','8'),
 ('gamecenter.snowwar.raygun.enabled','1'),
 ('gamecenter.snowwar.restart.seconds','30'),
+('global_home_room','0'),
 ('group.delete.member.limit','500'),
 ('messenger.buddy_limit','5000'),
 ('room.background.allowed_hosts',''),

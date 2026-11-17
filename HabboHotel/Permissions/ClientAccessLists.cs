@@ -1,5 +1,7 @@
+using Plus.Communication.Packets.Outgoing;
 using Plus.Communication.Packets.Outgoing.Handshake;
 using Plus.Communication.Packets.Outgoing.Navigator;
+using Plus.Communication.Packets.Outgoing.Rooms.Session;
 using Plus.Core;
 using Plus.HabboHotel.Rooms;
 using Plus.HabboHotel.Rooms.Chat.Styles;
@@ -20,7 +22,11 @@ public sealed class ClientAccessLists(IAccessControl permissions, IChatStyleMana
 
     public void Send(Habbo habbo)
     {
-        habbo.Client?.Send(new AllowedChatStylesComposer(styles.GetAllowedStyleIds(habbo.Access)));
+        if (habbo.Client is { } client && client.Revision?.InternalIdToOutgoingIdMapping.ContainsKey(ServerPacketHeader.UserPurchasableChatStylesComposer) == true) {
+            client.Send(new UserPurchasableChatStylesComposer(habbo.PurchasedChatStyles.Keys));
+        }
+
+        habbo.Client?.Send(new AllowedChatStylesComposer(styles.GetAllowedStyleIds(habbo)));
         habbo.Client?.Send(new CreatableRoomModelsComposer(CreatableRoomModelSnapshot.Capture(rooms.GetCreatableModels(habbo.Access))));
     }
 

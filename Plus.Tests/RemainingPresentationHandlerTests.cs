@@ -57,10 +57,10 @@ public sealed class RemainingPresentationHandlerTests
     }
 
     [Theory]
-    [InlineData("a,first;b,last;", "last")]
+    [InlineData("a,first;b,last;", "")]
     [InlineData(";a,;", "")]
     [InlineData("", "")]
-    public void CampaignRetainsTheLastUsableNameAndOriginalString(string campaigns, string name)
+    public void CampaignWithoutAStartedEntryKeepsTheOriginalStringAndNoCode(string campaigns, string name)
     {
         var (client, sent) = HabbiconTestSupport.Client(new Habbo());
         new LandingViewPresentationService(null!, TimeProvider.System).RefreshCampaign(client, campaigns);

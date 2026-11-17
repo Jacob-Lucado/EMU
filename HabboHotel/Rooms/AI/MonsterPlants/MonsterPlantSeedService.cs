@@ -1,5 +1,6 @@
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Items;
+using Plus.HabboHotel.Quests;
 using Plus.HabboHotel.Rooms.AI.Speech;
 using Plus.HabboHotel.Users.Inventory.Furniture;
 using Plus.Utilities.DependencyInjection;
@@ -25,7 +26,8 @@ public interface IMonsterPlantSeedService
     bool TryPlant(Room room, GameClient session, uint itemId);
 }
 
-public sealed class MonsterPlantSeedService(IMonsterPlantStore store, IMonsterPlantGenetics genetics, TimeProvider clock)
+public sealed class MonsterPlantSeedService(IMonsterPlantStore store, IMonsterPlantGenetics genetics, TimeProvider clock,
+    IRewardTrackManager rewards)
     : IMonsterPlantSeedService
 {
     public bool TryPlant(Room room, GameClient session, uint itemId)

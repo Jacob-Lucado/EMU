@@ -72,7 +72,7 @@ public sealed class BadgeLeaderboardSnapshot
         .SelectMany(board => board.Top).Select(score => score.UserId).Distinct();
 
     /// <summary>The user's place on the total badges board, or -1 when the user is not on it.</summary>
-    public int BadgesRank(int userId) => throw new NotImplementedException();
+    public int BadgesRank(int userId) => TotalBadges.Find(userId)?.Rank ?? -1;
 
     public BadgeLeaderboardSnapshot WithProfiles(IReadOnlyDictionary<int, LeaderboardProfile> profiles) =>
         new(Rarity, Badges, TotalBadges, AchievementLevel, RarityBoards, profiles);

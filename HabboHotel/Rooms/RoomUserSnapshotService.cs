@@ -56,7 +56,7 @@ public sealed class RoomUserSnapshotService(IGroupManager groups, IGameClientMan
             return new(habbo.Id, habbo.Username, habbo.Motto, user.LookFor(habbo), user.VirtualId, user.X, user.Y,
                 TextHandling.GetString(user.Z), user.RotBody, 1, habbo.Gender.ToLowerInvariant(),
                 group?.Id ?? 0, group?.Name ?? "", habbo.HabboStats?.AchievementPoints ?? 0,
-                false, 0, 0, "", false, false);
+                false, 0, 0, "", false, false, BadgesRank: badgeRarity.Snapshot.BadgesRank(habbo.Id));
         }
 
         var kind = user.BotData.AiType == BotAiType.Pet ? 2 : 4;

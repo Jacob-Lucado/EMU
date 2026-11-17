@@ -20,6 +20,11 @@ export function avatarSignature(secret, version, figure) {
     return createHmac('sha256', secret).update(`v${version}/${figure}`).digest('hex').slice(0, 16);
 }
 
+// Reads the avatar settings from the environment. Null means avatar images are off.
+export function avatarSettings(env) {
+    throw new Error('Not implemented');
+}
+
 // Reads /avatars/v<version>/<figure>/<signature>.<variant>.png. Null means the path is not one this hotel signed.
 export function avatarRequest(pathname, secret) {
     const path = AVATAR_PATH.exec(pathname);

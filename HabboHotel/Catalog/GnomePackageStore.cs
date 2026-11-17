@@ -14,9 +14,9 @@ public sealed record GnomePackageRequest(uint ItemId, uint BaseItem, int OwnerId
 
 /// <summary>Opening a pet package: the pet, and the furni that takes the package's place at the same spot.</summary>
 public sealed record PetPackageRequest(uint ItemId, uint BaseItem, int OwnerId, string OwnerName, uint RoomId,
-    int X, int Y, double Z, string Name, PetPackageFigure Figure, double PetZ, uint FurniBaseItem, int FurniRotation, DateTimeOffset CreatedAt);
+    int X, int Y, double Z, string Name, PetPackageFigure Figure, double PetZ, uint? FurniBaseItem, int FurniRotation, DateTimeOffset CreatedAt);
 
-public sealed record PetPackageOpening(Pet Pet, uint FurniId);
+public sealed record PetPackageOpening(Pet Pet, uint? FurniId);
 
 [Singleton]
 public interface IGnomePackageStore

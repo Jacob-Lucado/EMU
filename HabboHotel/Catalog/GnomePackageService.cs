@@ -93,7 +93,7 @@ public sealed class GnomePackageService(
     /// <summary>The furni a pet package leaves behind; null when the furni is no pet package or its furni is unknown.</summary>
     private ItemDefinition? PetPackageFurni(ItemDefinition? definition) =>
         definition is { InteractionType: InteractionType.None, PetPackage: { } package }
-        && definitions.GetItemByName(package.FurniName) is { Type: ItemType.Floor } furni
+        && package.FurniName is { } furniName && definitions.GetItemByName(furniName) is { Type: ItemType.Floor } furni
             ? furni
             : null;
 
@@ -114,7 +114,7 @@ public sealed class GnomePackageService(
         room.GetRoomItemHandler().RemoveFurniture(session, item.Id);
         var placed = new Item
         {
-            Id = opened.FurniId,
+            Id = opened.FurniId ?? 0,
             BaseItem = checked((int)furni.Id),
             OwnerId = item.OwnerId,
             RoomId = room.RoomId,

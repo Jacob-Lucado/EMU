@@ -9,6 +9,7 @@ public readonly record struct HorseStyle(int Palette, int Hair, int HairPalette,
 public static class HorseProducts
 {
     public const int HorseType = 15;
+    public const int DefaultRidingEffect = 77;
     private const int DefaultHairPalette = 1;
 
     // The first body palette of each colour tag in the horse asset. Breeds 1 to 4 follow it in order.
@@ -71,7 +72,12 @@ public static class HorseProducts
         .MinBy(definition => definition.Id);
 
     /// <summary>The avatar effect a rider gets on a horse with this saddle part: the last customparams value of its saddle product.</summary>
-    public static int RidingEffect(IEnumerable<ItemDefinition> definitions, int saddle) => throw new NotImplementedException();
+    public static int RidingEffect(IEnumerable<ItemDefinition> definitions, int saddle)
+    {
+        var values = SaddleProduct(definitions, saddle)?.CustomParams.Split(' ', StringSplitOptions.RemoveEmptyEntries) ?? [];
+
+        return values.Length >= 5 && int.TryParse(values[4], NumberStyles.Integer, CultureInfo.InvariantCulture, out var effect) ? effect : DefaultRidingEffect;
+    }
 
     private static HorseStyle? Dye(HorseStyle style, string tag)
     {

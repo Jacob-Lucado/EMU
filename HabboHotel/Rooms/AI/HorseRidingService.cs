@@ -35,7 +35,8 @@ public sealed class HorseRidingService(IPetLocale petLocale, IItemDataManager? i
             return;
         }
 
-        room.GetGameMap().Navigation!.Mounts.Ride(user, pet, mount, petLocale);
+        var effect = HorseProducts.RidingEffect(items?.Items.Values ?? Enumerable.Empty<ItemDefinition>(), pet.PetData.Saddle);
+        room.GetGameMap().Navigation!.Mounts.Ride(user, pet, mount, petLocale, effect);
     }
 
     private static bool MayRide(GameClient session, RoomUser user, RoomUser pet)

@@ -87,6 +87,7 @@ public class RoomUser
 
     public int PrevTime;
     public bool RidingHorse = false;
+    public int RidingEffect = HorseProducts.DefaultRidingEffect;
 
     // The swim effects. A swimming avatar cannot sit or lay.
     private static readonly int[] SwimEffects = [29, 30, 185];

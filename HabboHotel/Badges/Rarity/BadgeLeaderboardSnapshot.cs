@@ -49,6 +49,15 @@ public sealed class BadgeLeaderboardSnapshot
 
     public static BadgeLeaderboardSnapshot Empty { get; } = Build([], [], BadgeRarityScale.Empty);
 
+    private static BadgeLeaderboardSnapshot _current = Empty;
+
+    /// <summary>The latest refresh, for packet snapshots that are captured without services.</summary>
+    public static BadgeLeaderboardSnapshot Current
+    {
+        get => Volatile.Read(ref _current);
+        internal set => Volatile.Write(ref _current, value);
+    }
+
     public BadgeRarityTable Rarity { get; }
     public ImmutableArray<(string Badge, int Owners)> Badges { get; }
     public LeaderboardBoard TotalBadges { get; }
@@ -61,6 +70,9 @@ public sealed class BadgeLeaderboardSnapshot
     /// <summary>Profiles the top entries need; load these before publishing the snapshot.</summary>
     public IEnumerable<int> TopUserIds => RarityBoards.Values.Append(TotalBadges).Append(AchievementLevel)
         .SelectMany(board => board.Top).Select(score => score.UserId).Distinct();
+
+    /// <summary>The user's place on the total badges board, or -1 when the user is not on it.</summary>
+    public int BadgesRank(int userId) => TotalBadges.Find(userId)?.Rank ?? -1;
 
     public BadgeLeaderboardSnapshot WithProfiles(IReadOnlyDictionary<int, LeaderboardProfile> profiles) =>
         new(Rarity, Badges, TotalBadges, AchievementLevel, RarityBoards, profiles);

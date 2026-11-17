@@ -62,6 +62,7 @@ public sealed class BadgeRarityManager(IDatabase database, ISettingsManager sett
         snapshot = snapshot.WithProfiles(profiles);
         Volatile.Write(ref _snapshot, snapshot);
         BadgeRarityTable.Current = snapshot.Rarity;
+        BadgeLeaderboardSnapshot.Current = snapshot;
     }
 
     public async Task<LeaderboardProfile?> GetProfile(int userId)

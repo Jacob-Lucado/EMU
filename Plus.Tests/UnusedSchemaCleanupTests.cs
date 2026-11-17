@@ -51,7 +51,11 @@ public sealed class UnusedSchemaCleanupTests
             var scripts = MigrationScripts.Load();
             var configuration = new DatabaseConfiguration
             {
-                Hostname = server.Server, Port = server.Port, Username = server.UserID, Password = server.Password, Name = schema,
+                Hostname = server.Server,
+                Port = server.Port,
+                Username = server.UserID,
+                Password = server.Password,
+                Name = schema,
                 Migrations = new MigrationConfiguration { DumpCommand = string.Empty }
             };
             var migrator = new SchemaMigrator(configuration, NullLogger<SchemaMigrator>.Instance, scripts,

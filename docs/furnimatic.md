@@ -1,6 +1,6 @@
 # Furni-Matic
 
-Furni-Matic uses the native recycler window and Ecotron boxes. Its configuration is stored in `recycler_settings`, `recycler_levels` and `recycler_prizes`. Migration 150 gives a hotel that never set it up Habbo's machine: 8 slots, 10 Duckets, 10 seconds between exchanges and Habbo's prize table. A hotel with its own setup, or without every prize furni, is left unchanged.
+Furni-Matic uses the native recycler window and Ecotron boxes. Its configuration is stored in `recycler_settings`, `recycler_levels` and `recycler_prizes`. Migration 150 gives a hotel that never set it up Habbo's machine: 8 slots, 10 Duckets, 10 seconds between exchanges and Habbo's prize table. A hotel without every prize furni gets only the 8 slots and stays closed. A hotel with its own setup keeps it. A new settings row also starts with 8 slots.
 
 ## Configuration
 

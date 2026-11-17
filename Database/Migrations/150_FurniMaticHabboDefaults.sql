@@ -1,5 +1,5 @@
 -- A hotel that never set up its Furni-Matic gets Habbo's machine: 8 slots, 10 Duckets, 10 seconds between exchanges and
--- Habbo's prize table. A hotel with its own setup, or without every prize furni, is left unchanged.
+-- Habbo's prize table. Without every prize furni it only gets the 8 slots. A hotel with its own setup is left unchanged.
 SET @recycler_untouched = (SELECT COUNT(*) FROM recycler_levels) = 0 AND (SELECT COUNT(*) FROM recycler_prizes) = 0
     AND COALESCE((SELECT enabled FROM recycler_settings WHERE id = 1), FALSE) = FALSE;
 
@@ -20,6 +20,10 @@ SET @recycler_furni_complete = (
     WHERE p.chat_style_id IS NULL AND NOT EXISTS (
         SELECT 1 FROM furniture f WHERE BINARY f.item_name = BINARY p.item_name AND f.type IN ('s', 'i') AND f.sprite_id > 0)) = 0;
 SET @recycler_seed = @recycler_untouched AND @recycler_furni_complete;
+
+-- A new settings row, and a machine nobody set up, start with Habbo's 8 slots. A hotel's own setup keeps its slot count.
+ALTER TABLE recycler_settings ALTER COLUMN slots SET DEFAULT 8;
+UPDATE recycler_settings SET slots = 8 WHERE id = 1 AND slots = 5 AND @recycler_untouched;
 
 -- The paint-splattered speech bubble is a purchasable style that only an opened box grants.
 INSERT IGNORE INTO room_chat_styles(id, enabled, requires_hc, requires_ownership)

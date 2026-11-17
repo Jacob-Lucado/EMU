@@ -208,6 +208,40 @@ public class RewardTrackLiveTests
         Assert.Contains(ServerHeader(client, ServerPacketHeader.HabboActivityPointNotificationComposer), client.Sent);
     }
 
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(104)]
+    public async Task FullWalletLeavesTheCurrencyPrizeClaimable(int currency)
+    {
+        var database = TrackDatabase(8, currency.ToString(System.Globalization.CultureInfo.InvariantCulture), 5);
+        var (client, habbo, manager) = await Claimer(database, new BadgeDefinitions());
+        if (currency == -1) {
+            habbo.Credits = int.MaxValue;
+        }
+        else {
+            habbo.Currencies[currency] = int.MaxValue;
+        }
+
+        await manager.Claim(client, "introduction", "track_champ");
+
+        Assert.Equal(RewardTrackResults.Unknown, client.ClaimResult());
+        Assert.Empty(database.Committed);
+        Assert.Equal(int.MaxValue, currency == -1 ? habbo.Credits : habbo.Currencies[currency]);
+
+        if (currency == -1) {
+            habbo.Credits -= 5;
+        }
+        else {
+            habbo.Currencies[currency] -= 5;
+        }
+
+        await manager.Claim(client, "introduction", "track_champ");
+
+        Assert.Equal(RewardTrackResults.Ok, client.ClaimResult());
+        Assert.Single(database.Committed);
+        Assert.Equal(int.MaxValue, currency == -1 ? habbo.Credits : habbo.Currencies[currency]);
+    }
+
     [Fact]
     public async Task CreditPrizeAddsCreditsInTheClaimTransaction()
     {

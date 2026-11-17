@@ -69,7 +69,7 @@ public sealed class RoomUserSnapshotService(IGroupManager groups, IGameClientMan
             return new(ai.BaseId, user.BotData.Name, user.BotData.Motto, pet.Look.ToLowerInvariant(),
                 user.VirtualId, user.X, user.Y, TextHandling.GetString(user.Z), 0, kind, "", 0, "", 0,
                 true, pet.Type, pet.OwnerId, pet.OwnerName, pet.Saddle > 0,
-                user.RidingHorse, pet.Level);
+                user.RidingHorse, pet.Level, HasBreedingPermission: pet.AllowBreeding);
         }
 
         // A bot's entry carries the direction it faces.

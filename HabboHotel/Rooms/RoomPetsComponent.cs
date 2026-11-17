@@ -23,7 +23,7 @@ public sealed class RoomPetsComponent(IDatabase database) : IRoomComponent
 
             var pet = new Pet(row.Id, row.UserId, row.RoomId, row.Name, data.Type, data.Race, data.Color,
                 data.Experience, data.Energy, data.Nutrition, data.Respect, data.CreatedAt, row.X, row.Y, row.Z,
-                data.HaveSaddle, data.AnyoneRide, data.Hairdye, data.Pethair, data.GnomeClothing, row.OwnerName);
+                data.HaveSaddle, data.AnyoneRide, data.Hairdye, data.Pethair, data.GnomeClothing, row.OwnerName) { AllowBreeding = data.AllowBreeding };
             var speeches = new List<RandomSpeech>();
             _room.GetRoomUserManager().DeployBot(new(pet.PetId, _room.Id, "pet", "freeroam", pet.Name, "", pet.Look,
                 pet.X, pet.Y, pet.Z, 0, 0, 0, 0, 0, ref speeches, "", 0, pet.OwnerId, false, 0, false, 0), pet);
@@ -38,18 +38,19 @@ public sealed class RoomPetsComponent(IDatabase database) : IRoomComponent
     {
         var row = connection.QuerySingleOrDefault<PetDataSqlRow>("""
             SELECT type, race, color, experience, energy, nutrition, respect, createstamp AS CreatedAt,
-                   have_saddle AS HaveSaddle, anyone_ride AS AnyoneRide, hairdye, pethair,
+                   have_saddle AS HaveSaddle, anyone_ride AS AnyoneRide, allow_breeding AS AllowBreeding, hairdye, pethair,
                    gnome_clothing AS GnomeClothing
             FROM bots_petdata WHERE id = @petId LIMIT 1
             """, new { petId });
 
         return row == null ? null : new(checked((int)row.Type), row.Race, row.Color, row.Experience, row.Energy,
-            row.Nutrition, row.Respect, row.CreatedAt, row.HaveSaddle, row.AnyoneRide, row.Hairdye, row.Pethair, row.GnomeClothing);
+            row.Nutrition, row.Respect, row.CreatedAt, row.HaveSaddle, row.AnyoneRide, row.Hairdye, row.Pethair, row.GnomeClothing, row.AllowBreeding);
     }
 
     internal sealed record PetLocation(int Id, int UserId, uint RoomId, string Name, int X, int Y, double Z, string OwnerName);
     internal sealed record PetData(int Type, string Race, string Color, int Experience, int Energy, int Nutrition,
-        int Respect, DateTimeOffset? CreatedAt, int HaveSaddle, int AnyoneRide, int Hairdye, int Pethair, string GnomeClothing);
+        int Respect, DateTimeOffset? CreatedAt, int HaveSaddle, int AnyoneRide, int Hairdye, int Pethair, string GnomeClothing,
+        bool AllowBreeding = false);
 
     private sealed class PetLocationSqlRow
     {
@@ -75,6 +76,7 @@ public sealed class RoomPetsComponent(IDatabase database) : IRoomComponent
         public DateTimeOffset? CreatedAt { get; set; }
         public int HaveSaddle { get; set; }
         public int AnyoneRide { get; set; }
+        public bool AllowBreeding { get; set; }
         public int Hairdye { get; set; }
         public int Pethair { get; set; }
         public string GnomeClothing { get; set; } = string.Empty;

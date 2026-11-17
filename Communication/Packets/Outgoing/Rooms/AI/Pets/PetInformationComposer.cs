@@ -40,6 +40,6 @@ public sealed class PetInformationComposer(PetInformationSnapshot pet) : IServer
         packet.WriteInteger(-1);
         packet.WriteInteger(-1);
         packet.WriteInteger(-1);
-        packet.WriteBoolean(false);
+        packet.WriteBoolean(pet.HasBreedingPermission);
     }
 }

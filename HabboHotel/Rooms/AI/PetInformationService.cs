@@ -83,7 +83,7 @@ public sealed class PetInformationService(TimeProvider clock) : IPetInformationS
 
         return new(pet.PetId, pet.Name, pet.Level, Pet.MaxLevel, pet.Experience, pet.ExperienceGoal,
             pet.Energy, pet.MaxEnergy, pet.Nutrition, Pet.MaxNutrition, pet.Respect, pet.OwnerId,
-            days, pet.OwnerName, pet.Saddle > 0, pet.AnyoneCanRide, pet.Type == HorseType ? HorseJumpSkillLevels : []);
+            days, pet.OwnerName, pet.Saddle > 0, pet.AnyoneCanRide, pet.Type == HorseType ? HorseJumpSkillLevels : [], pet.AllowBreeding);
     }
 
     internal static PetInformationSnapshot Capture(Habbo habbo, DateTimeOffset now)

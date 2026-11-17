@@ -3,9 +3,11 @@ using Plus.HabboHotel.GameClients;
 
 namespace Plus.HabboHotel.Rooms.PathFinding;
 
-public sealed class FloorEffectService(Room room, Action<GameClient> progressSwim)
+/// <param name="random">Returns a number from 0 to the given bound, exclusive.</param>
+public sealed class FloorEffectService(Room room, Action<GameClient> progressSwim, Func<int, int>? random = null)
 {
-    public void Apply(RoomUser actor, int x, int y, SurfaceRef? surface = null)
+    /// <param name="lastStep">Whether the step onto the tile ends the walk.</param>
+    public void Apply(RoomUser actor, int x, int y, SurfaceRef? surface = null, bool lastStep = true)
     {
         // A rider keeps the riding effect: water and skates do not replace it.
         if (actor.IsBot || actor.RidingHorse) {

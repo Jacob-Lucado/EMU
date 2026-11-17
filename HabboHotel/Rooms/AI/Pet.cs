@@ -138,6 +138,7 @@ public class Pet
     public void OnRespect()
     {
         Respect++;
+        Nutrition = Math.Min(MaxNutrition, Nutrition + 10);
         Room.SendPacket(new RespectPetNotificationComposer(VirtualId, PetId, Name, Color));
 
         if (DbState != PetDatabaseUpdateState.NeedsInsert) {

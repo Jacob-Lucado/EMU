@@ -62,23 +62,28 @@ public sealed class RecyclerPacketTests
         Assert.Equal("recycle:", Assert.Single(recycler.Calls));
     }
 
-    [Fact]
-    public void EcotronInventoryCategorySurvivesReloadWithoutMutatingSharedFurnitureDefinitions()
+    [Theory]
+    [InlineData("matic_box", 4692, "2040-02-03")]
+    [InlineData("ecotron_box", 3095, "3-2-2040")]
+    public void FurniMaticBoxesAreListedAsBoxesWithoutTheirDateWithoutMutatingSharedFurnitureDefinitions(string name, int sprite, string date)
     {
-        var definition = new ItemDefinition { ItemName = "ecotron_box", SpriteId = 3095, Type = Plus.HabboHotel.Users.Inventory.Furniture.ItemType.Floor };
+        var definition = new ItemDefinition { ItemName = name, SpriteId = sprite, Type = Plus.HabboHotel.Users.Inventory.Furniture.ItemType.Floor };
 
         foreach (var id in new uint[] { 10, 11 }) {
             var item = new Plus.HabboHotel.Users.Inventory.Furniture.InventoryItem
             {
                 Id = id,
                 Definition = definition,
-                ExtraData = new Plus.HabboHotel.Items.DataFormat.LegacyDataFormat { Data = "3-2-2040" }
+                ExtraData = new Plus.HabboHotel.Items.DataFormat.LegacyDataFormat { Data = date }
             };
             var snapshot = Plus.HabboHotel.Users.Inventory.Furniture.InventoryItemSnapshot.Capture(item);
             Assert.Equal(Plus.HabboHotel.Users.Inventory.Furniture.FurniCategory.EcotronBox, snapshot.Category);
             var packet = new HabbiconTestSupport.RecordingPacket();
             new Plus.Communication.Packets.Outgoing.Inventory.Furni.FurniListAddComposer(snapshot).Compose(packet);
             Assert.Equal(10, packet.Writes[5]);
+            Assert.Equal((object)0, packet.Writes[6]);
+            Assert.Equal("", packet.Writes[7]);
+            Assert.Equal(date, item.ExtraData.Serialize());
         }
 
         Assert.Equal(Plus.HabboHotel.Users.Inventory.Furniture.FurniCategory.Default, definition.Category);

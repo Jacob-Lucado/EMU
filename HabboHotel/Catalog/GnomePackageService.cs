@@ -45,9 +45,11 @@ public sealed class GnomePackageService(
                 return;
             }
 
-            var furni = PetPackageFurni(item.Definition);
+            var package = item.Definition is { InteractionType: InteractionType.None, PetPackage: { } held } ? held : null;
+            var furni = package?.FurniName is { } furniName && definitions.GetItemByName(furniName) is { Type: ItemType.Floor } known ? known : null;
 
-            if (item.Definition?.InteractionType != InteractionType.GnomeBox && furni == null) {
+            // A package whose furni is unknown stays closed.
+            if (package == null ? item.Definition?.InteractionType != InteractionType.GnomeBox : package.FurniName != null && furni == null) {
                 return;
             }
 
@@ -57,8 +59,8 @@ public sealed class GnomePackageService(
                 return;
             }
 
-            if (furni != null) {
-                OpenPetPackage(room, session, item, furni, petName);
+            if (package != null) {
+                OpenPetPackage(room, session, item, package, furni, petName);
 
                 return;
             }
@@ -90,31 +92,11 @@ public sealed class GnomePackageService(
         }
     }
 
-    /// <summary>The furni a pet package leaves behind; null when the furni is no pet package or its furni is unknown.</summary>
-    private ItemDefinition? PetPackageFurni(ItemDefinition? definition) =>
-        definition is { InteractionType: InteractionType.None, PetPackage: { } package }
-        && package.FurniName is { } furniName && definitions.GetItemByName(furniName) is { Type: ItemType.Floor } furni
-            ? furni
-            : null;
-
-    // Habbo replaces the package with its furni facing direction 4 and puts the named pet on top of it.
-    private void OpenPetPackage(Room room, GameClient session, Item item, ItemDefinition furni, string petName)
+    private static void PlacePackageFurni(Room room, GameClient session, Item item, ItemDefinition furni, uint furniId)
     {
-        var habbo = session.GetHabbo();
-        var figure = PetPackageFigure.Of(item.Definition.PetPackage!, item.LegacyDataString);
-        var opened = store.OpenPetPackage(new(item.Id, item.Definition.Id, habbo.Id, habbo.Username, room.RoomId, item.GetX, item.GetY, item.GetZ,
-            petName, figure, item.GetZ + furni.Height, furni.Id, PetPackageFurniRotation, clock.GetUtcNow()));
-
-        if (opened == null) {
-            session.SendNotification("Oops, an error occoured. Please report this!");
-
-            return;
-        }
-
-        room.GetRoomItemHandler().RemoveFurniture(session, item.Id);
         var placed = new Item
         {
-            Id = opened.FurniId ?? 0,
+            Id = furniId,
             BaseItem = checked((int)furni.Id),
             OwnerId = item.OwnerId,
             RoomId = room.RoomId,
@@ -127,8 +109,29 @@ public sealed class GnomePackageService(
         };
 
         if (!room.GetRoomItemHandler().SetFloorItem(session, placed, placed.GetX, placed.GetY, placed.Rotation, true, false, true)
-            && habbo.Inventory is { } inventory && inventory.Furniture.AddItem(placed.ToInventoryItem())) {
+            && session.GetHabbo().Inventory is { } inventory && inventory.Furniture.AddItem(placed.ToInventoryItem())) {
             session.Send(new FurniListNotificationComposer(placed.Id, 1));
+        }
+    }
+
+    // Habbo replaces a package with its furni facing direction 4 and puts the named pet on top of it.
+    // An egg or box leaves no furni; the pet takes its place.
+    private void OpenPetPackage(Room room, GameClient session, Item item, PetPackage package, ItemDefinition? furni, string petName)
+    {
+        var habbo = session.GetHabbo();
+        var opened = store.OpenPetPackage(new(item.Id, item.Definition.Id, habbo.Id, habbo.Username, room.RoomId, item.GetX, item.GetY, item.GetZ,
+            petName, package.Hatch(item.LegacyDataString), item.GetZ + (furni?.Height ?? 0), furni?.Id, PetPackageFurniRotation, clock.GetUtcNow()));
+
+        if (opened == null) {
+            session.SendNotification("Oops, an error occoured. Please report this!");
+
+            return;
+        }
+
+        room.GetRoomItemHandler().RemoveFurniture(session, item.Id);
+
+        if (furni != null && opened.FurniId is { } furniId) {
+            PlacePackageFurni(room, session, item, furni, furniId);
         }
 
         var pet = opened.Pet;

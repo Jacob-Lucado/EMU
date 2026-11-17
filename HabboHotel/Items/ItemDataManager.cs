@@ -102,7 +102,8 @@ public class ItemDataManager : IItemDataManager, IStartable
                         Directions = FurnitureDirections.For(Convert.ToString(row["item_name"])),
                         DefaultDirection = row.Table.Columns.Contains("default_dir") && row["default_dir"] is not DBNull ? Convert.ToInt32(row["default_dir"], CultureInfo.InvariantCulture) : 0,
                         FigureSetIds = ReadFigureSetIds(row.Table.Columns.Contains("custom_params") ? row["custom_params"] : null),
-                        PetPackage = ReadPetPackage(row.Table.Columns.Contains("custom_params") ? row["custom_params"] : null),
+                        PetPackage = ReadPetPackage(row.Table.Columns.Contains("custom_params") ? row["custom_params"] : null)
+                                     ?? PetPackage.Hatchling(Convert.ToString(row["item_name"]) ?? ""),
                         Revision = row.Table.Columns.Contains("revision") && row["revision"] is not DBNull ? Convert.ToInt32(row["revision"], CultureInfo.InvariantCulture) : 0,
                     };
 

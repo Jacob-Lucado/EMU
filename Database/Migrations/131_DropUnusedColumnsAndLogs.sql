@@ -1,5 +1,5 @@
 -- Drops columns and log tables that neither the emulator nor the CMS reads or writes.
--- wired_items stays on hotels that have it: it holds their old Wired settings.
+-- wired_items stays on hotels that have it. The emulator no longer reads it.
 
 -- Gift achievements count gifts, quests keep their progress in user_quests and forum post counts come from the
 -- forum messages.

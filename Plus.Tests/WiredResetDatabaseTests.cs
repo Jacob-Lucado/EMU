@@ -129,8 +129,7 @@ public class WiredResetDatabaseTests
     private sealed record World(uint Definition, uint Legacy, uint Other);
 
     /// <summary>
-    /// A room variable box with every kind of saved row, a legacy box, another variable holding values on both, and a
-    /// box selecting the variable box.
+    /// A room variable box with every kind of saved row, a legacy box, another variable holding values on both.
     /// </summary>
     private static World Seed(MySqlConnection admin)
     {

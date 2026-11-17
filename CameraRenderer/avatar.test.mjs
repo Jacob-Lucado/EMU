@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict';
+import { createHmac } from 'node:crypto';
+import { resolve } from 'node:path';
 import test from 'node:test';
 import { crc32, deflateSync } from 'node:zlib';
-import { animatedPng, avatarRequest, avatarSignature, loopLength, AVATAR_FRAME_LIMIT } from './avatar.mjs';
+import { animatedPng, avatarRequest, avatarSettings, avatarSignature, loopLength, AVATAR_FRAME_LIMIT } from './avatar.mjs';
 
 const secret = 'avatar-secret-avatar-secret-avatar-secret';
 const figure = 'hd-180-1.hr-100-61.ch-210-66.lg-270-82.sh-290-80';
-const path = (variant, { version = 1, look = figure, key = secret } = {}) => `/avatars/v${version}/${look}/${avatarSignature(key, version, look)}.${variant}.png`;
+const path = (variant, { version = 1, look = figure, key = secret } = {}) => `/avatars/v${version}/${look}/${avatarSignature(key, version, look, variant)}.${variant}.png`;
 
 test('a signed path gives the page job and the file it is stored in', () => {
     const request = avatarRequest(path('m-m-full-2-3-std-wave-sml-0-0-0-still'), secret);
@@ -13,7 +15,42 @@ test('a signed path gives the page job and the file it is stored in', () => {
         figure, gender: 'M', part: 'full', direction: 2, headDirection: 3, posture: 'std', expression: 1,
         gesture: 'sml', dance: 0, effect: 0, handItem: 0, frames: 1, scale: 1
     });
-    assert.equal(request.file, `v1/${figure}/${avatarSignature(secret, 1, figure)}.m-m-full-2-3-std-wave-sml-0-0-0-still.png`);
+    assert.equal(request.file, `v1/${figure}/${avatarSignature(secret, 1, figure, 'm-m-full-2-3-std-wave-sml-0-0-0-still')}.m-m-full-2-3-std-wave-sml-0-0-0-still.png`);
+});
+
+test('the signature is the first 16 hex characters of HMAC-SHA256 over the version, the figure and the variant', () => {
+    const variant = 'm-m-full-2-3-std-wave-sml-0-0-0-still';
+    const expected = createHmac('sha256', secret).update(`v1/${figure}/${variant}`).digest('hex').slice(0, 16);
+    assert.equal(avatarSignature(secret, 1, figure, variant), expected);
+    assert.notEqual(avatarRequest(`/avatars/v1/${figure}/${expected}.${variant}.png`, secret), null);
+});
+
+test('a signed path cannot be changed into another image', () => {
+    const signed = path('m-m-full-2-2-std-none-nrm-0-0-0-still');
+    for (const variant of [
+        'm-l-full-2-2-std-none-nrm-0-0-0-still', 'f-m-full-2-2-std-none-nrm-0-0-0-still', 'm-m-full-4-2-std-none-nrm-0-0-0-still',
+        'm-m-full-2-2-sit-none-nrm-0-0-0-still', 'm-m-full-2-2-std-wave-nrm-0-0-0-still', 'm-m-full-2-2-std-none-sml-0-0-0-still',
+        'm-m-full-2-2-std-none-nrm-2-0-0-still', 'm-m-full-2-2-std-none-nrm-0-99999-0-still', 'm-m-full-2-2-std-none-nrm-0-0-99999-still',
+        'm-m-full-2-2-std-none-nrm-0-0-0-anim', 'm-m-head-2-2-std-none-nrm-0-0-0-still'
+    ]) assert.equal(avatarRequest(signed.replace('m-m-full-2-2-std-none-nrm-0-0-0-still', variant), secret), null, variant);
+});
+
+test('avatar images are off until the secret and the folder are both set', () => {
+    assert.equal(avatarSettings({}), null);
+    assert.equal(avatarSettings({ AVATAR_IMAGER_SECRET: '', AVATAR_IMAGER_ROOT: '' }), null);
+    assert.equal(avatarSettings({ AVATAR_IMAGER_SECRET: '' }), null);
+    assert.throws(() => avatarSettings({ AVATAR_IMAGER_SECRET: secret }), /set together/);
+    assert.throws(() => avatarSettings({ AVATAR_IMAGER_ROOT: '/var/www/avatars' }), /set together/);
+    assert.throws(() => avatarSettings({ AVATAR_IMAGER_SECRET: '', AVATAR_IMAGER_ROOT: '/var/www/avatars' }), /set together/);
+    assert.throws(() => avatarSettings({ AVATAR_IMAGER_SECRET: 'short', AVATAR_IMAGER_ROOT: '/var/www/avatars' }), /32 characters/);
+});
+
+test('the stored images have a size limit of 1024 MB unless the hotel sets another', () => {
+    const on = { AVATAR_IMAGER_SECRET: secret, AVATAR_IMAGER_ROOT: 'avatars' };
+    assert.deepEqual(avatarSettings(on), { secret, root: resolve('avatars'), maxBytes: 1024 * 1024 * 1024 });
+    assert.equal(avatarSettings({ ...on, AVATAR_IMAGER_MAX_MB: '' }).maxBytes, 1024 * 1024 * 1024);
+    assert.equal(avatarSettings({ ...on, AVATAR_IMAGER_MAX_MB: '50' }).maxBytes, 50 * 1024 * 1024);
+    for (const value of ['0', '-1', '1.5', 'abc', '1e3']) assert.throws(() => avatarSettings({ ...on, AVATAR_IMAGER_MAX_MB: value }), /AVATAR_IMAGER_MAX_MB/, value);
 });
 
 test('sizes, genders, postures, gestures and moving images map to the page job', () => {

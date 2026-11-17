@@ -57,6 +57,12 @@ public static class HorseProducts
         };
     }
 
+    /// <summary>The breed (1 to 4) of a horse body palette, or 0 for a palette without one.</summary>
+    public static int Breed(int palette) => throw new NotImplementedException();
+
+    /// <summary>The hair palette a horse shows: hair without a colour of its own wears the default palette.</summary>
+    public static int HairPalette(int stored) => throw new NotImplementedException();
+
     private static HorseStyle? Dye(HorseStyle style, string tag)
     {
         var breed = BodyColours.Values.Where(first => style.Palette >= first && style.Palette < first + 4).Select(first => style.Palette - first).FirstOrDefault(-1);

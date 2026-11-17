@@ -1,3 +1,7 @@
+using System.Globalization;
+using Plus.HabboHotel.Users;
+using Plus.HabboHotel.Users.Inventory.Furniture;
+
 namespace Plus.HabboHotel.Quests;
 
 public static class RewardTrackRules
@@ -58,7 +62,7 @@ public static class RewardTrackRules
             return RewardTrackResults.NotEnoughPoints;
         }
 
-        if (!IsKnownReward(prize)) {
+        if (Grant(prize) == null) {
             return RewardTrackResults.Unknown;
         }
 
@@ -66,17 +70,24 @@ public static class RewardTrackRules
     }
 
     /// <summary>What the prize gives, read from Habbo's prize fields; null when the server cannot grant it.</summary>
-    public static RewardTrackGrant? Grant(RewardTrackPrize prize) => throw new NotImplementedException();
-
-    public static bool IsKnownReward(RewardTrackPrize prize)
+    public static RewardTrackGrant? Grant(RewardTrackPrize prize)
     {
-        var type = prize.RewardType.Trim().ToLowerInvariant();
-
-        if (type is "credits" or "duckets" or "diamonds") {
-            return prize.RewardAmount > 0;
+        if (prize.RewardAmount < 1) {
+            return null;
         }
 
-        return type == "badge" && !string.IsNullOrWhiteSpace(prize.ExtraParams);
+        var code = prize.RewardType.Trim();
+        var id = int.TryParse(code, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var number) ? number : (int?)null;
+
+        return prize.ProductItemTypeId switch
+        {
+            ProductItemType.WallItem when id > 0 => new RewardTrackFurniGrant(ItemType.Wall, id.Value, prize.RewardAmount),
+            ProductItemType.FloorItem when id > 0 => new RewardTrackFurniGrant(ItemType.Floor, id.Value, prize.RewardAmount),
+            ProductItemType.Badge when code.Length > 0 => new RewardTrackBadgeGrant(code),
+            ProductItemType.Currency when id is { } type && (type == ProductItemType.Credits || ActivityPointType.IsValid(type)) =>
+                new RewardTrackCurrencyGrant(type, prize.RewardAmount),
+            _ => null
+        };
     }
 
     public static PremiumQuote Quote(RewardTrack? track, UserRewardTrackState? state, int credits, int diamonds)

@@ -188,7 +188,8 @@ public partial class PlacedFurniRoomTests
         Viewer(0, 0);
         var pet = BuiltinPet(0);
         pet.PetData!.Attach(_room, TestGameClientManager.Empty, null!);
-        pet.PetData.Experience = 149_995;
+        pet.PetData.ExperienceLevels = [100, 200];
+        pet.PetData.Experience = 95;
         _room.Behavior = RoomBehaviorSettings.Default with { MuteAllPets = muted };
         _client.Sent.Clear();
 

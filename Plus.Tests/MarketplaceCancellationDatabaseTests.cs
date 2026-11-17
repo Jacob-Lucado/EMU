@@ -71,15 +71,46 @@ public sealed class MarketplaceCancellationDatabaseTests
     }
 
     [RecyclerDatabaseFact]
-    public void MigrationCanRepeatWithoutChangingSalesOrReceipts()
+    public void MigrationCanRepeatWithoutChangingSalesOrReceiptsAndNeedsNoTriggerRights()
     {
         using var fixture = new Fixture();
         Assert.NotNull(fixture.Buy().Offer);
         fixture.Connection.Execute(File.ReadAllText(HabbiconPacketTests.Repo("Database/Migrations/136_MarketplaceSales.sql")));
         Assert.Equal(1, fixture.Connection.QuerySingle<int>("SELECT COUNT(*) FROM marketplace_sales"));
         Assert.Equal(1, fixture.Connection.QuerySingle<int>("SELECT COUNT(*) FROM marketplace_operations"));
-        Assert.Throws<MySqlException>(() => fixture.Connection.Execute("DELETE FROM marketplace_operations"));
-        Assert.Throws<MySqlException>(() => fixture.Connection.Execute("UPDATE marketplace_sales SET total_price=0"));
+        Assert.Equal(0, fixture.Connection.QuerySingle<int>("SELECT COUNT(*) FROM information_schema.triggers WHERE trigger_schema=DATABASE()"));
+    }
+
+    [RecyclerDatabaseFact]
+    public void OperationRecordsOlderThanADayAreRemovedWhenTheUserCompletesAnother()
+    {
+        using var fixture = new Fixture();
+        var oldOwn = Guid.NewGuid();
+        var recentOwn = Guid.NewGuid();
+        var oldOther = Guid.NewGuid();
+        fixture.Connection.Execute("""
+            INSERT INTO marketplace_operations(operation_ref,user_id,kind,created_at) VALUES
+            (@oldOwn,8,'buy',UTC_TIMESTAMP(6) - INTERVAL 2 DAY),(@recentOwn,8,'buy',UTC_TIMESTAMP(6) - INTERVAL 1 HOUR),
+            (@oldOther,9,'buy',UTC_TIMESTAMP(6) - INTERVAL 2 DAY)
+            """, new { oldOwn = oldOwn.ToString(), recentOwn = recentOwn.ToString(), oldOther = oldOther.ToString() });
+        Assert.NotNull(fixture.Buy().Offer);
+        var kept = fixture.Connection.Query<Guid>("SELECT operation_ref FROM marketplace_operations").ToHashSet();
+        Assert.DoesNotContain(oldOwn, kept);
+        Assert.Contains(recentOwn, kept);
+        Assert.Contains(oldOther, kept);
+        Assert.Equal(3, kept.Count);
+    }
+
+    [RecyclerDatabaseFact]
+    public void AnOldSaleOfAReusedOfferIdDoesNotBlockTheNewPurchase()
+    {
+        using var fixture = new Fixture();
+        fixture.Connection.Execute("""
+            INSERT INTO marketplace_sales(offer_id,buyer_id,seller_id,furni_id,item_id,limited_number,limited_stack,item_type,sprite_id,total_price,seller_amount,sold_at)
+            VALUES(1,9,7,70,10,0,0,1,42,5,4,'2030-01-01 00:00:00')
+            """);
+        Assert.NotNull(fixture.Buy().Offer);
+        Assert.Equal(2, fixture.Connection.QuerySingle<int>("SELECT COUNT(*) FROM marketplace_sales WHERE offer_id=1"));
     }
 
     [RecyclerDatabaseFact]

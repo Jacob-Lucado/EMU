@@ -17,14 +17,14 @@ namespace Plus.Tests;
 public sealed class CatalogBrowsingSnapshotTests
 {
     [Fact]
-    public void PetPalettesKeepTheirLegacyFieldsAndFreezeRaceData()
+    public void PetPalettesWriteSellableAndRareLikeHabboAndFreezeRaceData()
     {
         var race = new PetRace(1, 2, 3, true, true);
         var source = new List<PetRace> { race };
         var composer = new SellablePetBreedsComposer(PetPaletteSnapshot.Capture("pet", 7, source));
         var before = new HabbiconTestSupport.RecordingPacket();
         composer.Compose(before);
-        Assert.Equal(new object[] { "pet", 1, 7, 2, 3, true, false, false }, before.Writes);
+        Assert.Equal(new object[] { "pet", 1, 7, 2, 3, true, false }, before.Writes);
         race.PrimaryColour = 99;
         race.SecondaryColour = 99;
         source.Clear();

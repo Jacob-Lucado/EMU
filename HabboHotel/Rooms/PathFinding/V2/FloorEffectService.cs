@@ -48,7 +48,7 @@ public sealed class FloorEffectService(Room room, Action<GameClient> progressSwi
                 return;
             }
 
-            habbo.Effects.ApplyEffect(kind == ItemEffectType.Iceskates && iceEffect >= 0 ? iceEffect : EffectId(kind, habbo.Gender));
+            habbo.Effects.ApplyEffect(kind == ItemEffectType.Iceskates && iceEffect >= 0 ? iceEffect : EffectId(kind, habbo.Gender, actor.CurrentItemEffect));
             actor.CurrentItemEffect = kind;
 
             if (kind == ItemEffectType.Swim) {
@@ -91,13 +91,14 @@ public sealed class FloorEffectService(Room room, Action<GameClient> progressSwi
         _ => 0
     };
 
-    private static int EffectId(ItemEffectType kind, string gender) => kind switch
+    // Stepping off skates or ice clears the effect with 0.
+    private static int EffectId(ItemEffectType kind, string gender, ItemEffectType left) => kind switch
     {
         ItemEffectType.Iceskates => gender == "M" ? 38 : 39,
         ItemEffectType.Normalskates => gender == "M" ? 55 : 56,
         ItemEffectType.Swim => 29,
         ItemEffectType.SwimLow => 30,
         ItemEffectType.SwimHalloween => 37,
-        _ => -1
+        _ => left is ItemEffectType.Iceskates or ItemEffectType.Normalskates ? 0 : -1
     };
 }

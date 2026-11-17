@@ -152,7 +152,7 @@ public class MarketplaceOfferWireTests
 
     private static MarketplaceFeePolicy Policy(Dictionary<string, string>? values = null) => new(new TestRoomSettings(values));
 
-    private static MakeOfferEvent Offer(IMarketplaceOfferStore store) => new(new MarketplaceListingService(store, Policy(), TimeProvider.System, TestRoomSettings.Empty, MarketplaceTestAccess.Allowed));
+    private static MakeOfferEvent Offer(IMarketplaceOfferStore store) => new(new MarketplaceListingService(store, Policy(), TimeProvider.System, TestRoomSettings.Empty));
 
     private static (Habbo Habbo, InventoryItem[] Items) Owner(ItemType type, int count)
     {

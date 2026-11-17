@@ -12,8 +12,7 @@ public interface IMarketplaceListingService
     bool TryList(Habbo habbo, IReadOnlyList<uint> itemIds, int furniType, int price);
 }
 
-public sealed class MarketplaceListingService(IMarketplaceOfferStore store, IMarketplaceFeePolicy fee, TimeProvider time, ISettingsManager settings,
-    IMarketplaceAccessPolicy? access = null) : IMarketplaceListingService
+public sealed class MarketplaceListingService(IMarketplaceOfferStore store, IMarketplaceFeePolicy fee, TimeProvider time, ISettingsManager settings) : IMarketplaceListingService
 {
     public const int MaximumOfferCount = 500;
     public const int MinimumPrice = 1;
@@ -28,7 +27,7 @@ public sealed class MarketplaceListingService(IMarketplaceOfferStore store, IMar
         // The inventory lock first, then the wallet lock, as a trade does. One listing at a time per account: the inventory check, the committed offers and the in-memory removal stay together.
         lock (habbo.InventoryMutationSync)
             lock (habbo.WalletSync) {
-                if (habbo.WalletClosed || habbo.TradingLockExpiresAt > time.GetUtcNow() || access?.HasTradingPass(habbo) == false || habbo.Inventory is not { } inventory) {
+                if (habbo.WalletClosed || habbo.TradingLockExpiresAt > time.GetUtcNow() || habbo.Inventory is not { } inventory) {
                     return false;
                 }
 

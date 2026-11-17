@@ -89,7 +89,7 @@ public class MarketplaceListingTests
             ["catalog.marketplace.price.minimum"] = "2",
             ["catalog.marketplace.price.maximum"] = "99999"
         }));
-        Assert.Equal(accepted, new MarketplaceListingService(store, policy, new FixedClock(Now), Settings(), MarketplaceTestAccess.Allowed).TryList(habbo, [item.Id], 1, price));
+        Assert.Equal(accepted, new MarketplaceListingService(store, policy, new FixedClock(Now), Settings()).TryList(habbo, [item.Id], 1, price));
         Assert.Equal(accepted ? 1 : 0, store.Listings.Count);
     }
 
@@ -99,7 +99,7 @@ public class MarketplaceListingTests
         var store = new RecordingStore();
         var (habbo, item) = Owner(ItemType.Floor);
         habbo.TradingLockExpiresAt = Now.AddMinutes(1);
-        Assert.False(new MarketplaceListingService(store, Fee(), new FixedClock(Now), Settings(), MarketplaceTestAccess.Allowed).TryList(habbo, [item.Id], 1, 100));
+        Assert.False(new MarketplaceListingService(store, Fee(), new FixedClock(Now), Settings()).TryList(habbo, [item.Id], 1, 100));
         Assert.Empty(store.Listings);
         Assert.NotNull(habbo.Inventory!.Furniture.GetItem(item.Id));
     }
@@ -130,7 +130,7 @@ public class MarketplaceListingTests
             typeof(Habbo).GetField("_disconnected", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(habbo, true);
         }
 
-        Assert.False(new MarketplaceListingService(store, Fee(), new FixedClock(Now), Settings(), MarketplaceTestAccess.Allowed).TryList(habbo, [item.Id], 1, 100));
+        Assert.False(new MarketplaceListingService(store, Fee(), new FixedClock(Now), Settings()).TryList(habbo, [item.Id], 1, 100));
 
         Assert.Empty(store.Listings);
         Assert.NotNull(Assert.IsType<InventoryComponent>(habbo.Inventory).Furniture.GetItem(item.Id));
@@ -143,7 +143,7 @@ public class MarketplaceListingTests
     {
         var store = new RecordingStore();
         var (habbo, item) = Owner(ItemType.Floor);
-        var listing = new MarketplaceListingService(store, Fee(percentage: percentage, halfTaxLimit: halfTaxLimit), new FixedClock(Now), Settings(), MarketplaceTestAccess.Allowed);
+        var listing = new MarketplaceListingService(store, Fee(percentage: percentage, halfTaxLimit: halfTaxLimit), new FixedClock(Now), Settings());
 
         Assert.False(listing.TryList(habbo, [item.Id], 1, price));
 
@@ -182,7 +182,7 @@ public class MarketplaceListingTests
     {
         var database = new GroupManagementTests.RecordingDatabase();
         var (habbo, item) = Owner(ItemType.Floor);
-        var listing = new MarketplaceListingService(new MarketplaceOfferStore(database), Fee(), new FixedClock(Now), Settings(), MarketplaceTestAccess.Allowed);
+        var listing = new MarketplaceListingService(new MarketplaceOfferStore(database), Fee(), new FixedClock(Now), Settings());
 
         Assert.True(listing.TryList(habbo, [item.Id], 1, 100));
 
@@ -201,7 +201,7 @@ public class MarketplaceListingTests
     {
         var database = new GroupManagementTests.RecordingDatabase { FailInsert = true };
         var (habbo, item) = Owner(ItemType.Floor);
-        var listing = new MarketplaceListingService(new MarketplaceOfferStore(database), Fee(), new FixedClock(Now), Settings(), MarketplaceTestAccess.Allowed);
+        var listing = new MarketplaceListingService(new MarketplaceOfferStore(database), Fee(), new FixedClock(Now), Settings());
 
         Assert.Throws<InvalidOperationException>(() => listing.TryList(habbo, [item.Id], 1, 100));
 
@@ -223,7 +223,7 @@ public class MarketplaceListingTests
         item.Definition.IsRare = rare;
         item.UniqueNumber = limited ? 3u : 0u;
         item.UniqueSeries = limited ? 4u : 0u;
-        var listing = new MarketplaceListingService(store, Fee(), new FixedClock(Now), Settings(() => enabled), MarketplaceTestAccess.Allowed);
+        var listing = new MarketplaceListingService(store, Fee(), new FixedClock(Now), Settings(() => enabled));
 
         Assert.Equal(accepted, listing.TryList(habbo, [item.Id], 1, 100));
         Assert.Equal(accepted ? 1 : 0, store.Listings.Count);
@@ -237,7 +237,7 @@ public class MarketplaceListingTests
         var store = new RecordingStore();
         var (habbo, item) = Owner(ItemType.Floor);
         item.UniqueNumber = item.UniqueSeries = 0;
-        var listing = new MarketplaceListingService(store, Fee(), new FixedClock(Now), Settings(() => enabled), MarketplaceTestAccess.Allowed);
+        var listing = new MarketplaceListingService(store, Fee(), new FixedClock(Now), Settings(() => enabled));
 
         Assert.False(listing.TryList(habbo, [item.Id], 1, 100));
         Assert.Empty(store.Listings);
@@ -261,14 +261,14 @@ public class MarketplaceListingTests
     private static MarketplaceFeePolicy Fee(int? percentage = null, int? halfTaxLimit = null) => new(Settings(percentage: percentage, halfTaxLimit: halfTaxLimit));
 
     private static MakeOfferEvent Offer(IMarketplaceOfferStore store) =>
-        new(new MarketplaceListingService(store, Fee(), new FixedClock(Now), Settings(), MarketplaceTestAccess.Allowed));
+        new(new MarketplaceListingService(store, Fee(), new FixedClock(Now), Settings()));
 
     [Fact]
     public void AUserWithoutTradingPassOrCitizenshipCanListFurni()
     {
         var store = new RecordingStore();
         var (habbo, item) = Owner(ItemType.Floor);
-        var listing = new MarketplaceListingService(store, Fee(), new FixedClock(Now), Settings(), MarketplaceAccessTests.NewUserAccess());
+        var listing = new MarketplaceListingService(store, Fee(), new FixedClock(Now), Settings());
         Assert.True(listing.TryList(habbo, [item.Id], 1, 100));
         Assert.Single(store.Listings);
         Assert.Null(habbo.Inventory!.Furniture.GetItem(item.Id));

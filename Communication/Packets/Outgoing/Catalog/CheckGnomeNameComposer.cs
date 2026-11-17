@@ -8,7 +8,7 @@ public class CheckGnomeNameComposer : IServerPacket
     private readonly PetPackageNameError _errorId;
     public uint MessageId => ServerPacketHeader.CheckGnomeNameComposer;
 
-    public CheckGnomeNameComposer(string petName, PetPackageNameError errorId)
+    public CheckGnomeNameComposer(uint itemId, string petName, PetPackageNameError errorId)
     {
         _petName = petName;
         _errorId = errorId;

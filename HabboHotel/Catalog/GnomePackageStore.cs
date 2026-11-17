@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using Plus.Database;
 using Plus.HabboHotel.Catalog.Utilities;
+using Plus.HabboHotel.Items;
 using Plus.HabboHotel.Rooms.AI;
 using Plus.Utilities.DependencyInjection;
 
@@ -9,10 +10,19 @@ namespace Plus.HabboHotel.Catalog;
 public sealed record GnomePackageRequest(uint ItemId, uint BaseItem, int OwnerId, string OwnerName, uint RoomId,
     int X, int Y, double Z, string Name, string Clothing, DateTimeOffset CreatedAt);
 
+/// <summary>Opening a pet package: the pet, and the furni that takes the package's place at the same spot.</summary>
+public sealed record PetPackageRequest(uint ItemId, uint BaseItem, int OwnerId, string OwnerName, uint RoomId,
+    int X, int Y, double Z, string Name, PetPackageFigure Figure, double PetZ, uint FurniBaseItem, int FurniRotation, DateTimeOffset CreatedAt);
+
+public sealed record PetPackageOpening(Pet Pet, uint FurniId);
+
 [Singleton]
 public interface IGnomePackageStore
 {
     Pet? Open(GnomePackageRequest request);
+
+    /// <summary>Creates the pet, deletes the package and adds its furni in one transaction; null when nothing was written.</summary>
+    PetPackageOpening? OpenPetPackage(PetPackageRequest request);
 }
 
 public sealed class GnomePackageStore(IDatabase database, ILogger<GnomePackageStore> logger) : IGnomePackageStore
@@ -42,4 +52,6 @@ public sealed class GnomePackageStore(IDatabase database, ILogger<GnomePackageSt
             return null;
         }
     }
+
+    public PetPackageOpening? OpenPetPackage(PetPackageRequest request) => throw new NotImplementedException();
 }

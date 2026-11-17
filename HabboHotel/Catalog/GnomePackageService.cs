@@ -46,7 +46,7 @@ public sealed class GnomePackageService(
             }
 
             if (!PetUtility.CheckPetName(petName)) {
-                session.Send(new CheckGnomeNameComposer(petName, PetPackageNameError.InvalidName));
+                session.Send(new CheckGnomeNameComposer(itemId, petName, PetPackageNameError.InvalidName));
 
                 return;
             }
@@ -61,7 +61,7 @@ public sealed class GnomePackageService(
             }
 
             room.GetRoomItemHandler().RemoveFurniture(session, item.Id);
-            session.Send(new CheckGnomeNameComposer(petName, PetPackageNameError.None));
+            session.Send(new CheckGnomeNameComposer(itemId, petName, PetPackageNameError.None));
             var speeches = new List<RandomSpeech>();
             room.GetRoomUserManager().DeployBot(new(pet.PetId, pet.RoomId, "pet", "freeroam", pet.Name, "", pet.Look,
                 pet.X, pet.Y, pet.Z, 0, 0, 0, 0, 0, ref speeches, "", 0, pet.OwnerId, false, 0, false, 0), pet);

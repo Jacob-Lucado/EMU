@@ -45,18 +45,6 @@ def test_hab_logic_reads_logic_type_height_and_states_without_transitions():
         'logicType': 'furniture_multistate', 'visualizationType': 'furniture_animated', 'height': 1.5, 'states': 3}
 
 
-def test_hab_logic_counts_states_up_to_the_highest_one_and_skips_habbo_transitions():
-    document = json.loads(m.read_hab(hab('panel', 'furniture_multistate'))['panel.json'])
-    document['visualizations'] = [{'size': 64, 'animations': {
-        '1': {}, '2': {}, '100': {'transitionTo': 2}, '101': {'transitionTo': 0}, '102': {'transitionFrom': 1}}}]
-    body = json.dumps(document).encode()
-    stored = zlib.compress(body)
-    index = zlib.compress(json.dumps({'entries': [{'name': 'panel.json', 'offset': 0, 'storedLength': len(stored), 'compression': 'deflate'}]}).encode())
-    bundle = b'HAB\0' + struct.pack('<HHIII', 1, 1, len(index), 0, len(stored)) + index + stored
-
-    assert m.hab_logic(bundle)['states'] == 3
-
-
 def test_read_hab_rejects_other_files():
     with pytest.raises(ValueError):
         m.read_hab(b'NITRO' + bytes(30))

@@ -204,11 +204,26 @@ public partial class PlacedFurniRoomTests
             ["imageUrl"] = "",
             ["offsetX"] = "10000",
             ["offsetY"] = "-10000",
-            ["offsetZ"] = "1000",
+            ["offsetZ"] = "5000",
             ["scale"] = "500",
             ["alpha"] = "0"
         }, Assert.IsType<MapDataFormat>(item.ExtraData).Data);
         Assert.Equal(1, store.Writes);
+    }
+
+    [Theory]
+    [InlineData("12000", "12000")]
+    [InlineData("-12000", "-12000")]
+    [InlineData("9999999999", "2147483647")]
+    [InlineData("-9999999999", "-2147483648")]
+    public void BackgroundKeepsOffsetZInTheIntRange(string sent, string kept)
+    {
+        var item = PlacedBranding(29, InteractionType.Background);
+        Recipient();
+
+        new RoomItemMetadataService(new BrandingStore(), null!).SetBranding(_client, new(29, Pairs("offsetZ", sent)));
+
+        Assert.Equal(kept, Assert.IsType<MapDataFormat>(item.ExtraData).Data["offsetZ"]);
     }
 
     [Fact]

@@ -111,6 +111,7 @@ public static class ServerPacketHeader
     // Room Settings
     public const uint RoomSettingsDataComposer = 933;
     public const uint RoomSettingsSavedComposer = 1000;
+    public const uint RoomSettingsSaveErrorComposer = 889;
     public const uint FlatControllerRemovedComposer = 3184;
     public const uint FlatControllerAddedComposer = 1907;
     public const uint RoomRightsListComposer = 3347;
@@ -175,6 +176,7 @@ public static class ServerPacketHeader
     // Inventory
     public const uint CreditBalanceComposer = 231;
     public const uint BadgesComposer = 2887;
+    public const uint BadgeLeaderboardComposer = 2114;
     public const uint FurniListAddComposer = 2857;
     public const uint FurniListNotificationComposer = 178;
     public const uint FurniListRemoveComposer = 883;
@@ -273,6 +275,7 @@ public static class ServerPacketHeader
 
     public const uint UserTagsComposer = 65514;
     public const uint CampaignComposer = 653;
+    public const uint BonusRareInfoComposer = 1841;
     public const uint RoomEventComposer = 3909;
     public const uint MarketplaceItemStatsComposer = 1275;
     public const uint HabboSearchResultComposer = 3423;

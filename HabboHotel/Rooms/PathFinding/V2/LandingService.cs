@@ -19,7 +19,7 @@ internal sealed class LandingService(Room room, RoomNavigation navigation, Movem
         var landing = context.Graph.ResolveLanding(surface, view, initial.Z);
         SetLandingPosition(actor, landing);
 
-        if (surface.Tile == navigation.Grid.DoorTile && !actor.IsBot) {
+        if (surface.Tile == navigation.Grid.DoorTile && !actor.IsBot && room.Behavior.LeaveOnDoorTile) {
             room.GetRoomUserManager().RemoveUserFromRoom(actor.GetClient(), true);
 
             return;

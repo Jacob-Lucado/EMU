@@ -115,6 +115,7 @@ public class RoomData
         LayEnabled = data.LayEnabled;
         HideWired = data.HideWired;
         DiagonalSqueeze = data.DiagonalSqueeze;
+        Behavior = data.Behavior;
         Model = data.Model;
     }
 
@@ -164,6 +165,7 @@ public class RoomData
     public bool HideWired { get; set; }
     // Avatars may walk diagonally between two blocked tiles that touch at a corner.
     public bool DiagonalSqueeze { get; set; }
+    public RoomBehaviorSettings Behavior { get; set; } = RoomBehaviorSettings.Default;
 
 
     public RoomModel Model { get; set; }

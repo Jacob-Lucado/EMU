@@ -18,7 +18,7 @@ internal sealed class TestRoomUserSnapshots : IRoomUserSnapshotService
             ? HabbiconTestSupport.Client(new Habbo { Id = user.BotData.OwnerId, Username = "owner" }).Client
             : user.GetClient();
 
-        return new RoomUserSnapshotService(null!, clients, null!, null!).Capture(user);
+        return new RoomUserSnapshotService(null!, clients, null!, null!, TestBadgeRarity.Empty).Capture(user);
     }
 
     public IReadOnlyList<RoomUserSnapshot> Capture(IEnumerable<RoomUser> users) =>

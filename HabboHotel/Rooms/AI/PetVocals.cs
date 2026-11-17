@@ -8,17 +8,21 @@ public enum PetVocal
     Scratched,
     Eating,
     Drinking,
-    Sleeping
+    Sleeping,
+    Playing
 }
 
 /// <summary>
-/// Habbo's pet answers. Every pet type can refuse with the shared refusal lines and adds its own lines.
+/// Habbo's pet answers. Every pet type can refuse with the shared refusal lines and adds its own lines; all pets share the playing lines.
 /// A pet type without lines for a moment stays silent.
 /// </summary>
 public static class PetVocals
 {
     private static readonly string[] SharedRefusals =
         ["Maybe I'll do it later", "I'd rather not do it...", "Yes, yes, I'll do it later", "Well, I'm not going to do it..."];
+
+    private static readonly string[] SharedPlaying =
+        ["I'm having a blast!", "I can't stop playing!", "See! I knew this would be fun!", "Wooo! Yay!", "Whee!"];
 
     private static readonly Dictionary<(int Type, PetVocal Vocal), string[]> Lines = new()
     {
@@ -78,7 +82,12 @@ public static class PetVocals
     {
         var own = Lines.GetValueOrDefault((type, vocal), []);
 
-        return vocal == PetVocal.Refusal ? [.. SharedRefusals, .. own] : own;
+        return vocal switch
+        {
+            PetVocal.Refusal => [.. SharedRefusals, .. own],
+            PetVocal.Playing => SharedPlaying,
+            _ => own
+        };
     }
 
     /// <summary>The pet says one of its lines for the moment. A muted room hears nothing.</summary>

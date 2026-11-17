@@ -16,6 +16,8 @@ public class PetBot : BotAi
     private static readonly int EnergyRestTicks = (int)(TimeSpan.FromSeconds(40) / RoomCycle.Interval);
     private int _energyTimer;
     private uint _visitId;
+    private uint _toyId;
+    private int _toyTicks;
     private Point _visitSpot;
     private int _speechTimer;
     private readonly IPetLocale _locale;
@@ -129,6 +131,10 @@ public class PetBot : BotAi
             return;
         }
 
+        if (_toyId != 0 && --_toyTicks <= 0) {
+            StopPlaying(botRoom);
+        }
+
         if (_visitId != 0 && Visit(botRoom, pet, petData)) {
             return;
         }
@@ -168,6 +174,9 @@ public class PetBot : BotAi
                     }
                     else if (Random.Shared.Next(DrinkChance) == 0 && FindWater(botRoom, botUser) is { } water) {
                         GoTo(botRoom, botUser, water);
+                    }
+                    else if (Random.Shared.Next(ToyChance) == 0 && FindNearest(botRoom, botUser, item => PetToy.Is(item.Definition) && item.Definition.Walkable) is { } toy) {
+                        GoTo(botRoom, botUser, toy);
                     }
                     else if (Random.Shared.Next(NestChance) == 0 && FindNearest(botRoom, botUser, item => PetNest.Is(item.Definition) && item.Definition.Walkable) is { } nest) {
                         GoTo(botRoom, botUser, nest);
@@ -332,6 +341,12 @@ public class PetBot : BotAi
             return true;
         }
 
+        if (PetToy.Is(item.Definition)) {
+            Play(item, pet, petData);
+
+            return true;
+        }
+
         return PetFood.Of(item.Definition) is { } values && values.Feeds(petData.Type) && Eat(room, item, values, pet, petData);
     }
 
@@ -344,6 +359,39 @@ public class PetBot : BotAi
         PetVocals.Say(pet, PetVocal.Drinking);
         PetWater.Drink(water, DateTimeOffset.UtcNow);
         water.UpdateState(true, true);
+    }
+
+    // A horse kicks the ball; other pets play with it. The ball moves for three and a half seconds.
+    private void Play(Item toy, RoomUser pet, Pet petData)
+    {
+        RemovePetStatus();
+        pet.Statusses[petData.Type == 15 ? "kck" : "pla"] = TextHandling.GetString(pet.Z);
+        pet.Statusses["gst"] = "sml";
+        pet.UpdateNeeded = true;
+        _actionTimer = 10;
+        PetVocals.Say(pet, PetVocal.Playing);
+        SetToyState(toy, "1");
+        _toyId = toy.Id;
+        _toyTicks = (int)(TimeSpan.FromSeconds(3.5) / RoomCycle.Interval);
+    }
+
+    private void StopPlaying(Room room)
+    {
+        if (room.GetRoomItemHandler().GetItem(_toyId) is { } toy) {
+            SetToyState(toy, "0");
+        }
+
+        _toyId = 0;
+    }
+
+    private static void SetToyState(Item toy, string state)
+    {
+        if (toy.ExtraData is not LegacyDataFormat) {
+            toy.ExtraData = new LegacyDataFormat();
+        }
+
+        toy.LegacyDataString = state;
+        toy.UpdateUsedState();
     }
 
     // A pet sleeps in a nest for about a minute.
@@ -418,6 +466,9 @@ public class PetBot : BotAi
 
     // About one action in six a pet goes to drink when there is water in the room.
     private const int DrinkChance = 6;
+
+    // About one action in six a pet goes to play with a toy.
+    private const int ToyChance = 6;
 
     // About one action in twenty a pet goes to sleep in a nest.
     private const int NestChance = 20;

@@ -22,8 +22,11 @@ public sealed record InventoryItemSnapshot(uint Id, string Type, int SpriteId, F
                 : Plus.HabboHotel.Rooms.Music.RoomMusicDefinition.IsDisc(definition) ? FurniCategory.TraxSong : definition.Category
         };
 
+        // A Furni-Matic box keeps its date for the room, but the inventory lists it without data.
+        var data = category == FurniCategory.EcotronBox ? new FurnitureDataSnapshot.Legacy("") : FurnitureDataSnapshot.Capture(item.ExtraData);
+
         return new(item.Id, definition.Type.ToCharCode(), definition.SpriteId, category,
-            FurnitureDataSnapshot.Capture(item.ExtraData), item.UniqueNumber, item.UniqueSeries,
+            data, item.UniqueNumber, item.UniqueSeries,
             definition.AllowEcotronRecycle, definition.AllowTrade, item.ShouldStackInInventory(),
             item.UniqueNumber == 0 && definition.AllowInventoryStack, definition.AllowMarketplaceSell, item.IsWallItem);
     }

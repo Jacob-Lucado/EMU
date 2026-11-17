@@ -1,6 +1,5 @@
 using System.Collections.Immutable;
 using System.Data;
-using System.Globalization;
 using Dapper;
 using Plus.Database;
 using Plus.HabboHotel.Items;
@@ -68,7 +67,7 @@ public sealed class RecyclerStore(IDatabase database, TimeProvider? clock = null
         }
 
         if (connection.ExecuteScalar<uint?>("SELECT id FROM furniture WHERE id=@boxDefinitionId AND BINARY item_name=BINARY @name AND sprite_id=@sprite AND type='s' AND interaction_type IN ('','default') LOCK IN SHARE MODE",
-                new { boxDefinitionId, name = RecyclerBox.ClassName, sprite = RecyclerBox.SpriteId }, transaction) is null
+                new { boxDefinitionId, name = RecyclerBox.Mystery.ClassName, sprite = RecyclerBox.Mystery.SpriteId }, transaction) is null
             || !ValidPrize(connection, transaction, prize)) {
             return null;
         }
@@ -103,7 +102,7 @@ public sealed class RecyclerStore(IDatabase database, TimeProvider? clock = null
             throw new DBConcurrencyException("Recycler inputs changed during consumption.");
         }
 
-        var extraData = now.UtcDateTime.ToString("d-M-yyyy", CultureInfo.InvariantCulture);
+        var extraData = RecyclerBox.Date(now);
         connection.Execute("INSERT INTO items(base_item,user_id,room_id,x,y,z,wall_pos,rot,extra_data,limited_number,limited_stack) VALUES(@boxDefinitionId,@userId,0,0,0,0,'',0,@extraData,0,0)",
             new { boxDefinitionId, userId, extraData }, transaction);
         var id = connection.ExecuteScalar<uint>("SELECT LAST_INSERT_ID()", transaction: transaction);

@@ -90,6 +90,27 @@ public sealed class ClientAccessListTests
     }
 
     [Fact]
+    public void OwnedStylesAreAllowedOnlyForTheirOwnerWhileEnabled()
+    {
+        var manager = Styles();
+        var styles = (Dictionary<int, ChatStyle>)typeof(ChatStyleManager).GetField("_styles", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(manager)!;
+        styles.Add(10001, new ChatStyle(10001, "Prize", "", requiresOwnership: true));
+        styles.Add(10002, new ChatStyle(10002, "Retired prize", "", enabled: false, requiresOwnership: true));
+        var owner = new Plus.HabboHotel.Users.Habbo { Id = 7 };
+        owner.PurchasedChatStyles.TryAdd(10001, 0);
+        owner.PurchasedChatStyles.TryAdd(10002, 0);
+        Assert.Equal(new[] { 0, 10001 }, manager.GetAllowedStyleIds(owner));
+        Assert.Equal(new[] { 0 }, manager.GetAllowedStyleIds(new Plus.HabboHotel.Users.Habbo { Id = 8 }));
+        var (client, sent) = HabbiconTestSupport.Client(owner);
+        owner.Client = client;
+        new ClientAccessLists(null!, manager, Models()).Send(owner);
+        var allowed = new Plus.Communication.Flash.FlashIncomingPacket { Buffer = sent.Single(packet => packet.Header == Plus.Communication.Packets.Outgoing.ServerPacketHeader.AllowedChatStylesComposer).Payload };
+        Assert.Equal(2, allowed.ReadInt());
+        Assert.Equal(0, allowed.ReadInt());
+        Assert.Equal(10001, allowed.ReadInt());
+    }
+
+    [Fact]
     public void LegacyModelsRemainLoadableButCannotBeOfferedOrCreated()
     {
         var manager = Models();

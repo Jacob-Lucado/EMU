@@ -90,6 +90,7 @@ public sealed class ActorTickService(Room room)
 
             if (actor.CurrentEffect != effect) {
                 actor.ApplyEffect(effect);
+                actor.RoomEffect = effect;
             }
         }
 

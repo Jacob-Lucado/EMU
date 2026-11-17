@@ -6,7 +6,11 @@ namespace Plus.HabboHotel.Rooms.AI;
 
 public sealed record PetInformationSnapshot(int Id, string Name, int Level, int MaxLevel, int Experience,
     int ExperienceGoal, int Energy, int MaxEnergy, int Nutrition, int MaxNutrition, int Respect, int OwnerId,
-    int AgeInDays, string OwnerName, bool HasSaddle, int AnyoneCanRide);
+    int AgeInDays, string OwnerName, bool HasSaddle, int AnyoneCanRide, PetPlantInformation? Plant = null);
+
+/// <summary>The monster plant fields of the pet information window.</summary>
+public sealed record PetPlantInformation(int BreedId, bool CanBreed, bool CanRevive, int Rarity, int MaxWellbeingSeconds,
+    int RemainingWellbeingSeconds, int RemainingGrowthSeconds, bool BreedingPermission);
 
 public interface IPetInformationService
 {

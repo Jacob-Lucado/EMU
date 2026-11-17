@@ -3,6 +3,7 @@ using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Time.Testing;
 using Plus.Communication.RCON;
 using Plus.Communication.RCON.Commands;
 using Plus.HabboHotel.Users.Grants;
@@ -12,12 +13,14 @@ namespace Plus.Tests;
 
 public sealed class RconConnectionTests
 {
+    private static readonly TimeSpan HangGuard = TimeSpan.FromSeconds(30);
+
     [Fact]
     public async Task AcknowledgesASplitJsonRequestOnlyAfterTheCommandSucceeds()
     {
         using var sockets = await ConnectedSockets.Create();
         var commands = new RecordingCommands(true);
-        using var connection = new RconConnection(sockets.Server, NullLogger<RconConnection>.Instance, commands);
+        using var connection = new RconConnection(sockets.Server, NullLogger<RconConnection>.Instance, commands, new FakeTimeProvider());
 
         await sockets.Client.SendAsync(Encoding.UTF8.GetBytes("{\"command\":\"give_user_"));
         await Task.Delay(20);
@@ -33,7 +36,7 @@ public sealed class RconConnectionTests
     {
         using var sockets = await ConnectedSockets.Create();
         var commands = new RecordingCommands(true);
-        using var connection = new RconConnection(sockets.Server, NullLogger<RconConnection>.Instance, commands);
+        using var connection = new RconConnection(sockets.Server, NullLogger<RconConnection>.Instance, commands, new FakeTimeProvider());
 
         await sockets.Client.SendAsync(Encoding.UTF8.GetBytes("{\"command\":\"shutdown\",\"parameters\":[\"5\",\"30\"]}\n"));
 
@@ -45,7 +48,7 @@ public sealed class RconConnectionTests
     public async Task ReportsACommandRejectionInsteadOfFabricatingSuccess()
     {
         using var sockets = await ConnectedSockets.Create();
-        using var connection = new RconConnection(sockets.Server, NullLogger<RconConnection>.Instance, new RecordingCommands(false));
+        using var connection = new RconConnection(sockets.Server, NullLogger<RconConnection>.Instance, new RecordingCommands(false), new FakeTimeProvider());
 
         await sockets.Client.SendAsync(Encoding.UTF8.GetBytes("{\"command\":\"disconnect_user\",\"parameters\":[\"42\"]}\n"));
 
@@ -63,7 +66,7 @@ public sealed class RconConnectionTests
     {
         using var sockets = await ConnectedSockets.Create();
         var commands = new RecordingCommands(true);
-        using var connection = new RconConnection(sockets.Server, NullLogger<RconConnection>.Instance, commands);
+        using var connection = new RconConnection(sockets.Server, NullLogger<RconConnection>.Instance, commands, new FakeTimeProvider());
 
         await sockets.Client.SendAsync(Encoding.UTF8.GetBytes(request));
 
@@ -76,7 +79,7 @@ public sealed class RconConnectionTests
     {
         using var sockets = await ConnectedSockets.Create();
         var commands = new RecordingCommands(true);
-        using var connection = new RconConnection(sockets.Server, NullLogger<RconConnection>.Instance, commands);
+        using var connection = new RconConnection(sockets.Server, NullLogger<RconConnection>.Instance, commands, new FakeTimeProvider());
         var oversized = "{\"command\":\"alert_user\",\"parameters\":[\"" + new string('a', RconConnection.MaxRequestBytes) + "\"]}\n";
 
         await sockets.Client.SendAsync(Encoding.UTF8.GetBytes(oversized));
@@ -90,11 +93,15 @@ public sealed class RconConnectionTests
     {
         using var sockets = await ConnectedSockets.Create();
         var commands = new RecordingCommands(true);
-        using var connection = new RconConnection(sockets.Server, NullLogger<RconConnection>.Instance, commands);
+        var time = new FakeTimeProvider();
+        using var connection = new RconConnection(sockets.Server, NullLogger<RconConnection>.Instance, commands, time);
 
         await sockets.Client.SendAsync(Encoding.UTF8.GetBytes("{\"command\":\"disconnect_user\""));
+        time.Advance(TimeSpan.FromSeconds(2) - TimeSpan.FromMilliseconds(1));
+        Assert.False(sockets.Client.Poll(0, SelectMode.SelectRead));
+        time.Advance(TimeSpan.FromMilliseconds(1));
 
-        var response = await ReadResponse(sockets.Client, TimeSpan.FromSeconds(3));
+        var response = await ReadResponse(sockets.Client);
         Assert.Equal(1, response.GetProperty("status").GetInt32());
         Assert.Contains("timed out", response.GetProperty("message").GetString());
         Assert.Null(commands.Request);
@@ -105,11 +112,12 @@ public sealed class RconConnectionTests
     {
         using var sockets = await ConnectedSockets.Create();
         var commands = new BlockingCommands();
-        using var connection = new RconConnection(sockets.Server, NullLogger<RconConnection>.Instance, commands);
+        var time = new FakeTimeProvider();
+        using var connection = new RconConnection(sockets.Server, NullLogger<RconConnection>.Instance, commands, time);
 
         await sockets.Client.SendAsync(Encoding.UTF8.GetBytes("{\"command\":\"disconnect_user\",\"parameters\":[\"42\"]}\n"));
-        await commands.Entered.Task.WaitAsync(TimeSpan.FromSeconds(1));
-        await Task.Delay(TimeSpan.FromSeconds(2.2));
+        await commands.Entered.Task.WaitAsync(HangGuard);
+        time.Advance(TimeSpan.FromSeconds(2.2));
         Assert.False(sockets.Client.Poll(0, SelectMode.SelectRead));
 
         commands.Release.SetResult();
@@ -121,7 +129,7 @@ public sealed class RconConnectionTests
     {
         using var sockets = await ConnectedSockets.Create();
         var commands = new RecordingCommands(true);
-        using var connection = new RconConnection(sockets.Server, NullLogger<RconConnection>.Instance, commands);
+        using var connection = new RconConnection(sockets.Server, NullLogger<RconConnection>.Instance, commands, new FakeTimeProvider());
 
         await sockets.Client.SendAsync(Encoding.Default.GetBytes("disconnect_user\u000142"));
         var buffer = new byte[1];
@@ -130,11 +138,11 @@ public sealed class RconConnectionTests
         Assert.Equal("disconnect_user\u000142", commands.Request);
     }
 
-    private static async Task<JsonElement> ReadResponse(Socket socket, TimeSpan? timeout = null)
+    private static async Task<JsonElement> ReadResponse(Socket socket)
     {
         using var stream = new NetworkStream(socket, ownsSocket: false);
         using var reader = new StreamReader(stream, Encoding.UTF8, leaveOpen: true);
-        var line = await reader.ReadLineAsync().WaitAsync(timeout ?? TimeSpan.FromSeconds(2));
+        var line = await reader.ReadLineAsync().WaitAsync(HangGuard);
 
         return JsonDocument.Parse(line!).RootElement.Clone();
     }
@@ -145,7 +153,7 @@ public sealed class RconConnectionTests
         using var sockets = await ConnectedSockets.Create();
         var payload = new string('A', 10_924);
         var commands = new AcknowledgedCommands(_ => Task.FromResult(GrantOutcome.Success(new { balance = 7 })));
-        using var connection = new RconConnection(sockets.Server, NullLogger<RconConnection>.Instance, commands);
+        using var connection = new RconConnection(sockets.Server, NullLogger<RconConnection>.Instance, commands, new FakeTimeProvider());
 
         await sockets.Client.SendAsync(Encoding.UTF8.GetBytes("{\"command\":\"grant_user_bundle\",\"parameters\":[\"42\",\"order-1\",\"" + payload + "\"]}\n"));
 
@@ -170,7 +178,7 @@ public sealed class RconConnectionTests
             1 => throw new TimeoutException(),
             _ => throw new InvalidOperationException(),
         });
-        using var connection = new RconConnection(sockets.Server, NullLogger<RconConnection>.Instance, commands);
+        using var connection = new RconConnection(sockets.Server, NullLogger<RconConnection>.Instance, commands, new FakeTimeProvider());
 
         await sockets.Client.SendAsync(Encoding.UTF8.GetBytes("{\"command\":\"take_user_badge\",\"parameters\":[\"42\",\"ACH\"]}\n"));
 
@@ -185,7 +193,7 @@ public sealed class RconConnectionTests
     {
         using var sockets = await ConnectedSockets.Create();
         var commands = new AcknowledgedCommands(_ => throw new InvalidOperationException("dispatched"));
-        using var connection = new RconConnection(sockets.Server, NullLogger<RconConnection>.Instance, commands);
+        using var connection = new RconConnection(sockets.Server, NullLogger<RconConnection>.Instance, commands, new FakeTimeProvider());
         var oversized = "{\"command\":\"grant_user_bundle\",\"parameters\":[\"42\",\"k\",\"" + new string('A', RconConnection.MaxRequestBytes) + "\"]}\n";
 
         await sockets.Client.SendAsync(Encoding.UTF8.GetBytes(oversized));

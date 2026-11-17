@@ -162,8 +162,12 @@ public partial class PlacedFurniRoomTests
         Assert.Equal(100u, packet.ReadUInt());
         Assert.Equal(wallReward ? "i" : "s", packet.ReadString());
         Assert.False(packet.ReadBool());
-        Assert.Equal("blue", packet.ReadString());
+        Assert.Equal("", packet.ReadString());
         Assert.False(packet.HasDataRemaining());
+        Assert.Equal(new[] { ServerPacketHeader.FurniListAddComposer, ServerPacketHeader.OpenGiftComposer,
+            ServerPacketHeader.FurniListNotificationComposer, ServerPacketHeader.FurniListAddComposer },
+            _client.Sent.Where(header => header is ServerPacketHeader.FurniListAddComposer or ServerPacketHeader.OpenGiftComposer
+                or ServerPacketHeader.FurniListNotificationComposer or ServerPacketHeader.FurniListUpdateComposer));
         Assert.False(service.TryOpen(_client, box.Id));
         Assert.Equal(1, store.Opens);
     }

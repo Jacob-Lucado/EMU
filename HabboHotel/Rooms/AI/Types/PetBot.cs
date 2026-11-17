@@ -1,3 +1,4 @@
+using Plus.Communication.Packets.Outgoing.Rooms.AI.Pets;
 using Plus.Core;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Rooms.PathFinding;
@@ -217,6 +218,12 @@ public class PetBot : BotAi
             return;
         }
 
+        if (commandId == PetCommandSet.Breed) {
+            GoToBreedingBox(botRoom, pet, petData.Type, user.GetClient()!);
+
+            return;
+        }
+
         // Without a bowl or food in the room a pet refuses to drink or eat.
         if (commandId is PetCommandSet.Drink or PetCommandSet.Eat || !petData.ObeysCommand(commandId)) {
             petData.SpendEnergy(2);
@@ -230,6 +237,30 @@ public class PetBot : BotAi
             petData.Addexperience(5);
             petData.SpendEnergy(5);
         }
+    }
+
+    // The pet walks to the nearest box for its type it has a route to; otherwise Habbo tells the owner why not.
+    private void GoToBreedingBox(Room room, RoomUser pet, int petType, GameClient owner)
+    {
+        var navigation = room.GetGameMap().Navigation;
+        navigation.RunOwner(pet, (actor, _) =>
+        {
+            var boxes = room.GetRoomItemHandler().GetFloor.Where(item => item.Definition.BreedingPetType != null).ToList();
+            var suitable = boxes.Where(item => item.Definition.BreedingPetType == petType).ToList();
+            var reachable = suitable
+                .OrderBy(item => Math.Max(Math.Abs(item.GetX - actor.X), Math.Abs(item.GetY - actor.Y)))
+                .FirstOrDefault(item => navigation.HasRoute(actor, item.GetX, item.GetY));
+
+            if (reachable != null) {
+                _actionTimer = 30;
+                actor.MoveTo(reachable.GetX, reachable.GetY);
+
+                return;
+            }
+
+            owner.Send(new GoToBreedingNestFailureComposer(boxes.Count == 0 ? BreedingNestFailure.NoNest
+                : suitable.Count == 0 ? BreedingNestFailure.NoSuitableNest : BreedingNestFailure.NoPath));
+        });
     }
 
     private void Obey(Room room, RoomUser pet, RoomUser user, int commandId)

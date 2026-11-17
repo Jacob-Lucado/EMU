@@ -600,6 +600,10 @@ public partial class RoomItemHandling
             _room.GetGameMap().RemoveFromMap(item);
         }
 
+        if (_room.TonerData?.ItemId == item.Id) {
+            _room.TonerData = null;
+        }
+
         RemoveItem(item);
         _room.GetGameMap().GenerateMaps();
         _room.GetGameMap().FlushPlacementUpdates();
@@ -930,6 +934,11 @@ public partial class RoomItemHandling
 
         // A move across the edge of a hidden area adds or removes the furni for the clients instead of updating it.
         var settled = newItem ? [] : FurniVisibility.Reconcile(_room, [item]);
+
+        if (newItem && item.Definition.InteractionType == InteractionType.Toner && _room.TonerData == null) {
+            _room.TonerData = LoadToner(item);
+        }
+
         announcing?.Invoke();
 
         if (sendMessage) {

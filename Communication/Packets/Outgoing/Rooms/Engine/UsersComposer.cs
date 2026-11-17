@@ -12,8 +12,6 @@ namespace Plus.Communication.Packets.Outgoing.Rooms.Engine;
 /// </summary>
 public sealed class UsersComposer : IServerPacket
 {
-    /// <summary>No rank. The client defaults to it and hides a negative rank.</summary>
-    private const int BadgesRankUnknown = -1;
     /// <summary>The skills of a bot type without a list of its own.</summary>
     private static readonly short[] DefaultBotSkills = [1, 2, 3, 4, 5];
 
@@ -47,7 +45,7 @@ public sealed class UsersComposer : IServerPacket
                 packet.WriteString("");
                 packet.WriteInteger(user.AchievementPoints);
                 packet.WriteBoolean(false);
-                packet.WriteInteger(BadgesRankUnknown);
+                packet.WriteInteger(user.BadgesRank);
             }
             else if (user.IsPet) {
                 packet.WriteInteger(user.PetType);

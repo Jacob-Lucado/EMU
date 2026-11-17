@@ -62,7 +62,7 @@ public sealed class LandingViewSnapshotTests
         var source = new List<Promotion>();
         var manager = CatalogSnapshotTestSupport.Proxy<ILandingViewManager>((method, _) => method == "GetPromotionItems"
             ? source : throw new NotSupportedException(method));
-        var service = new LandingViewPresentationService(manager);
+        var service = new LandingViewPresentationService(manager, TimeProvider.System);
         var (client, sent) = HabbiconTestSupport.Client(new Habbo());
         service.ShowArticles(client);
         Assert.Equal(ServerPacketHeader.PromoArticlesComposer, Assert.Single(sent).Header);

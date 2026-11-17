@@ -63,7 +63,7 @@ public sealed class RemainingPresentationHandlerTests
     public void CampaignRetainsTheLastUsableNameAndOriginalString(string campaigns, string name)
     {
         var (client, sent) = HabbiconTestSupport.Client(new Habbo());
-        new LandingViewPresentationService(null!).RefreshCampaign(client, campaigns);
+        new LandingViewPresentationService(null!, TimeProvider.System).RefreshCampaign(client, campaigns);
         Assert.Equal(ServerPacketHeader.CampaignComposer, Assert.Single(sent).Header);
         var packet = new FlashIncomingPacket { Buffer = sent[0].Payload };
         Assert.Equal(campaigns, packet.ReadString());
@@ -77,7 +77,7 @@ public sealed class RemainingPresentationHandlerTests
     public void RejectedCampaignPublishesNothing(string campaigns)
     {
         var (client, sent) = HabbiconTestSupport.Client(new Habbo());
-        new LandingViewPresentationService(null!).RefreshCampaign(client, campaigns);
+        new LandingViewPresentationService(null!, TimeProvider.System).RefreshCampaign(client, campaigns);
         Assert.Empty(sent);
     }
 
@@ -86,7 +86,7 @@ public sealed class RemainingPresentationHandlerTests
     {
         var (client, _) = HabbiconTestSupport.Client(new Habbo());
         client.SendCallback = _ => throw new InvalidOperationException("send failed");
-        new LandingViewPresentationService(null!).RefreshCampaign(client, "id,name");
+        new LandingViewPresentationService(null!, TimeProvider.System).RefreshCampaign(client, "id,name");
     }
 
     [Theory]

@@ -18,7 +18,7 @@ public interface ILandingViewPresentationService
     void RefreshCampaign(GameClient session, string campaigns);
 }
 
-public sealed class LandingViewPresentationService(ILandingViewManager landingView) : ILandingViewPresentationService
+public sealed class LandingViewPresentationService(ILandingViewManager landingView, TimeProvider time) : ILandingViewPresentationService
 {
     public void RefreshCampaign(GameClient session, string campaigns)
     {

@@ -2,6 +2,7 @@ using Plus.Utilities;
 using System.Globalization;
 using Dapper;
 using Plus.Database;
+using Plus.HabboHotel.Badges.Rarity;
 using Plus.HabboHotel.Cache;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Groups;
@@ -12,7 +13,8 @@ namespace Plus.HabboHotel.Rooms;
 
 public sealed record RoomUserSnapshot(int Id, string Name, string Motto, string Look, int VirtualId, int X, int Y,
     string Z, int Rotation, int Kind, string Gender, int GroupId, string GroupName, int AchievementPoints,
-    bool IsPet, int PetType, int OwnerId, string OwnerName, bool HasSaddle, bool IsRidden, int PetLevel = 0, IReadOnlyList<short>? BotSkills = null);
+    bool IsPet, int PetType, int OwnerId, string OwnerName, bool HasSaddle, bool IsRidden, int PetLevel = 0, IReadOnlyList<short>? BotSkills = null,
+    int BadgesRank = -1);
 
 [Scoped]
 public interface IRoomUserSnapshotService
@@ -22,7 +24,7 @@ public interface IRoomUserSnapshotService
 }
 
 public sealed class RoomUserSnapshotService(IGroupManager groups, IGameClientManager clients, ICacheManager cache,
-    IDatabase database) : IRoomUserSnapshotService
+    IDatabase database, IBadgeRarityManager badgeRarity) : IRoomUserSnapshotService
 {
     /// <summary>A generic bot's Users entry lists skills 1-5 and 19-23.</summary>
     private static readonly short[] GenericBotSkills = [1, 2, 3, 4, 5, 19, 20, 21, 22, 23];

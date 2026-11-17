@@ -84,11 +84,18 @@ public class PetBot : BotAi
 
             if (pet?.PetData is { } petData) {
                 if (speakerSession.GetHabbo().Username == petData.OwnerName) {
-                    var speech = _locale.GetValue($"welcome.speech.pet{petData.Type}");
-                    var rSpeech = speech[Random.Shared.Next(0, speech.Length)];
-                    pet.Chat(rSpeech);
+                    Greet();
                 }
             }
+        }
+    }
+
+    /// <summary>Says one welcome line, as a pet does when its owner places it.</summary>
+    public void Greet()
+    {
+        if (GetRoomUser() is { PetData: { } petData } pet) {
+            var speech = _locale.GetValue($"welcome.speech.pet{petData.Type}");
+            pet.Chat(speech[Random.Shared.Next(0, speech.Length)]);
         }
     }
 
@@ -123,14 +130,11 @@ public class PetBot : BotAi
 
             if (pet != null) {
                 RemovePetStatus();
-                var speech = _locale.GetValue($"speech.pet{petData.Type}");
-                var rSpeech = speech[Random.Shared.Next(0, speech.Length)];
+                // A pet never chats on its own; it only shows the three letter gestures from its speech list.
+                var gestures = _locale.GetValue($"speech.pet{petData.Type}").Where(entry => entry.Length == 3).ToArray();
 
-                if (rSpeech.Length != 3) {
-                    pet.Chat(rSpeech);
-                }
-                else {
-                    pet.Statusses.Add(rSpeech, TextHandling.GetString(pet.Z));
+                if (gestures.Length > 0) {
+                    pet.Statusses.Add(gestures[Random.Shared.Next(0, gestures.Length)], TextHandling.GetString(pet.Z));
                 }
             }
 
@@ -311,7 +315,6 @@ public class PetBot : BotAi
                     case 6:
                         // Remove Status
                         RemovePetStatus();
-                        pet.Chat("ZzzZZZzzzzZzz");
                         pet.Statusses.Add("lay", TextHandling.GetString(pet.Z));
                         pet.UpdateNeeded = true;
                         petData.Addexperience(10); // Give XP
@@ -337,10 +340,6 @@ public class PetBot : BotAi
                         break;
                     case 46:
                         break;
-                    default:
-                        var speech = _locale.GetValue("pet.unknowncommand");
-                        pet.Chat(speech[Random.Shared.Next(0, speech.Length)]);
-                        break;
                 }
 
                 petData.PetEnergy(false); // Remove Energy
@@ -349,8 +348,6 @@ public class PetBot : BotAi
                 RemovePetStatus(); // Remove Status
 
                 if (petData.IsTired) {
-                    var speech = _locale.GetValue("pet.tired");
-                    pet.Chat(speech[Random.Shared.Next(0, speech.Length)]);
                     pet.Statusses.Add("lay", TextHandling.GetString(pet.Z));
                     pet.UpdateNeeded = true;
                     _speechTimer = 50;
@@ -358,8 +355,6 @@ public class PetBot : BotAi
                     _energyTimer = 5;
                 }
                 else {
-                    var speech = _locale.GetValue("pet.lazy");
-                    pet.Chat(speech[Random.Shared.Next(0, speech.Length)]);
                     petData.PetEnergy(false); // Remove Energy
                 }
             }

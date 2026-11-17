@@ -70,6 +70,9 @@ public static class HorseProducts
         .Where(definition => Apply(default, definition.InteractionType, definition.CustomParams) is { Saddle: var part } && part == saddle && saddle > 0)
         .MinBy(definition => definition.Id);
 
+    /// <summary>The avatar effect a rider gets on a horse with this saddle part: the last customparams value of its saddle product.</summary>
+    public static int RidingEffect(IEnumerable<ItemDefinition> definitions, int saddle) => throw new NotImplementedException();
+
     private static HorseStyle? Dye(HorseStyle style, string tag)
     {
         var breed = BodyColours.Values.Where(first => style.Palette >= first && style.Palette < first + 4).Select(first => style.Palette - first).FirstOrDefault(-1);

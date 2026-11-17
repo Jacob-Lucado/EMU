@@ -1,3 +1,4 @@
+using Plus.HabboHotel.Items;
 using Plus.Communication.Packets.Outgoing.Rooms.AI.Pets;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Rooms.Chat.Pets.Locale;
@@ -9,7 +10,7 @@ public interface IHorseRidingService
     void Ride(Room room, GameClient session, int petId, bool mount);
 }
 
-public sealed class HorseRidingService(IPetLocale petLocale) : IHorseRidingService
+public sealed class HorseRidingService(IPetLocale petLocale, IItemDataManager? items = null) : IHorseRidingService
 {
     public void Ride(Room room, GameClient session, int petId, bool mount)
     {

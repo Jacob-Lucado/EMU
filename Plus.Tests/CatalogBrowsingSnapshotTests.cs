@@ -34,6 +34,29 @@ public sealed class CatalogBrowsingSnapshotTests
     }
 
     [Fact]
+    public void PetPalettesFollowThePetOfferWithTheRequestedProductCode()
+    {
+        var pigeon = new CatalogOffer { Id = 11197, LocalizationKey = "a0 pet22", Products = [new CatalogProduct { Type = CatalogProductType.Pet, PetType = 22 }] };
+        var dog = new CatalogOffer { Id = 448, LocalizationKey = "a0 pet0", Products = [new CatalogProduct { Type = CatalogProductType.Pet, PetType = 0 }] };
+        var pages = new List<CatalogPage> { new() { Id = 1, Offers = { [448] = dog } }, new() { Id = 2, Offers = { [11197] = pigeon } } };
+        var catalog = CatalogSnapshotTestSupport.Proxy<ICatalogManager>((method, _) => method == "get_Pages" ? pages : throw new InvalidOperationException(method));
+        var noFurniture = CatalogSnapshotTestSupport.Proxy<IItemDataManager>((method, _) => method == nameof(IItemDataManager.GetItemByName) ? null : throw new InvalidOperationException(method));
+        var pigeonRace = new PetRace(22, 0, 0, true, false);
+        var races = new Races([new PetRace(0, 3, 3, true, false), pigeonRace]);
+        var service = new CatalogBrowsingService(noFurniture, races, null!, TimeProvider.System, catalog, null!);
+        var (client, sent) = HabbiconTestSupport.Client(EditorTestSupport.Player());
+
+        service.ShowPetPalettes(client, "a0 pet22");
+        service.ShowPetPalettes(client, "a0 pet99");
+
+        var packet = Assert.Single(sent);
+        Assert.Equal(ServerPacketHeader.SellablePetBreedsComposer, packet.Header);
+        var (expectedClient, expectedSent) = HabbiconTestSupport.Client(EditorTestSupport.Player());
+        expectedClient.Send(new SellablePetBreedsComposer(PetPaletteSnapshot.Capture("a0 pet22", 22, [pigeonRace])));
+        Assert.Equal(expectedSent[0].Payload, packet.Payload);
+    }
+
+    [Fact]
     public void PromotableRoomsUseInjectedOwnerLoaderAndOneCapturedExpiryInstant()
     {
         var now = new DateTimeOffset(2040, 1, 1, 0, 0, 0, TimeSpan.Zero);
@@ -246,6 +269,11 @@ public sealed class CatalogBrowsingSnapshotTests
     private sealed class ThrowingClock : TimeProvider
     {
         public override DateTimeOffset GetUtcNow() => throw new InvalidOperationException("Expiry must use the captured clock.");
+    }
+    private sealed class Races(List<PetRace> races) : IPetRaceManager
+    {
+        public void Init() { }
+        public List<PetRace> GetRacesForRaceId(int raceId) => races.Where(race => race.RaceId == raceId).ToList();
     }
     private sealed class RecordingBrowsing : ICatalogBrowsingService
     {

@@ -1164,48 +1164,6 @@ public class Item
                             UpdateState();
                             break;
                         }
-                    case InteractionType.Banzaifloor: {
-                            if (Value == 3) {
-                                if (InteractionCountHelper == 1) {
-                                    InteractionCountHelper = 0;
-
-                                    switch (Team) {
-                                        case Team.Blue: {
-                                                LegacyDataString = "11";
-                                                break;
-                                            }
-                                        case Team.Green: {
-                                                LegacyDataString = "8";
-                                                break;
-                                            }
-                                        case Team.Red: {
-                                                LegacyDataString = "5";
-                                                break;
-                                            }
-                                        case Team.Yellow: {
-                                                LegacyDataString = "14";
-                                                break;
-                                            }
-                                    }
-                                }
-                                else {
-                                    LegacyDataString = "";
-                                    InteractionCountHelper++;
-                                }
-
-                                UpdateState();
-                                InteractionCount++;
-
-                                if (InteractionCount < 16) {
-                                    UpdateCounter = 1;
-                                }
-                                else {
-                                    UpdateCounter = 0;
-                                }
-                            }
-
-                            break;
-                        }
                     case InteractionType.Banzaipuck: {
                             if (InteractionCount > 4) {
                                 InteractionCount++;

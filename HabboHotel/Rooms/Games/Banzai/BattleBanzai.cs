@@ -18,6 +18,8 @@ public class BattleBanzai
     private readonly TimeProvider _clock;
     private readonly IAchievementManager _achievements;
     private DateTimeOffset? _startedAt;
+    private List<Item> _blinking = [];
+    private int _blinksLeft;
 
     public BattleBanzai(Room room, TimeProvider clock, IAchievementManager achievements)
     {
@@ -79,6 +81,8 @@ public class BattleBanzai
         }
 
         _startedAt = _clock.GetUtcNow();
+        _blinking = [];
+        _blinksLeft = 0;
         _room.GetGameManager().LockGates();
 
         _room.GetGameManager().ZeroScores();
@@ -134,17 +138,16 @@ public class BattleBanzai
             _room.GetGameManager().UnlockGates();
         }
 
-        foreach (var tile in _banzaiTiles.Values) {
-            if (tile.Team == winners) {
-                tile.InteractionCount = 0;
-                tile.InteractionCountHelper = 0;
-                tile.UpdateNeeded = true;
-            }
-            else if (tile.Team == Team.None) {
-                tile.LegacyDataString = "0";
-                tile.UpdateState();
-            }
+        var unclaimed = _banzaiTiles.Values.Where(tile => tile.Team == Team.None).ToList();
+
+        foreach (var tile in unclaimed) {
+            tile.LegacyDataString = "0";
+            tile.UpdateState(true, false);
         }
+
+        _room.SendObjectsData(unclaimed);
+        _blinking = winners == Team.None ? [] : [.. _banzaiTiles.Values.Where(tile => tile.Team == winners && tile.Value == 3)];
+        _blinksLeft = _blinking.Count > 0 ? 10 : 0;
 
         if (winners != Team.None) {
             foreach (var user in _room.GetRoomUserManager().GetRoomUsers().ToList()) {
@@ -251,7 +254,9 @@ public class BattleBanzai
         ShowState(item);
     }
 
-    private static void ShowState(Item item) => item.LegacyDataString = (item.Value + Convert.ToInt32(item.Team) * 3 - 1).ToString();
+    private static void ShowState(Item item) => item.LegacyDataString = Colour(item);
+
+    private static string Colour(Item item) => (item.Value + Convert.ToInt32(item.Team) * 3 - 1).ToString();
 
     private void HandleBanzaiTiles(Point coord, Team team, RoomUser user)
     {
@@ -318,8 +323,21 @@ public class BattleBanzai
         }
     }
 
+    // The winning team's locked tiles blink off and on five times, one room tick each, and stay lit.
     internal void OnCycle()
     {
+        if (_blinksLeft == 0) {
+            return;
+        }
+
+        var lit = _blinksLeft-- % 2 == 1;
+
+        foreach (var tile in _blinking) {
+            tile.LegacyDataString = lit ? Colour(tile) : "0";
+            tile.UpdateState(false, false);
+        }
+
+        _room.SendObjectsData(_blinking);
     }
 
     public void Dispose()

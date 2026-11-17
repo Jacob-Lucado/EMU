@@ -43,6 +43,9 @@ public class ItemDefinition
     /// <summary>The figure set ids a purchasable clothing item unlocks: its Habbo furnidata customparams.</summary>
     public IReadOnlyList<int> FigureSetIds { get; set; } = [];
 
+    /// <summary>The pet type a breeding box is for: the first value of its Habbo furnidata customparams. Null for other furni.</summary>
+    public int? BreedingPetType { get; set; }
+
     public int Modes { get; set; }
     public List<int> VendingIds { get; set; } = new();
     public List<double> AdjustableHeights { get; set; } = new();

@@ -4,13 +4,16 @@ using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Text;
+using Dapper;
 using Microsoft.Extensions.Logging.Abstractions;
 using Plus.Communication.Flash;
+using Plus.Communication.Packets;
 using Plus.Communication.Packets.Outgoing;
 using Plus.Communication.Revisions;
 using Plus.Database;
 using Plus.HabboHotel.Badges;
 using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Habbicons;
 using Plus.HabboHotel.Items;
 using Plus.HabboHotel.Quests;
 using Plus.HabboHotel.Users;
@@ -222,6 +225,36 @@ public class RewardTrackLiveTests
         Assert.Contains(ServerHeader(client, ServerPacketHeader.CreditBalanceComposer), client.Sent);
     }
 
+    [Fact]
+    public async Task HabbiconPrizeIsOwnedInTheClaimTransaction()
+    {
+        var database = TrackDatabase(12, "32", 1);
+        var habbicons = new HabbiconGrants();
+        var (client, _, manager) = await Claimer(database, new BadgeDefinitions(), habbicons: habbicons);
+
+        await manager.Claim(client, "introduction", "track_champ");
+
+        Assert.Equal(RewardTrackResults.Ok, client.ClaimResult());
+        Assert.Equal(new[] { 32 }, habbicons.Granted);
+        var write = Assert.Single(database.Committed);
+        Assert.Contains(write, sql => sql.Contains("INTO users_reward_track_prizes"));
+        Assert.Contains(write, sql => sql.Contains("INTO users_habbicons"));
+        Assert.Contains(ServerHeader(client, ServerPacketHeader.UserHabbiconStatusChangedComposer), client.Sent);
+    }
+
+    [Fact]
+    public async Task RejectedHabbiconStoresNoClaim()
+    {
+        var database = TrackDatabase(12, "32", 1);
+        var (client, _, manager) = await Claimer(database, new BadgeDefinitions(), habbicons: new HabbiconGrants { Reject = true });
+
+        await manager.Claim(client, "introduction", "track_champ");
+
+        Assert.Equal(RewardTrackResults.Unknown, client.ClaimResult());
+        Assert.Empty(database.Committed);
+        Assert.DoesNotContain(ServerHeader(client, ServerPacketHeader.UserHabbiconStatusChangedComposer), client.Sent);
+    }
+
     private const uint NewItemId = 9001;
 
     private static ItemDefinition Sofa() => new() { Id = 77, SpriteId = 1534, ItemName = "club_sofa", Type = ItemType.Floor, ProductType = "s" };
@@ -230,17 +263,17 @@ public class RewardTrackLiveTests
 
     private static Task<Revision> Profile() => Task.FromResult(new RevisionsCache().InternalRevision);
 
-    private static async Task<RewardTrackManager> Manager(FakeDatabase database, IBadgeManager badges, IItemDataManager? items = null)
+    private static async Task<RewardTrackManager> Manager(FakeDatabase database, IBadgeManager badges, IItemDataManager? items = null, IHabbiconService? habbicons = null)
     {
         var manager = new RewardTrackManager(NullLogger<RewardTrackManager>.Instance, database, badges, new FixedTimeProvider(FixedTimeProvider.Epoch),
-            items: items, itemFactory: new ItemFactory(database));
+            items: items, itemFactory: new ItemFactory(database), habbicons: habbicons);
         await manager.Start();
 
         return manager;
     }
 
     private static async Task<(TestClient Client, Habbo Habbo, RewardTrackManager Manager)> Claimer(FakeDatabase database, IBadgeManager badges,
-        IItemDataManager? items = null)
+        IItemDataManager? items = null, IHabbiconService? habbicons = null)
     {
         var client = new TestClient(await Profile());
         var habbo = new Habbo
@@ -252,7 +285,7 @@ public class RewardTrackLiveTests
         };
         client.SetHabbo(habbo);
 
-        return (client, habbo, await Manager(database, badges, items));
+        return (client, habbo, await Manager(database, badges, items, habbicons));
     }
 
     /// <summary>The introduction track's champ prize, with the player 10 points past it.</summary>
@@ -293,6 +326,32 @@ public class RewardTrackLiveTests
         public Dictionary<int, uint> Gifts { get; } = new();
         public void Init() { }
         public ItemDefinition? GetItemByName(string name) => Items.Values.FirstOrDefault(definition => definition.ItemName == name);
+    }
+
+    /// <summary>Writes the grant on the claim's own transaction, as the real service does.</summary>
+    private sealed class HabbiconGrants : IHabbiconService
+    {
+        public bool Reject { get; init; }
+        public List<int> Granted { get; } = new();
+
+        public HabbiconChange Grant(IDbConnection connection, IDbTransaction transaction, int userId, int id)
+        {
+            if (Reject) {
+                throw new HabbiconRejected(HabbiconActionError.InvalidRequest);
+            }
+
+            connection.Execute("INSERT INTO users_habbicons (user_id, habbicon_id, state, unseen) VALUES (@userId, @id, 2, TRUE)", new { userId, id }, transaction);
+            Granted.Add(id);
+            var item = new HabbiconItem(id, "trackicon", 1, HabbiconState.Owned, 0, 0, 0);
+
+            return new(new HabbiconSnapshot([], new Dictionary<int, HabbiconItem> { [id] = item }, [], [id]), [item], null);
+        }
+
+        public HabbiconSnapshot Load(int userId) => throw new NotSupportedException();
+        public HabbiconChange Change(Habbo habbo, HabbiconAction action, int id) => throw new NotSupportedException();
+        public HabbiconChange BuyCatalog(Habbo habbo, int id, int credits, int points, int pointsType) => throw new NotSupportedException();
+        public bool Use(int userId, int id) => throw new NotSupportedException();
+        public void ClearUnseen(int userId, IReadOnlyList<int> ids) => throw new NotSupportedException();
     }
 
     private sealed class BadgeDefinitions : IBadgeManager

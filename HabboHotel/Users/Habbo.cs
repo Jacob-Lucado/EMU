@@ -356,6 +356,8 @@ public class Habbo
                 var interval = Convert.ToInt32(settings.TryGetValue("user.currency_scheduler.tick"));
 
                 if (creditUpdate < 0 || ducketUpdate < 0) {
+                    CreditsUpdateTick = interval;
+
                     return;
                 }
 
@@ -379,7 +381,9 @@ public class Habbo
                 Client?.Send(new HabboActivityPointNotificationComposer(Duckets, ducketUpdate));
             }
         }
-        catch { }
+        catch (Exception exception) {
+            Plus.Core.ExceptionLogger.LogException(exception);
+        }
     }
 
 

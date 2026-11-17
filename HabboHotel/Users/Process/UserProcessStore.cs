@@ -17,6 +17,7 @@ public sealed class UserProcessStore(IDatabase database) : IUserProcessStore
             return false;
         }
 
+        // Lock order: the user row first, then the currency rows, as in the logout save.
         using var connection = database.Connection();
         connection.Open();
         using var transaction = connection.BeginTransaction();

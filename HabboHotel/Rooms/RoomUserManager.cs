@@ -954,20 +954,24 @@ public partial class RoomUserManager
         return user.GetClient()?.GetHabbo()?.CurrentRoom == _room;
     }
 
+    private const short IdleKickCloseReason = 2;
+
     internal bool ValidateMovementActor(RoomUser actor)
     {
         if (_disposed) {
             return false;
         }
 
-        if (IsValid(actor) && !actor.NeedsAutokick) {
+        var valid = IsValid(actor);
+
+        if (valid && !actor.NeedsAutokick) {
             return true;
         }
 
         var client = actor.GetClient();
 
         if (client?.GetHabbo()?.CurrentRoom == _room) {
-            RemoveUserFromRoom(client, true);
+            RemoveUserFromRoom(client, true, closeReason: valid ? IdleKickCloseReason : null);
         }
         else {
             RemoveAbandonedRoomUser(actor);

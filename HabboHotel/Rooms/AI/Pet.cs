@@ -169,7 +169,7 @@ public class Pet
             if (Room != null) {
                 Room.SendPacket(new AddExperiencePointsComposer(PetId, VirtualId, amount));
 
-                if (Experience >= ExperienceGoal) {
+                if (Experience >= ExperienceGoal && !Room.Behavior.MuteAllPets) {
                     Room.SendChat(receiver => new ChatComposer(VirtualId, $"*leveled up to level {Level} *", 0, 0, receiver));
                 }
             }

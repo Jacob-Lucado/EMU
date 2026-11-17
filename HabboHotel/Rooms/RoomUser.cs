@@ -234,19 +234,9 @@ public class RoomUser
                 return true;
             }
 
-            if (habbo.Access.Can(PermissionKeys.ModerationTool) || GetRoom().OwnerId == HabboId) {
-                return false;
-            }
+            var room = GetRoom();
 
-            if (GetRoom().Id == 1649919) {
-                return false;
-            }
-
-            if (IdleTime >= 7200) {
-                return true;
-            }
-
-            return false;
+            return !IdleKickExemption.Applies(room, habbo) && room.Behavior.IdleAutokickTicks is { } ticks && IdleTime >= ticks;
         }
     }
 
@@ -475,7 +465,7 @@ public class RoomUser
     {
         var room = GetRoom();
 
-        if (room == null || !IsBot && Stress == null) {
+        if (room == null || !IsBot && Stress == null || IsPet && room.Behavior.MuteAllPets) {
             return;
         }
 

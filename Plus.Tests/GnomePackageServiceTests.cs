@@ -70,15 +70,16 @@ public sealed class GnomePackageServiceTests
     }
 
     [Theory]
-    [InlineData("")]
-    [InlineData("bad name!")]
-    [InlineData("abcdefghijklmnopq")]
-    public void InvalidNameRepliesWithoutConsumingPackage(string name)
+    [InlineData("", 2, "")]
+    [InlineData("bad name!", 3, " !")]
+    [InlineData("a#b#", 3, "#")]
+    [InlineData("abcdefghijklmnopq", 1, "16")]
+    public void InvalidNameRepliesWithHabbosReasonWithoutConsumingPackage(string name, int status, string info)
     {
         var world = World();
         world.Service.Open(world.Room, world.Client, 7, name);
         Assert.Empty(world.Store.Requests);
-        Assert.Single(world.Packets);
+        Assert.Equal(Bytes(7, status, info), Assert.Single(world.Packets).Payload);
         Assert.Same(world.Item, world.Room.GetRoomItemHandler().GetItem(7));
     }
 
@@ -137,10 +138,10 @@ public sealed class GnomePackageServiceTests
         var (client, packets) = HabbiconTestSupport.Client(new Habbo { Id = 1 });
 
         client.Send(new CheckGnomeNameComposer(7, "Smokey", PetPackageNameError.None));
-        client.Send(new CheckGnomeNameComposer(7, "bad name!", PetPackageNameError.InvalidName));
+        client.Send(new CheckGnomeNameComposer(7, "#", PetPackageNameError.InvalidCharacters));
 
         Assert.Equal(Bytes(7, 0, ""), packets[0].Payload);
-        Assert.Equal(Bytes(7, 1, "bad name!"), packets[1].Payload);
+        Assert.Equal(Bytes(7, 3, "#"), packets[1].Payload);
     }
 
     [Theory]
@@ -184,7 +185,7 @@ public sealed class GnomePackageServiceTests
         world.Service.Open(world.Room, world.Client, 7, "bad name!");
 
         Assert.Empty(world.Store.PetRequests);
-        Assert.Equal(Bytes(7, 1, "bad name!"), Assert.Single(world.Packets).Payload);
+        Assert.Equal(Bytes(7, 3, " !"), Assert.Single(world.Packets).Payload);
         Assert.Same(world.Item, world.Room.GetRoomItemHandler().GetItem(7));
     }
 

@@ -1,83 +1,37 @@
 using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Rooms.AI;
 
 namespace Plus.Communication.Packets.Outgoing.Rooms.AI.Pets;
 
 public class PetTrainingPanelComposer : IServerPacket
 {
     private readonly int _petId;
-    private readonly int _level;
+    private readonly IReadOnlyList<int> _commands;
+    private readonly IReadOnlyList<int> _learned;
 
     public uint MessageId => ServerPacketHeader.PetTrainingPanelComposer;
 
-    public PetTrainingPanelComposer(int petId, int level)
+    public PetTrainingPanelComposer(Pet pet)
     {
-        _petId = petId;
-        _level = level;
+        var commands = PetCommandSet.For(pet.Type);
+        _petId = pet.PetId;
+        _commands = commands.Commands;
+        _learned = commands.Learned(pet.Level);
     }
 
     public void Compose(IOutgoingPacket packet)
     {
-        packet.WriteInteger(_petId); //Pet Id for sure.
+        packet.WriteInteger(_petId);
+        packet.WriteInteger(_commands.Count);
 
-        //Commands available to be done.
-        packet.WriteInteger(8); //Count
-        {
-            packet.WriteInteger(46); // Pet command ID.
-            packet.WriteInteger(0); //Command Id
-            packet.WriteInteger(1);
-            packet.WriteInteger(2);
-            packet.WriteInteger(3);
-            packet.WriteInteger(4);
-            packet.WriteInteger(5);
-            packet.WriteInteger(6);
+        foreach (var command in _commands) {
+            packet.WriteInteger(command);
         }
 
-        //Commands that can be used NOW. (Level ups give you new commands etc).
-        packet.WriteInteger(GetCount(_level)); //Count
-        {
-            packet.WriteInteger(46); // Pet command ID.
-            packet.WriteInteger(0); //Command Id
-            packet.WriteInteger(1);
-            packet.WriteInteger(2);
-            packet.WriteInteger(3);
-            packet.WriteInteger(4);
-            packet.WriteInteger(5);
-            packet.WriteInteger(6);
-        }
-    }
+        packet.WriteInteger(_learned.Count);
 
-    public int GetCount(int level)
-    {
-        switch (level) {
-            case 1:
-            case 2:
-                return 1;
-            case 3:
-            case 4:
-                return 2;
-            case 5:
-            case 6:
-                return 3;
-            case 7:
-            case 8:
-                return 4;
-            case 9:
-            case 10:
-                return 5;
-            case 11:
-            case 12:
-                return 6;
-            case 13:
-            case 14:
-            case 15:
-            case 16:
-            case 17:
-            case 18:
-            case 19:
-            case 20:
-                return 8;
-            default:
-                return 1;
+        foreach (var command in _learned) {
+            packet.WriteInteger(command);
         }
     }
 }

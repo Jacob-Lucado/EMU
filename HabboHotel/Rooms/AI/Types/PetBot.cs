@@ -15,8 +15,8 @@ public class PetBot : BotAi
     private int _actionTimer;
     private static readonly int EnergyRestTicks = (int)(TimeSpan.FromSeconds(40) / RoomCycle.Interval);
     private int _energyTimer;
-    private uint _mealId;
-    private Point _mealSpot;
+    private uint _visitId;
+    private Point _visitSpot;
     private int _speechTimer;
     private readonly IPetLocale _locale;
     private readonly IPetCommandManager _commands;
@@ -129,7 +129,7 @@ public class PetBot : BotAi
             return;
         }
 
-        if (_mealId != 0 && Eat(botRoom, pet, petData)) {
+        if (_visitId != 0 && Visit(botRoom, pet, petData)) {
             return;
         }
 
@@ -164,7 +164,10 @@ public class PetBot : BotAi
                     RemovePetStatus();
 
                     if (petData.Energy < petData.MaxEnergy && FindFood(botRoom, botUser, petData) is { } food) {
-                        GoEat(botUser, food);
+                        GoTo(botRoom, botUser, food);
+                    }
+                    else if (Random.Shared.Next(DrinkChance) == 0 && FindWater(botRoom, botUser) is { } water) {
+                        GoTo(botRoom, botUser, water);
                     }
                     else if (botUser.CanWalk && botRoom.GetGameMap().TryGetRandomWalkableSquare(out var nextCoord)) {
                         botUser.MoveTo(nextCoord.X, nextCoord.Y);
@@ -231,9 +234,10 @@ public class PetBot : BotAi
         }
 
         var food = commandId == PetCommandSet.Eat ? FindFood(botRoom, pet, petData) : null;
+        var water = commandId == PetCommandSet.Drink ? FindWater(botRoom, pet) : null;
 
         // Without a bowl or food in the room a pet refuses to drink or eat.
-        if (commandId == PetCommandSet.Drink || commandId == PetCommandSet.Eat && food == null || !petData.ObeysCommand(commandId)) {
+        if (commandId == PetCommandSet.Drink && water == null || commandId == PetCommandSet.Eat && food == null || !petData.ObeysCommand(commandId)) {
             petData.SpendEnergy(2);
             PetVocals.Say(pet, PetVocal.Refusal);
 
@@ -241,13 +245,17 @@ public class PetBot : BotAi
         }
 
         if (food != null) {
-            GoEat(pet, food);
+            GoTo(botRoom, pet, food);
             petData.Addexperience(0);
 
             return;
         }
 
         Obey(botRoom, pet, user, commandId);
+
+        if (water != null) {
+            GoTo(botRoom, pet, water);
+        }
 
         if (commandId != PetCommandSet.Free) {
             petData.Addexperience(5);
@@ -259,21 +267,41 @@ public class PetBot : BotAi
         .Where(item => PetFood.Of(item.Definition)?.Feeds(petData.Type) == true)
         .MinBy(item => Math.Abs(item.GetX - pet.X) + Math.Abs(item.GetY - pet.Y));
 
-    private void GoEat(RoomUser pet, Item food)
+    private static Item? FindWater(Room room, RoomUser pet) => room.GetRoomItemHandler().GetFloor
+        .Where(item => PetWater.Is(item.Definition))
+        .MinBy(item => Math.Abs(item.GetX - pet.X) + Math.Abs(item.GetY - pet.Y));
+
+    // A pet stands on food and bowls; it stands next to furni it cannot walk on, such as the trough.
+    private void GoTo(Room room, RoomUser pet, Item item)
     {
-        _mealId = food.Id;
-        _mealSpot = food.Definition.Walkable ? food.Coordinate : food.SquareInFront;
-        pet.MoveTo(_mealSpot);
+        var map = room.GetGameMap();
+        var spot = item.Definition.Walkable
+            ? item.Coordinate
+            : Around(item.Coordinate).Where(tile => map.CanWalk(tile.X, tile.Y, false))
+                .OrderBy(tile => Math.Abs(tile.X - pet.X) + Math.Abs(tile.Y - pet.Y)).FirstOrDefault(item.SquareInFront);
+        _visitId = item.Id;
+        _visitSpot = spot;
+        pet.MoveTo(spot);
     }
 
-    // On the food the pet takes one bite, and more while it is below its maximum energy.
-    // Returns false when there is nothing to eat any more.
-    private bool Eat(Room room, RoomUser pet, Pet petData)
+    private static IEnumerable<Point> Around(Point tile)
     {
-        var food = room.GetRoomItemHandler().GetItem(_mealId);
+        for (var dx = -1; dx <= 1; dx++) {
+            for (var dy = -1; dy <= 1; dy++) {
+                if (dx != 0 || dy != 0) {
+                    yield return new(tile.X + dx, tile.Y + dy);
+                }
+            }
+        }
+    }
 
-        if (food == null || PetFood.Of(food.Definition) is not { } values || !values.Feeds(petData.Type)) {
-            _mealId = 0;
+    // Returns false when the pet is not at the furni it went to, so it goes on with its day.
+    private bool Visit(Room room, RoomUser pet, Pet petData)
+    {
+        var item = room.GetRoomItemHandler().GetItem(_visitId);
+
+        if (item == null) {
+            _visitId = 0;
 
             return false;
         }
@@ -282,12 +310,35 @@ public class PetBot : BotAi
             return true;
         }
 
-        _mealId = 0;
+        _visitId = 0;
 
-        if (pet.Coordinate != _mealSpot) {
+        if (pet.Coordinate != _visitSpot) {
             return false;
         }
 
+        if (PetWater.Is(item.Definition)) {
+            Drink(item, pet);
+
+            return true;
+        }
+
+        return PetFood.Of(item.Definition) is { } values && values.Feeds(petData.Type) && Eat(room, item, values, pet, petData);
+    }
+
+    private void Drink(Item water, RoomUser pet)
+    {
+        RemovePetStatus();
+        pet.Statusses["eat"] = TextHandling.GetString(pet.Z);
+        pet.UpdateNeeded = true;
+        _actionTimer = 10;
+        PetVocals.Say(pet, PetVocal.Drinking);
+        PetWater.Drink(water, DateTimeOffset.UtcNow);
+        water.UpdateState(true, true);
+    }
+
+    // On the food the pet takes one bite, and more while it is below its maximum energy.
+    private bool Eat(Room room, Item food, PetFood values, RoomUser pet, Pet petData)
+    {
         var bites = int.TryParse(food.LegacyDataString, out var taken) ? Math.Clamp(taken, 0, PetFood.Bites - 1) : 0;
         var eaten = 0;
 
@@ -343,6 +394,9 @@ public class PetBot : BotAi
                 break;
         }
     }
+
+    // About one action in six a pet goes to drink when there is water in the room.
+    private const int DrinkChance = 6;
 
     private static readonly Dictionary<int, string> Postures = new()
     {

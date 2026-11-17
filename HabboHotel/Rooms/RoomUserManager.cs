@@ -1359,10 +1359,6 @@ public partial class RoomUserManager
             }
 
             if (cyclegameitems) {
-                if (_room.GotSoccer()) {
-                    _room.GetSoccer().OnUserWalk(user);
-                }
-
                 if (_room.GotBanzai()) {
                     _room.GetBanzai().OnUserWalk(user);
                 }

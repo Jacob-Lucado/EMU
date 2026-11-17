@@ -411,41 +411,12 @@ public class Room
     public bool IsGroupAdmin(GameClient? session) =>
         Type == "private" && Group != null && session?.GetHabbo() is { } habbo && Group.IsAdmin(habbo.Id);
 
-    internal void OnGoalScored(RoomUser kicker) => throw new NotImplementedException();
-
-    public void OnUserShoot(RoomUser user, Item ball)
+    internal void OnGoalScored(RoomUser kicker)
     {
-        Func<Item, bool>? predicate = null;
-        string? key = null;
-
-        foreach (var item in GetRoomItemHandler().GetFurniObjects(ball.GetX, ball.GetY).ToList()) {
-            if (item.Definition.ItemName.StartsWith("fball_goal_")) {
-                key = item.Definition.ItemName.Split(new[] { '_' })[2];
-                user.UnIdle();
-                user.DanceId = 0;
-                _achievements.ProgressAchievement(user.GetClient(), "ACH_FootballGoalScored", 1);
-                SendPacket(new ActionComposer(user.VirtualId, 1));
-            }
-        }
-
-        if (key != null) {
-            if (predicate == null) {
-                predicate = p => p.Definition.ItemName == $"fball_score_{key}";
-            }
-
-            foreach (var item2 in GetRoomItemHandler().GetFloor.Where(predicate).ToList()) {
-                if (item2.Definition.ItemName == $"fball_score_{key}") {
-                    if (!string.IsNullOrEmpty(item2.LegacyDataString)) {
-                        item2.LegacyDataString = (Convert.ToInt32(item2.LegacyDataString) + 1).ToString();
-                    }
-                    else {
-                        item2.LegacyDataString = "1";
-                    }
-
-                    item2.UpdateState();
-                }
-            }
-        }
+        kicker.UnIdle();
+        kicker.DanceId = 0;
+        _achievements.ProgressAchievement(kicker.GetClient(), "ACH_FootballGoalScored", 1);
+        SendPacket(new ActionComposer(kicker.VirtualId, 1));
     }
 
     internal void ProcessWiredOnly()

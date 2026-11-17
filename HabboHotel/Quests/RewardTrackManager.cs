@@ -353,6 +353,12 @@ public sealed class RewardTrackManager : IRewardTrackManager, IStartable
                 return null;
             }
 
+            var balance = currency.Type == ProductItemType.Credits ? habbo.Credits : habbo.Currencies[currency.Type];
+
+            if ((long)balance + currency.Amount > int.MaxValue) {
+                return null;
+            }
+
             if (InsertClaim(habbo, trackId, prizeId, grant, claimedAt) is not { } delivered) {
                 return null;
             }

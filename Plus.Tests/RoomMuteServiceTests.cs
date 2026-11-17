@@ -86,6 +86,28 @@ public sealed class RoomMuteServiceTests
     }
 
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    public void PlainGroupMemberCannotMuteInTheGroupRoom(int adminsOnly)
+    {
+        var clock = new CountingClock(Now, TimeZoneInfo.Utc);
+        var world = new World(clock);
+        var (achievements, achievementRecorder) = AchievementRecorder.Create();
+        world.Room.OwnerId = 99;
+        world.Room.OwnerName = "somebody-else";
+        var group = new Plus.HabboHotel.Groups.Group(20, "group", "", "", 1, 99, null, 0, 1, 1, adminsOnly, false,
+            new Plus.HabboHotel.Groups.GroupMembershipSnapshot([], [], []));
+        group.PublishJoin(world.Owner.Id);
+        world.Room.Group = group;
+
+        new RoomMuteService(achievements, clock).Mute(world.OwnerClient, world.Target.Id, 2);
+
+        Assert.Empty(world.Room.MutedUsers);
+        Assert.Equal(0, achievementRecorder.Calls);
+        Assert.Empty(world.TargetPackets);
+    }
+
     private sealed class World
     {
         public Room Room { get; }

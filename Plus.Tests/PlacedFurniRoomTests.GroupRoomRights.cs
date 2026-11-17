@@ -8,6 +8,7 @@ using Xunit;
 namespace Plus.Tests;
 
 // The owner of a group home room can give rights to any avatar below controller level 1, so a group room keeps individual rights holders at level 1.
+// A member who may decorate only through the group setting is level 2, the guild member level.
 public partial class PlacedFurniRoomTests
 {
     [Theory]
@@ -26,8 +27,8 @@ public partial class PlacedFurniRoomTests
         Assert.False(_room.CheckRights(member, true, true));
 
         if (allowed) {
-            Assert.Equal("/flatctrl 1//", Assert.Single(RoomUserStatusSnapshot.Capture([actor])).Status);
-            Assert.Equal(1, ControllerLevelSentTo(member));
+            Assert.Equal("/flatctrl 2//", Assert.Single(RoomUserStatusSnapshot.Capture([actor])).Status);
+            Assert.Equal(2, ControllerLevelSentTo(member));
         }
         else {
             Assert.False(actor.HasStatus("flatctrl"));
@@ -45,8 +46,8 @@ public partial class PlacedFurniRoomTests
         group.TakeAdmin(8);
         member.Packets.Clear();
         _room.GetRoomUserManager().RefreshControllerRights(member);
-        Assert.Equal(1, ControllerLevelSentTo(member));
-        Assert.Equal("1", actor.Statusses["flatctrl"]);
+        Assert.Equal(2, ControllerLevelSentTo(member));
+        Assert.Equal("2", actor.Statusses["flatctrl"]);
         group.DeleteMember(8);
         member.Packets.Clear();
         _room.GetRoomUserManager().RefreshControllerRights(member);
@@ -60,6 +61,20 @@ public partial class PlacedFurniRoomTests
         Assert.Equal(1, ControllerLevelSentTo(member));
         Assert.True(_room.CheckRights(member, false, true));
         Assert.False(_room.CheckRights(member, true, true));
+    }
+
+    [Fact]
+    public void GroupMemberWithIndividualRightsKeepsControllerLevelOne()
+    {
+        var group = GroupWithAdmins();
+        group.PublishJoin(8);
+        _room.UsersWithRights = [8];
+        _room.Group = group;
+        var member = new TestClient();
+        var actor = Admit(member, 8, "member");
+
+        Assert.Equal("/flatctrl 1//", Assert.Single(RoomUserStatusSnapshot.Capture([actor])).Status);
+        Assert.Equal(1, ControllerLevelSentTo(member));
     }
 
     [Fact]

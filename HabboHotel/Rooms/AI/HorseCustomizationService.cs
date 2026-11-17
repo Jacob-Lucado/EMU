@@ -104,16 +104,34 @@ public sealed class HorseCustomizationService(
 
     public void ApplyEffect(Room room, GameClient session, uint itemId, int petId)
     {
-        var item = room.GetRoomItemHandler().GetItem(itemId);
+        var habbo = session.GetHabbo();
+        var placed = room.GetRoomItemHandler().GetItem(itemId);
+        var inventory = placed == null ? habbo.Inventory?.Furniture : null;
+        var stored = inventory?.GetItem(itemId);
+        var definition = placed?.Definition ?? stored?.Definition;
 
-        if (item == null || item.IsTemporary || item.UserId != session.GetHabbo().Id) {
+        if (definition == null || placed is { } item && (item.IsTemporary || item.UserId != habbo.Id)) {
             return;
         }
 
-        if (!room.GetRoomUserManager().TryGetPet(petId, out var petUser) || petUser.PetData?.OwnerId != session.GetHabbo().Id) {
+        if (!room.GetRoomUserManager().TryGetPet(petId, out var petUser) || petUser.PetData?.OwnerId != habbo.Id) {
             return;
         }
 
+        if (stored != null && !stored.TryReserve()) {
+            return;
+        }
+
+        try {
+            Customize(room, session, petUser, definition, itemId, placed != null, inventory);
+        }
+        finally {
+            stored?.ReleaseReservation();
+        }
+    }
+
+    private void Customize(Room room, GameClient session, RoomUser petUser, ItemDefinition definition, uint itemId, bool placed, FurnitureInventoryComponent? inventory)
+    {
         var pet = petUser.PetData;
 
         if (pet.Type != HorseProducts.HorseType || !int.TryParse(pet.Race, NumberStyles.Integer, CultureInfo.InvariantCulture, out var palette)) {
@@ -122,20 +140,27 @@ public sealed class HorseCustomizationService(
 
         var current = new HorseStyle(palette, pet.PetHair, pet.HairDye, pet.Saddle);
 
-        if (HorseProducts.Apply(current, item.Definition.InteractionType, item.Definition.CustomParams) is not { } style) {
+        if (HorseProducts.Apply(current, definition.InteractionType, definition.CustomParams) is not { } style) {
             return;
         }
 
         var oldSaddle = style.Saddle != current.Saddle ? HorseProducts.SaddleProduct(itemDataManager.Items.Values, current.Saddle) : null;
-        store.ConsumeItem(pet.PetId, style, item.Id, room.Id, session.GetHabbo().Id);
+        store.ConsumeItem(pet.PetId, style, itemId, placed ? room.Id : 0, session.GetHabbo().Id);
         pet.Race = style.Palette.ToString(CultureInfo.InvariantCulture);
         pet.PetHair = style.Hair;
         pet.HairDye = style.HairPalette;
         pet.Saddle = style.Saddle;
-        room.GetRoomItemHandler().RemoveFurniture(session, item.Id);
 
-        if (oldSaddle != null && session.GetHabbo().Inventory is { } inventory) {
-            GiveBack(session, inventory.Furniture, oldSaddle);
+        if (placed) {
+            room.GetRoomItemHandler().RemoveFurniture(session, itemId);
+        }
+        else if (inventory != null) {
+            inventory.RemoveItem(itemId);
+            session.Send(new FurniListRemoveComposer(itemId));
+        }
+
+        if (oldSaddle != null && session.GetHabbo().Inventory is { } owned) {
+            GiveBack(session, owned.Furniture, oldSaddle);
         }
 
         room.SendUser(petUser);

@@ -25,7 +25,9 @@ public sealed class RoomSettingsDatabaseTests
                     category INT, state ENUM('open','locked','password','invisible'), tags VARCHAR(100), users_max INT,
                     allow_pets BOOL, allow_pets_eat BOOL, room_blocking_disabled BOOL, allow_hidewall BOOL,
                     floorthick INT, wallthick INT, mute_settings BOOL, kick_settings ENUM('0','1','2'), ban_settings BOOL,
-                    chat_mode INT, chat_size INT, chat_speed INT, chat_extra_flood INT, chat_hearing_distance INT, trade_settings INT);
+                    chat_mode INT, chat_size INT, chat_speed INT, chat_extra_flood INT, chat_hearing_distance INT, trade_settings INT,
+                    leave_on_door_tile BOOL, idle_sleep_enabled BOOL, idle_sleep_timeout_seconds INT, idle_autokick_enabled BOOL,
+                    idle_autokick_timeout_seconds INT, mute_all_pets BOOL);
                 INSERT INTO rooms (id,owner,caption,state) VALUES (42,'7','Original','open');
                 CREATE TABLE items (id INT PRIMARY KEY, room_id INT, extra_data TEXT);
                 INSERT INTO items VALUES (92,42,'original');
@@ -36,8 +38,10 @@ public sealed class RoomSettingsDatabaseTests
             var database = new ProbeDatabase(options.ConnectionString);
             var settings = new RoomSettingsStore(database);
             var request = new RoomSettingsRequest(42, "Updated", "Description", 1, "", 25, 36, ["one"],
-                2, true, false, true, false, -1, 1, 1, 2, 0, 2);
+                2, true, false, true, false, -1, 1, 1, 2, 0, 2, new(false, true, 45, false, 120, true));
             settings.Save(request, 7, RoomAccess.Doorbell);
+            Assert.Equal((0, 1, 45, 0, 120, 1), connection.QuerySingle<(int, int, int, int, int, int)>("SELECT leave_on_door_tile, idle_sleep_enabled, " +
+                "idle_sleep_timeout_seconds, idle_autokick_enabled, idle_autokick_timeout_seconds, mute_all_pets FROM rooms"));
             Assert.Equal("2", connection.QuerySingle<string>("SELECT kick_settings FROM rooms"));
             Assert.Equal("locked", connection.QuerySingle<string>("SELECT state FROM rooms"));
             Assert.Equal(1, connection.QuerySingle<int>("SELECT allow_pets FROM rooms"));

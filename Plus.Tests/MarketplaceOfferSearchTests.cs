@@ -53,6 +53,22 @@ public class MarketplaceOfferSearchTests
         Assert.Equal(Now.AddSeconds(-172800), query.Parameters["threshold"]);
     }
 
+    [Theory]
+    [InlineData(0, 4)]
+    [InlineData(1, 0)]
+    [InlineData(2, 4)]
+    public async Task OfferTypeKeepsOnlyFurniOffersBecauseNoOfferIsACollectible(int offerType, int expectedOffers)
+    {
+        var (database, manager) = Fixture(Rows());
+        var (client, sent) = HabbiconTestSupport.Client(new Habbo { Id = 1, Username = "u" });
+
+        await new GetOffersEvent(new MarketplaceOfferSearchService(database, manager, new FixedClock(Now))).Parse(client, Packet(-1, -1, "", 0, true, offerType));
+
+        var payload = sent.Single().Payload;
+        Assert.Equal(expectedOffers, BinaryPrimitives.ReadInt32BigEndian(payload));
+        Assert.Equal(expectedOffers, BinaryPrimitives.ReadInt32BigEndian(payload.AsSpan(payload.Length - 4)));
+    }
+
     [Fact]
     public async Task SnapshotDoesNotFollowLaterMarketStateMutation()
     {
@@ -140,6 +156,9 @@ public class MarketplaceOfferSearchTests
                 BinaryPrimitives.WriteUInt16BigEndian(length, (ushort)raw.Length);
                 stream.Write(length);
                 stream.Write(raw);
+            }
+            else if (value is bool flag) {
+                stream.WriteByte(flag ? (byte)1 : (byte)0);
             }
         }
 

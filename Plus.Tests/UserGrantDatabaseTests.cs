@@ -432,7 +432,7 @@ public sealed class UserGrantDatabaseTests : IDisposable
 
     public void Dispose() => Clean();
 
-    private UserGrantService Service(IUserGrantStore? store = null) => new(store ?? _store, _gate, _clients, _items, _access);
+    private UserGrantService Service(IUserGrantStore? store = null) => new(store ?? _store, _gate, _clients, _items, _access, TestRoomSettings.Empty);
 
     private UserMaintenanceService Maintenance() => new(new UserMaintenanceStore(_database), _gate, _clients);
 

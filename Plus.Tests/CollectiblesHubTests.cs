@@ -60,7 +60,7 @@ public sealed class CollectiblesHubTests
     public void HeadersMatchAir()
     {
         Assert.Equal(
-            new uint[] { 3913, 2368, 60, 1653, 3288, 3277, 2688, 1028, 2719, 3957, 1352, 501 },
+            new uint[] { 1534, 1496, 1479, 2572, 1730, 3226, 784, 3993, 3301, 672, 3707, 133 },
             new[]
             {
                 ClientPacketHeader.GetCollectibleWalletAddressesEvent, ClientPacketHeader.GetCollectorScoreEvent, ClientPacketHeader.GetNftCollectionsEvent,
@@ -69,7 +69,7 @@ public sealed class CollectiblesHubTests
                 ClientPacketHeader.MintCollectibleEvent, ClientPacketHeader.GetNftClaimsEvent, ClientPacketHeader.ClaimNftRewardsEvent,
             });
         Assert.Equal(
-            new uint[] { 3185, 2659, 667, 154, 2730, 3151, 2908, 131, 2735, 595, 2824, 1957, 1071 },
+            new uint[] { 1645, 2899, 70, 1901, 2380, 177, 3694, 2640, 57, 2964, 2802, 2361, 318 },
             new[]
             {
                 ServerPacketHeader.CollectibleWalletAddressesComposer, ServerPacketHeader.CollectorScoreComposer, ServerPacketHeader.NftCollectionsComposer,
@@ -92,10 +92,10 @@ public sealed class CollectiblesHubTests
         var manager = new PacketManager(handlers, NullLogger<PacketManager>.Instance);
 
         Assert.Equal(12, handlers.Count);
-        Assert.All(new uint[] { 3913, 2368, 60, 1653, 3288, 3277, 2688, 1028, 2719, 3957, 1352, 501 },
+        Assert.All(new uint[] { 1534, 1496, 1479, 2572, 1730, 3226, 784, 3993, 3301, 672, 3707, 133 },
             header => Assert.True(manager.IsRegistered(header), $"{header} has no handler"));
         // AIR's mint token, transfer fee and transfer requests.
-        Assert.All(new uint[] { 79, 307, 668, 3654, 2626 }, header => Assert.False(manager.IsRegistered(header), $"{header} still has a handler"));
+        Assert.All(new uint[] { 1252, 3766, 2688, 94, 2385 }, header => Assert.False(manager.IsRegistered(header), $"{header} still has a handler"));
     }
 
     [RoomComponentDatabaseFact]

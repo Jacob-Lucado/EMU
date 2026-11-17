@@ -4,8 +4,10 @@ using Plus.Communication.Packets.Outgoing.Inventory.Badges;
 using Plus.Communication.Packets.Outgoing.Inventory.Furni;
 using Plus.Communication.Packets.Outgoing.Moderation;
 using Plus.Communication.Packets.Outgoing.Navigator;
+using Plus.Core.Settings;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Items;
+using Plus.HabboHotel.Navigator;
 using Plus.HabboHotel.Permissions;
 using Plus.HabboHotel.Users.Authentication;
 using Plus.HabboHotel.Users.Badges;
@@ -29,7 +31,7 @@ public interface IUserGrantService
 }
 
 public sealed class UserGrantService(IUserGrantStore store, IAccountSessionGate sessionGate, IGameClientManager clients, IItemDataManager itemData,
-    IAccessControl access) : IUserGrantService
+    IAccessControl access, ISettingsManager settingsManager) : IUserGrantService
 {
     public async Task<GrantOutcome> GrantBundle(int userId, string? key, string? payloadBase64)
     {
@@ -149,7 +151,7 @@ public sealed class UserGrantService(IUserGrantStore store, IAccountSessionGate 
                     habbo.FriendbarState = FriendBarStateUtility.GetEnum(friendBarState);
 
                     if (settings.HomeRoom != null) {
-                        client.Send(new NavigatorSettingsComposer(homeRoom));
+                        client.Send(new NavigatorSettingsComposer(GlobalHomeRoom.For(homeRoom, settingsManager)));
                     }
 
                     return GrantOutcome.Success(new { userId, homeRoom, friendBarState, online = true });

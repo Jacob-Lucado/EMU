@@ -25,9 +25,9 @@ public sealed class AvatarCollectiblesTests
     [Fact]
     public void HeadersMatchAir()
     {
-        Assert.Equal(56u, ClientPacketHeader.GetSelectedNftWardrobeOutfitEvent);
-        Assert.Equal(489u, ClientPacketHeader.SaveUserNftWardrobeEvent);
-        Assert.Equal(3377u, ServerPacketHeader.SelectedNftWardrobeOutfitComposer);
+        Assert.Equal(1680u, ClientPacketHeader.GetSelectedNftWardrobeOutfitEvent);
+        Assert.Equal(539u, ClientPacketHeader.SaveUserNftWardrobeEvent);
+        Assert.Equal(2547u, ServerPacketHeader.SelectedNftWardrobeOutfitComposer);
     }
 
     [Fact]

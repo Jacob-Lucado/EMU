@@ -4,9 +4,10 @@ import { resolve, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 import stripJsonComments from 'strip-json-comments';
+import { adImageAddress, createAdImages } from './ad-images.mjs';
 import { createAssetCache, freshness } from './asset-cache.mjs';
 import { createFurnitureDataSource, fetchCameraData } from './furniture-data.mjs';
-import { allowedBrowserRequest, authorized, buildEffectCatalogue, cameraEffectAsset, containedPath, JOB_DEADLINE_MS, MAX_ACTIVE, MAX_BODY, MAX_QUEUE, mediaPath, nitroAssetRelative, pageConfiguration, PREPARE_DEADLINE_MS, QUEUE_WAIT_MS, SMALL_PNG_SIZE, validPng, validateJob, validatePreparation } from './security.mjs';
+import { allowedBrowserRequest, assetLayout, authorized, buildEffectCatalogue, cameraEffectAsset, containedPath, JOB_DEADLINE_MS, MAX_ACTIVE, MAX_BODY, MAX_QUEUE, mediaPath, nitroAssetRelative, pageConfiguration, PREPARE_DEADLINE_MS, QUEUE_WAIT_MS, SMALL_PNG_SIZE, validPng, validateJob, validatePreparation } from './security.mjs';
 
 const directory = fileURLToPath(new URL('.', import.meta.url));
 const secret = process.env.CAMERA_RENDERER_SECRET;
@@ -16,6 +17,7 @@ const port = Number(process.env.CAMERA_RENDERER_PORT ?? 3921);
 const origin = process.env.CAMERA_RENDERER_ORIGIN ?? `http://${host}:${port}`;
 const rooted = (env, fallback) => env ? resolve(env) : resolve(directory, fallback);
 const assets = rooted(process.env.CAMERA_ASSET_ROOT, '../../nitro-assets');
+const layout = assetLayout(process.env.CAMERA_ASSET_LAYOUT);
 const images = rooted(process.env.CAMERA_IMAGES_ROOT, '../../../retro-hotel-files/flash/c_images');
 const media = rooted(process.env.CAMERA_MEDIA_ROOT, '../camera');
 // The page is camera.html from the Volt client build, so photos use the same renderer as the client.
@@ -24,7 +26,7 @@ const pageRoot = rooted(process.env.CAMERA_PAGE_ROOT, '../../Volt/dist');
 const chromiumSandbox = process.env.CAMERA_CHROMIUM_SANDBOX !== '0';
 const assetOrigin = process.env.CAMERA_ASSET_ORIGIN ? new URL(process.env.CAMERA_ASSET_ORIGIN) : null;
 if (assetOrigin && (assetOrigin.protocol !== 'https:' || assetOrigin.username || assetOrigin.password || assetOrigin.pathname !== '/' || assetOrigin.search || assetOrigin.hash)) throw new Error('CAMERA_ASSET_ORIGIN must be an HTTPS origin');
-const furnitureData = createFurnitureDataSource({ url: process.env.CAMERA_FURNIDATA_URL, filename: resolve(assets, 'furniture/json/FurnitureData.json') });
+const furnitureData = createFurnitureDataSource({ url: process.env.CAMERA_FURNIDATA_URL, filename: resolve(assets, layout.gamedata['FurnitureData.json']) });
 const originAsset = createAssetCache({
     load: async (path, signal) => {
         const response = await fetchCameraData(new URL(path, assetOrigin), {}, signal);
@@ -45,6 +47,15 @@ async function currentCatalogue() {
 }
 const configuration = {};
 for (const filename of [process.env.CAMERA_RENDERER_CONFIG, process.env.CAMERA_UI_CONFIG].filter(Boolean)) Object.assign(configuration, JSON.parse(stripJsonComments(await readFile(filename, 'utf8'))));
+// Room ads on the hotel's own image library are read from disk; the hotel may sit on a private address.
+const hotelImages = adImageAddress(configuration['image.library.url'])?.replace(/\/?$/, '/');
+const adImages = createAdImages({
+    local: async href => {
+        if (!hotelImages || !href.startsWith(hotelImages)) return null;
+        try { return await safeFile(images, decodeURIComponent(new URL(href).pathname.slice(new URL(hotelImages).pathname.length))); }
+        catch { return null; }
+    }
+});
 Object.assign(configuration, {
     'socket.url': '', 'image.library.url': `${origin}/c_images/`,
     'furnidata.url': `${origin}/gamedata/FurnitureData.json`,
@@ -53,21 +64,16 @@ Object.assign(configuration, {
     'avatar.figuredata.url': `${origin}/gamedata/FigureData.json`,
     'avatar.figuremap.url': `${origin}/gamedata/FigureMap.json`,
     'avatar.effectmap.url': `${origin}/gamedata/EffectMap.json`,
-    'avatar.asset.url': `${origin}/assets/figure/%libname%.nitro`,
-    'avatar.asset.effect.url': `${origin}/assets/effect/%libname%.nitro`,
-    'furni.asset.url': `${origin}/assets/furniture/%libname%.nitro`,
-    'pet.asset.url': `${origin}/assets/pet/%libname%.nitro`,
-    'generic.asset.url': `${origin}/assets/generic/%libname%.nitro`,
+    'avatar.asset.url': `${origin}/assets/figure/%libname%.${layout.extension}`,
+    'avatar.asset.effect.url': `${origin}/assets/effect/%libname%.${layout.extension}`,
+    'furni.asset.url': `${origin}/assets/furniture/%libname%.${layout.extension}`,
+    'pet.asset.url': `${origin}/assets/pet/%libname%.${layout.extension}`,
+    'generic.asset.url': `${origin}/assets/generic/%libname%.${layout.extension}`,
     'room.color.skip.transition': true, 'system.log.packets': false
 });
 const catalogue = buildEffectCatalogue(configuration['camera.available.effects']);
 const pageConfig = pageConfiguration(configuration, secret);
-const gamedata = {
-    'FurnitureData.json': 'furniture/json/FurnitureData.json', 'ProductData.json': 'furniture/json/ProductData.json',
-    'FigureData.json': 'clothes/json/FigureData.json', 'FigureMap.json': 'clothes/json/FigureMap.json',
-    'EffectMap.json': 'effects/json/EffectMap.json', 'HabboAvatarActions.json': 'gamedata/json/HabboAvatarActions.json'
-};
-const mime = {'.html':'text/html','.js':'text/javascript','.css':'text/css','.json':'application/json','.png':'image/png','.nitro':'application/octet-stream'};
+const mime = {'.html':'text/html','.js':'text/javascript','.css':'text/css','.json':'application/json','.png':'image/png','.nitro':'application/octet-stream','.hab':'application/octet-stream'};
 let browser;
 let shuttingDown = false;
 let active = 0;
@@ -128,6 +134,12 @@ async function createPage(abort, furniture) {
         await context.route('**/*', async route => {
             const request = route.request();
             const href = request.url();
+            if (request.method() === 'GET' && adImages.has(href)) {
+                const headers = { 'access-control-allow-origin': '*' };
+                try { const { body, contentType } = await adImages.load(href); await route.fulfill({ status: 200, contentType, body, headers }); }
+                catch (error) { console.error(`Room ad image failed: ${href}: ${error.message}`); await route.fulfill({ status: 404, headers }); }
+                return;
+            }
             if (!allowedBrowserRequest(request.method(), href, origin, catalogue)) { slot.failures.push('Blocked asset request: '+href); console.error('Blocked camera asset: '+href); await route.abort(); return; }
             // Pin one catalogue to the page for its entire lifetime, including concurrent jobs.
             if (new URL(href).pathname === '/gamedata/FurnitureData.json') { await route.fulfill({ contentType: 'application/json', body: furniture.body }); return; }
@@ -139,8 +151,9 @@ async function createPage(abort, furniture) {
         page.on('pageerror', error => console.error('Camera page error: '+error.message));
         page.on('console', message => { if(message.type()==='error') console.error('Camera page: '+message.text()); });
         // A missing wall photo stays an empty frame, as it does in the client.
-        page.on('response', response => { const path = new URL(response.url()).pathname; if (response.status() >= 400 && !mediaPath.test(path)) { slot.failures.push('Missing trusted asset: '+path); console.error('Missing camera asset: '+path); } });
-        page.on('requestfailed', request => slot.failures.push('Failed trusted asset: '+request.url()));
+        // A room ad image that cannot load stays empty, as it does in the client.
+        page.on('response', response => { const path = new URL(response.url()).pathname; if (response.status() >= 400 && !mediaPath.test(path) && !adImages.has(response.url())) { slot.failures.push('Missing trusted asset: '+path); console.error('Missing camera asset: '+path); } });
+        page.on('requestfailed', request => { if (!adImages.has(request.url())) slot.failures.push('Failed trusted asset: '+request.url()); });
         await page.goto(`${origin}/page/camera.html`, {waitUntil:'load',timeout:15000});
         await page.waitForFunction(() => window.cameraReady === true, {timeout:15000});
         if (slot.failures.length) throw new Error(slot.failures[0]);
@@ -358,14 +371,18 @@ const server = http.createServer(async (request, response) => {
         if (url.pathname === '/render' && request.method === 'POST') {
             const body = await readJson(request);
             if (!body) {response.writeHead(413).end(); return;}
-            const result=await render(validateJob(body,catalogue));
+            const job = validateJob(body,catalogue);
+            adImages.allow(job.scene);
+            const result=await render(job);
             response.setHeader('Content-Type','application/json'); response.end(JSON.stringify(result)); return;
         }
         // 204 once the libraries are loaded, 409 when no page is free to prepare.
         if (url.pathname === '/prepare' && request.method === 'POST') {
             const body = await readJson(request);
             if (!body) {response.writeHead(413).end(); return;}
-            response.writeHead(await prepare(validatePreparation(body)) ? 204 : 409).end(); return;
+            const preparation = validatePreparation(body);
+            adImages.allow(preparation.scene);
+            response.writeHead(await prepare(preparation) ? 204 : 409).end(); return;
         }
         if (request.method !== 'GET') {response.writeHead(405).end(); return;}
         const path = decodeURIComponent(url.pathname);
@@ -373,13 +390,13 @@ const server = http.createServer(async (request, response) => {
         let data;
         if (path.startsWith('/page/')) data=await safeFile(pageRoot,path.slice(6));
         else if (path.startsWith('/gamedata/')) {
-            const relative=gamedata[path.slice(10)];if(!relative) throw new Error('Unknown gamedata');
+            const relative=layout.gamedata[path.slice(10)];if(!relative) throw new Error('Unknown gamedata');
             if (path.endsWith('/FurnitureData.json')) data=(await currentCatalogue()).body;
             else data=assetOrigin ? await originAsset(path, lifetime.signal) : await safeFile(assets,relative);
         } else if (path.startsWith('/c_images/Habbo-Stories/')) data=await safeFile(images, cameraEffectAsset(path, catalogue));
         else if (mediaPath.test(path)) data=await safeFile(media,path.slice(8));
         else {
-            const relative = nitroAssetRelative(path);
+            const relative = nitroAssetRelative(path, layout);
             if (!relative) throw new Error('Unknown trusted asset');
             data=assetOrigin ? await originAsset(path, lifetime.signal) : await safeFile(assets, relative);
         }

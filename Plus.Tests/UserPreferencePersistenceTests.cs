@@ -28,7 +28,7 @@ public sealed class UserPreferencePersistenceTests
         var user = new Habbo { Id = 7, HomeRoom = 20, ChatPreference = false, ClientVolume = [20, 30, 40] };
         var (session, sent) = HabbiconTestSupport.Client(user);
         var profiles = new UserProfileService(null!, null!, null!, null!, new FailingDatabase(), TimeProvider.System, null!, null!, null!, null!);
-        var navigator = new NavigatorManager(new FailingDatabase(), TestLogging.For<NavigatorManager>(), new Rooms());
+        var navigator = new NavigatorManager(new FailingDatabase(), TestLogging.For<NavigatorManager>(), new Rooms(), TestRoomSettings.Empty);
         await Assert.ThrowsAsync<InvalidOperationException>(() => new SetChatPreferenceEvent(profiles).Parse(session, HabbiconTestSupport.Incoming(true)));
         await Assert.ThrowsAsync<InvalidOperationException>(() => new UpdateNavigatorSettingsEvent(navigator).Parse(session, HabbiconTestSupport.Incoming(42)));
         await Assert.ThrowsAsync<InvalidOperationException>(() => new SetMessengerInviteStatusEvent(profiles).Parse(session, HabbiconTestSupport.Incoming(true)));
@@ -265,7 +265,7 @@ public sealed class UserPreferencePersistenceTests
             var user = new Habbo { Id = 7, HomeRoom = 20 };
             var (session, sent) = HabbiconTestSupport.Client(user);
             var profiles = new UserProfileService(null!, null!, null!, null!, database, TimeProvider.System, null!, null!, null!, null!);
-            var navigator = new NavigatorManager(database, TestLogging.For<NavigatorManager>(), new Rooms());
+            var navigator = new NavigatorManager(database, TestLogging.For<NavigatorManager>(), new Rooms(), TestRoomSettings.Empty);
             await new SetChatPreferenceEvent(profiles).Parse(session, HabbiconTestSupport.Incoming(true));
             await new UpdateNavigatorSettingsEvent(navigator).Parse(session, HabbiconTestSupport.Incoming(42));
             await new SetMessengerInviteStatusEvent(profiles).Parse(session, HabbiconTestSupport.Incoming(true));

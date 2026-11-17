@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { allowedBrowserRequest, buildEffectCatalogue, cameraEffectAsset, containedPath, JOB_DEADLINE_MS, MAX_ACTIVE, MAX_BODY, MAX_QUEUE, mediaPath, nitroAssetRelative, pageConfiguration, QUEUE_WAIT_MS, renderedPngSize, SMALL_PNG_SIZE, validateJob, validatePreparation } from './security.mjs';
+import { allowedBrowserRequest, assetLayout, buildEffectCatalogue, cameraEffectAsset, containedPath, JOB_DEADLINE_MS, MAX_ACTIVE, MAX_BODY, MAX_QUEUE, mediaPath, nitroAssetRelative, pageConfiguration, QUEUE_WAIT_MS, renderedPngSize, SMALL_PNG_SIZE, validateJob, validatePreparation } from './security.mjs';
 
 const configured = [
     { name: 'dark_sepia', colorMatrix: [1, 0, 0, 0, 0], minLevel: 0, enabled: true },
@@ -21,6 +21,24 @@ test('trusted bundle routes support HAB and Nitro without allowing arbitrary pat
         assert.equal(allowedBrowserRequest('GET', `http://camera.local${path}`, 'http://camera.local', catalogue), true);
     }
     for (const path of ['/assets/furniture/../secret.hab', '/assets/furniture/a.js', '/assets/furniture/a.hab/extra']) assert.equal(nitroAssetRelative(path), null);
+});
+
+test('the hotel files layout reads flat .hab folders and gamedata', () => {
+    const layout = assetLayout('hotel-files');
+    assert.equal(layout.extension, 'hab');
+    assert.equal(nitroAssetRelative('/assets/furniture/drinks.hab', layout), 'assets/furniture/drinks.hab');
+    assert.equal(nitroAssetRelative('/assets/figure/hh_human_body.hab', layout), 'assets/figure/hh_human_body.hab');
+    assert.equal(nitroAssetRelative('/assets/effect/Dance1.hab', layout), 'assets/effect/Dance1.hab');
+    assert.equal(nitroAssetRelative('/assets/pet/dog.hab', layout), 'assets/pet/dog.hab');
+    assert.equal(nitroAssetRelative('/assets/furniture/../secret.hab', layout), null);
+    assert.equal(layout.gamedata['FurnitureData.json'], 'gamedata/FurnitureData.json');
+    assert.equal(layout.gamedata['HabboAvatarActions.json'], 'gamedata/HabboAvatarActions.json');
+});
+
+test('the default layout is the nitro assets layout and unknown layouts fail', () => {
+    assert.equal(assetLayout(undefined).extension, 'nitro');
+    assert.equal(assetLayout('').gamedata['FigureData.json'], 'clothes/json/FigureData.json');
+    assert.throws(() => assetLayout('flat'), /CAMERA_ASSET_LAYOUT/);
 });
 
 const viewport = (cropWidth, cropHeight) => ({
@@ -140,6 +158,24 @@ test('scene strings cannot carry a remote image URL', () => {
     const mintedScene = job(320, 320);
     mintedScene.scene = { ...mintedScene.scene, items: [{ extraData: `/camera/${minted}.png` }] };
     assert.equal(validateJob(mintedScene, catalogue).scene.items[0].extraData, `/camera/${minted}.png`);
+});
+
+test('a room ad is the one scene item that may carry a web address, its image', () => {
+    const branding = { imageUrl: 'https://images.example/ad.png', offsetX: -120, offsetY: 40, offsetZ: 3, scale: 100, alpha: 100 };
+    const withItem = item => ({ ...job(320, 320), scene: { ...job(320, 320).scene, items: [item] } });
+    assert.equal(validateJob(withItem({ id: 7, extraData: '', branding }), catalogue).scene.items[0].branding.imageUrl, branding.imageUrl);
+    assert.equal(validatePreparation({ scene: withItem({ id: 7, branding: null }).scene }).scene.items[0].branding, null);
+    assert.throws(() => validateJob(withItem({ id: 7, extraData: 'https://evil.example/a.png', branding }), catalogue), /URL in scene/);
+    for (const imageUrl of ['javascript:alert(1)', 'https:/images.example/ad.png', 'https://user:secret@images.example/ad.png', 'https://images.example:8080/ad.png', 'http://images.example:80/ad.png']) {
+        assert.deepEqual(validateJob(withItem({ id: 7, branding: { ...branding, imageUrl } }), catalogue).scene.items, [], imageUrl);
+    }
+    for (const bad of [
+        { ...branding, imageUrl: 42 },
+        { ...branding, clickUrl: 'https://evil.example' },
+        { ...branding, offsetX: 1.5 },
+        { imageUrl: branding.imageUrl },
+        'https://images.example/ad.png'
+    ]) assert.throws(() => validateJob(withItem({ id: 7, branding: bad }), catalogue), /Invalid room ad/, JSON.stringify(bad));
 });
 
 test('an empty effect catalogue still accepts a capture with no effects', () => {

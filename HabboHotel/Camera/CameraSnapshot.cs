@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
 using Plus.HabboHotel.Items;
+using Plus.HabboHotel.Items.DataFormat;
 using Plus.HabboHotel.Rooms;
 using Plus.HabboHotel.Users.Inventory.Furniture;
 
@@ -18,7 +19,10 @@ public sealed record CameraSceneItem(
     int Direction,
     int State,
     string WallPosition,
-    string ExtraData);
+    string ExtraData,
+    CameraSceneBranding? Branding = null);
+
+public sealed record CameraSceneBranding(string ImageUrl, int OffsetX, int OffsetY, int OffsetZ, int Scale, int Alpha);
 
 public sealed record CameraSceneUser(
     int Id,
@@ -85,6 +89,8 @@ public static class CameraSnapshotBuilder
     private static readonly Regex WallPosition = new(
         @"^:w=(-?\d+),(-?\d+)\s+l=(-?\d+),(-?\d+)\s+([lr])$",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    private const int MaxAdAddressLength = 500;
 
     private static readonly Regex ExternalAddress = new(
         @"(?:https?:|data:|blob:|javascript:|file:|//)|\u0000",
@@ -178,7 +184,7 @@ public static class CameraSnapshotBuilder
         }
 
         if (item.Definition.InteractionType is InteractionType.Background) {
-            return false;
+            return TryReadAd(item, out sceneItem);
         }
 
         string extra;
@@ -216,6 +222,43 @@ public static class CameraSnapshotBuilder
 
         return true;
     }
+
+    // A room ad shows its image in photos, as it does in the room. Its click address never enters a scene.
+    private static bool TryReadAd(Item item, out CameraSceneItem sceneItem)
+    {
+        sceneItem = null!;
+
+        if (item.Definition.Type != ItemType.Floor || item.ExtraData is not MapDataFormat map
+            || !map.Data.TryGetValue("imageUrl", out var imageUrl) || !IsWebImage(imageUrl)) {
+            return false;
+        }
+
+        int Number(string key, int fallback) =>
+            map.Data.TryGetValue(key, out var text) && int.TryParse(text, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var value) ? value : fallback;
+
+        sceneItem = new CameraSceneItem(
+            item.Id,
+            item.Definition.SpriteId,
+            "s",
+            item.GetX,
+            item.GetY,
+            item.GetZ,
+            item.Rotation,
+            0,
+            "",
+            "",
+            new CameraSceneBranding(imageUrl, Number("offsetX", 0), Number("offsetY", 0), Number("offsetZ", 0), Number("scale", 100), Number("alpha", 100)));
+
+        return true;
+    }
+
+    private static bool IsWebImage(string value) =>
+        value.Length is > 0 and <= MaxAdAddressLength
+        && !value.Any(character => char.IsWhiteSpace(character) || char.IsControl(character) || character == '\\')
+        && Uri.TryCreate(value, UriKind.Absolute, out var address)
+        && (address.Scheme == Uri.UriSchemeHttp || address.Scheme == Uri.UriSchemeHttps)
+        && address.UserInfo.Length == 0
+        && address.IsDefaultPort;
 
     internal static bool TryReadUser(RoomUser? user, out CameraSceneUser sceneUser)
     {

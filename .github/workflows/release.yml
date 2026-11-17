@@ -61,6 +61,8 @@ jobs:
             mkdir -p "out/$rid/Database"
             cp Database/FreshInstall.sql "out/$rid/Database/"
             cp -r Database/Migrations "out/$rid/Database/"
+            mkdir -p "out/$rid/CameraRenderer"
+            (cd CameraRenderer && cp README.md package.json package-lock.json $(ls *.mjs | grep -v '\.test\.mjs$') "../out/$rid/CameraRenderer/")
           done
 
       - name: Package

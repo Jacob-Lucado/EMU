@@ -1,11 +1,14 @@
 using System.Collections.Immutable;
+using System.Data;
 using System.Data.Common;
 using Plus.Communication.Flash;
 using Plus.Communication.Packets.Outgoing;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Items;
 using Plus.HabboHotel.Items.Wired;
+using Plus.HabboHotel.Permissions;
 using Plus.HabboHotel.Recycler;
+using Plus.HabboHotel.Rooms.Chat.Styles;
 using Plus.HabboHotel.Users.Inventory;
 using Plus.HabboHotel.Users.Inventory.Furniture;
 using Xunit;
@@ -342,11 +345,188 @@ public partial class PlacedFurniRoomTests
             data.Items.Add(103, new ItemDefinition { Id = 103, ItemName = "ecotron_box", SpriteId = 3095 });
         }
 
-        var service = new RecyclerService(store, data, _interactionClock, new RecyclerTestRandom([]), TestLogging.For<RecyclerService>());
+        var service = new RecyclerService(store, data, _interactionClock, new RecyclerTestRandom([]), TestLogging.For<RecyclerService>(), new RecyclerStyles());
         _client.Sent.Clear();
         _client.Packets.Clear();
 
         return (service, store, inputs, box);
+    }
+
+    [Fact]
+    public void UnknownFreeRecyclerOutcomeClosesTheSessionButStillSavesTheWalletAtLogout()
+    {
+        var (service, store, inputs, _) = RecyclerFixture();
+        var habbo = _client.GetHabbo();
+        store.BeforeCommit = () => throw new RecyclerOutcomeUnknownException(new RecyclerFailure());
+        service.Recycle(_client, [20, 21]);
+        Assert.False(habbo.CurrencyPersistenceUncertain);
+        Assert.Null(store.SavedWallet);
+        Assert.True(_client.Closed.IsCancellationRequested);
+        Assert.Empty(_client.Packets);
+        Assert.All(inputs, item => { Assert.True(item.TryReserve()); item.ReleaseReservation(); });
+    }
+
+    [Fact]
+    public void RecyclerChargesTheLiveWalletWithoutDroppingOtherPendingRewards()
+    {
+        var (service, store, _, _) = RecyclerFixture();
+        var habbo = _client.GetHabbo();
+        habbo.Duckets = 150;
+        store.Configuration = store.Configuration with { CostDuckets = 10 };
+        store.PaidBalance = 90;
+        service.Recycle(_client, [20, 21]);
+        Assert.Equal(140, habbo.Duckets);
+        Assert.Equal(99u, Assert.Single(habbo.Inventory!.Furniture.GetItems).Id);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void OpeningAChatStyleBoxUsesTheNativeRewardAndOnlyAddsANewOwnershipOnce(bool alreadyOwned)
+    {
+        var (service, store, _, box) = RecyclerFixture();
+        var habbo = _client.GetHabbo();
+        store.Content = new(0, "") { ChatStyleId = 10001 };
+
+        if (alreadyOwned) {
+            habbo.PurchasedChatStyles.TryAdd(10001, 0);
+        }
+
+        _client.BeforeCapture = header =>
+        {
+            if (header == ServerPacketHeader.UserPurchasableChatStyleChangedComposer) {
+                Assert.False(Monitor.IsEntered(habbo.WalletSync));
+                Assert.Null(_room.GetRoomItemHandler().GetItem(box.Id));
+            }
+        };
+        Assert.True(service.TryOpen(_client, box.Id));
+        ExecutorTick();
+        Assert.Equal(1, store.Opens);
+        Assert.True(habbo.PurchasedChatStyles.ContainsKey(10001));
+        Assert.Null(_room.GetRoomItemHandler().GetItem(box.Id));
+        Assert.Equal(alreadyOwned ? 0 : 1, _client.Packets.Count(packet => packet.Header == ServerPacketHeader.UserPurchasableChatStyleChangedComposer));
+        var opened = new FlashIncomingPacket { Buffer = Assert.Single(_client.Packets, packet => packet.Header == ServerPacketHeader.OpenGiftComposer).Body };
+        Assert.Equal("chat_style", opened.ReadString());
+        Assert.Equal(10001, opened.ReadInt());
+    }
+
+    [Fact]
+    public void UnsupportedChatStyleRevisionsCannotListOrConsumeModernPrizes()
+    {
+        var (service, store, _, _) = RecyclerFixture();
+        store.Configuration = store.Configuration with { Levels = [new(1, 1, [new(1, 0, 10001)])] };
+        _client.Revision!.InternalIdToOutgoingIdMapping = _client.Revision.InternalIdToOutgoingIdMapping
+            .Where(pair => pair.Key != ServerPacketHeader.UserPurchasableChatStylesComposer).ToDictionary();
+        service.GetPrizes(_client);
+        var prizes = new FlashIncomingPacket { Buffer = Assert.Single(_client.Packets).Body };
+        Assert.Equal(0, prizes.ReadInt());
+        service.Recycle(_client, [20, 21]);
+        Assert.Empty(store.Consumed);
+        Assert.Equal(2, _client.GetHabbo().Inventory!.Furniture.GetItems.Count());
+    }
+
+    [Fact]
+    public void UnknownOpeningOutcomeClosesTheSessionBeforeAnySuccessPacket()
+    {
+        var (service, store, _, box) = RecyclerFixture();
+        var habbo = _client.GetHabbo();
+        store.BeforeOpen = () => throw new RecyclerOutcomeUnknownException(new RecyclerFailure());
+        Assert.True(service.TryOpen(_client, box.Id));
+        ExecutorTick();
+        Assert.False(habbo.CurrencyPersistenceUncertain);
+        Assert.True(_client.Closed.IsCancellationRequested);
+        Assert.DoesNotContain(_client.Packets, packet => packet.Header == ServerPacketHeader.OpenGiftComposer);
+    }
+
+    [Fact]
+    public void PaidRecyclingSavesTheLiveWalletBeforeTheExchangeChargesIt()
+    {
+        var (service, store, _, _) = RecyclerFixture();
+        var habbo = _client.GetHabbo();
+        habbo.Credits = 300;
+        habbo.Duckets = 150;
+        habbo.Currencies[5] = 7;
+        store.Configuration = store.Configuration with { CostDuckets = 10 };
+        store.PaidBalance = 140;
+        service.Recycle(_client, [20, 21]);
+        Assert.Equal(new[] { "wallet", "recycle" }, store.Calls);
+        Assert.Equal(300, store.SavedWallet!.Value.Credits);
+        Assert.Equal(new KeyValuePair<int, int>[] { new(0, 150), new(5, 7) }, store.SavedWallet.Value.Currencies);
+        Assert.Equal(140, habbo.Duckets);
+        Assert.Equal(99u, Assert.Single(habbo.Inventory!.Furniture.GetItems).Id);
+    }
+
+    [Fact]
+    public void FreeRecyclingDoesNotWriteTheWallet()
+    {
+        var (service, store, _, _) = RecyclerFixture();
+        service.Recycle(_client, [20, 21]);
+        Assert.Equal(new[] { "recycle" }, store.Calls);
+        Assert.Null(store.SavedWallet);
+    }
+
+    [Fact]
+    public void AFailedWalletSaveRefusesThePaidExchangeAndKeepsTheInputs()
+    {
+        var (service, store, _, _) = RecyclerFixture();
+        var habbo = _client.GetHabbo();
+        habbo.Duckets = 150;
+        store.Configuration = store.Configuration with { CostDuckets = 10 };
+        store.BeforeWalletSave = () => throw new RecyclerFailure();
+        service.Recycle(_client, [20, 21]);
+        Assert.Empty(store.Consumed);
+        Assert.Equal(150, habbo.Duckets);
+        Assert.False(habbo.CurrencyPersistenceUncertain);
+        Assert.Equal(2, habbo.Inventory!.Furniture.GetItems.Count());
+        var finished = new FlashIncomingPacket { Buffer = Assert.Single(_client.Packets, packet => packet.Header == ServerPacketHeader.RecyclerFinishedComposer).Body };
+        Assert.Equal(2, finished.ReadInt());
+    }
+
+    [Fact]
+    public void UnknownPaidRecyclerOutcomeKeepsTheSavedWalletOutOfTheLogoutWrite()
+    {
+        var (service, store, inputs, _) = RecyclerFixture();
+        var habbo = _client.GetHabbo();
+        habbo.Duckets = 150;
+        store.Configuration = store.Configuration with { CostDuckets = 10 };
+        store.BeforeCommit = () => throw new RecyclerOutcomeUnknownException(new RecyclerFailure());
+        service.Recycle(_client, [20, 21]);
+        Assert.Equal(new[] { "wallet", "recycle" }, store.Calls);
+        Assert.Equal(150, store.SavedWallet!.Value.Currencies.Single(pair => pair.Key == 0).Value);
+        Assert.True(habbo.CurrencyPersistenceUncertain);
+        Assert.True(habbo.WalletClosed);
+        Assert.True(_client.Closed.IsCancellationRequested);
+        Assert.Empty(_client.Packets);
+        Assert.All(inputs, item => { Assert.True(item.TryReserve()); item.ReleaseReservation(); });
+    }
+
+    [Fact]
+    public void ARecyclerConcurrencyErrorIsAnsweredAndKeepsTheInputsAndTheBox()
+    {
+        var (service, store, _, box) = RecyclerFixture();
+        store.BeforeCommit = () => throw new DBConcurrencyException("changed");
+        service.Recycle(_client, [20, 21]);
+        var finished = new FlashIncomingPacket { Buffer = Assert.Single(_client.Packets, packet => packet.Header == ServerPacketHeader.RecyclerFinishedComposer).Body };
+        Assert.Equal(2, finished.ReadInt());
+        Assert.Equal(2, _client.GetHabbo().Inventory!.Furniture.GetItems.Count());
+        store.BeforeOpen = () => throw new DBConcurrencyException("changed");
+        Assert.True(service.TryOpen(_client, box.Id));
+        ExecutorTick();
+        Assert.NotNull(_room.GetRoomItemHandler().GetItem(box.Id));
+        Assert.False(_client.Closed.IsCancellationRequested);
+    }
+
+    [Fact]
+    public void OpeningAChatStyleBoxSendsTheAllowedStylesWithTheNewStyle()
+    {
+        var (service, store, _, box) = RecyclerFixture();
+        store.Content = new(0, "") { ChatStyleId = 10001 };
+        Assert.True(service.TryOpen(_client, box.Id));
+        ExecutorTick();
+        var allowed = new FlashIncomingPacket { Buffer = Assert.Single(_client.Packets, packet => packet.Header == ServerPacketHeader.AllowedChatStylesComposer).Body };
+        Assert.Equal(2, allowed.ReadInt());
+        Assert.Equal(0, allowed.ReadInt());
+        Assert.Equal(10001, allowed.ReadInt());
     }
 
     private sealed class RecyclerRecordingStore : IRecyclerStore
@@ -358,15 +538,27 @@ public partial class PlacedFurniRoomTests
         public GiftContent? Content { get; set; } = new(102, "blue");
         public uint[] Consumed { get; private set; } = [];
         public int Opens { get; private set; }
+        public int? PaidBalance { get; set; }
+        public Action? BeforeWalletSave { get; set; }
+        public (int Credits, KeyValuePair<int, int>[] Currencies)? SavedWallet { get; private set; }
+        public List<string> Calls { get; } = [];
         public RecyclerConfiguration Load() => Configuration;
         public DateTimeOffset? NextAllowed(int userId) => Next;
-        public RecycledBox? Recycle(int userId, uint boxDefinitionId, RecyclerConfiguration configuration, RecyclerPrize prize, IReadOnlyList<RecyclerInput> inputs, DateTimeOffset now)
+        public RecycledBox? Recycle(int userId, uint boxDefinitionId, RecyclerConfiguration configuration, RecyclerPrize prize, IReadOnlyList<RecyclerInput> inputs, DateTimeOffset now, int? currentDuckets = null)
         {
             Assert.Equal((7, 100u), (userId, boxDefinitionId));
+            Calls.Add("recycle");
             BeforeCommit?.Invoke();
             Consumed = inputs.Select(input => input.Id).ToArray();
 
-            return new(99, "3-2-2040");
+            return new(99, "3-2-2040", PaidBalance);
+        }
+        public void SaveWallet(int userId, int credits, IReadOnlyList<KeyValuePair<int, int>> currencies)
+        {
+            Assert.Equal(7, userId);
+            Calls.Add("wallet");
+            BeforeWalletSave?.Invoke();
+            SavedWallet = (credits, currencies.ToArray());
         }
         public GiftContent? FindBox(uint itemId, int ownerId, uint roomId, uint boxDefinitionId) => Content;
         public uint? OpenBox(uint itemId, int ownerId, uint roomId, uint boxDefinitionId, GiftContent content)
@@ -377,8 +569,24 @@ public partial class PlacedFurniRoomTests
 
             return 100;
         }
+
+        public bool OpenChatStyleBox(uint itemId, int ownerId, uint roomId, uint boxDefinitionId, GiftContent content)
+        {
+            Assert.Equal((10u, 7, 42u, 100u), (itemId, ownerId, roomId, boxDefinitionId));
+            BeforeOpen?.Invoke();
+            Opens++;
+
+            return true;
+        }
     }
     private sealed class RecyclerFailure() : DbException("forced recycler failure");
+    private sealed class RecyclerStyles : IChatStyleManager
+    {
+        private readonly Dictionary<int, ChatStyle> _styles = new() { [0] = new(0, "Normal", ""), [10001] = new(10001, "Prize", "", requiresOwnership: true) };
+        public void Init() => throw new NotSupportedException();
+        public IReadOnlyList<int> GetAllowedStyleIds(UserAccess access) => _styles.Values.Where(style => style.CanUse(access)).Select(style => style.Id).Order().ToArray();
+        public bool TryGetStyle(int id, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out ChatStyle? style) => _styles.TryGetValue(id, out style);
+    }
     private sealed class RecyclerDefinitions(IEnumerable<ItemDefinition> definitions) : IItemDataManager
     {
         public Dictionary<uint, ItemDefinition> Items { get; } = definitions.ToDictionary(definition => definition.Id);

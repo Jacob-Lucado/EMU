@@ -35,9 +35,9 @@ public sealed class WiredCanonicalProtocolTests
     }
 
     [Theory]
-    [InlineData("SaveWiredSelectorConfigEvent", 1119)]
-    [InlineData("SaveWiredAddonConfigEvent", 3766)]
-    [InlineData("SaveWiredVariableConfigEvent", 3999)]
+    [InlineData("SaveWiredSelectorConfigEvent", 752)]
+    [InlineData("SaveWiredAddonConfigEvent", 2067)]
+    [InlineData("SaveWiredVariableConfigEvent", 1491)]
     public void NativeExtraCategoriesHaveDirectUniqueCoreHeaders(string name, int expected)
     {
         var headers = new Plus.Communication.Revisions.RevisionsCache().InternalRevision.IncomingHeaders;

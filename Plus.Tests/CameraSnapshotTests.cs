@@ -96,6 +96,48 @@ public class CameraSnapshotTests
     }
 
     [Fact]
+    public void RoomAdsKeepTheirImageAndPositionButNotTheirClickAddress()
+    {
+        var ad = Ad(7, new Dictionary<string, string>
+        {
+            ["state"] = "0",
+            ["imageUrl"] = "https://images.example/hotel.png",
+            ["clickUrl"] = "https://hotel.example",
+            ["offsetX"] = "-120",
+            ["offsetY"] = "40",
+            ["offsetZ"] = "3",
+            ["scale"] = "80",
+            ["alpha"] = "50"
+        });
+        var plain = Ad(8, new Dictionary<string, string> { ["state"] = "0", ["imageUrl"] = "http://images.example/plain.png" });
+
+        var scene = CameraSnapshotBuilder.Compose(Shell("0"), [ad, plain], []);
+
+        var kept = Assert.Single(scene.Items, item => item.Id == 7);
+        Assert.Equal("", kept.ExtraData);
+        Assert.Equal(new CameraSceneBranding("https://images.example/hotel.png", -120, 40, 3, 80, 50), kept.Branding);
+        Assert.Equal(new CameraSceneBranding("http://images.example/plain.png", 0, 0, 0, 100, 100), Assert.Single(scene.Items, item => item.Id == 8).Branding);
+        Assert.Null(CameraSnapshotBuilder.Compose(Shell("0"), [Floor(1, 100, "2", 0, 0, 0, 0)], []).Items[0].Branding);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("javascript:alert(1)")]
+    [InlineData("data:image/png;base64,AAAA")]
+    [InlineData("file:///etc/passwd")]
+    [InlineData("//images.example/room.png")]
+    [InlineData("/camera/room.png")]
+    [InlineData("https://user:secret@images.example/room.png")]
+    [InlineData("https://images.example/room one.png")]
+    [InlineData("https://images.example:8443/room.png")]
+    public void RoomAdsWithoutAWebImageAreLeftOut(string imageUrl)
+    {
+        var ad = Ad(7, new Dictionary<string, string> { ["state"] = "0", ["imageUrl"] = imageUrl });
+
+        Assert.Empty(CameraSnapshotBuilder.Compose(Shell("0"), [ad], []).Items);
+    }
+
+    [Fact]
     public void BoundsStopAtRendererCapsAndMotionsUseRoomStatus()
     {
         var items = Enumerable.Range(1, CameraSnapshotBuilder.MaxItems + 1)
@@ -138,6 +180,15 @@ public class CameraSnapshotTests
             GetZ = z,
             Rotation = rotation
         };
+
+    private static Item Ad(uint id, Dictionary<string, string> data)
+    {
+        var item = Floor(id, 4200, "", 2, 3, 0, 2);
+        item.Definition.InteractionType = InteractionType.Background;
+        item.ExtraData = new MapDataFormat(data);
+
+        return item;
+    }
 
     private static Item Wall(uint id, int sprite, string extra, string position)
     {

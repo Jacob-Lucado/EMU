@@ -1,5 +1,6 @@
 import { timingSafeEqual } from 'node:crypto';
 import { isAbsolute, relative, sep } from 'node:path';
+import { adImageAddress } from './ad-images.mjs';
 
 export const MAX_BODY = 1024 * 1024;
 export const MAX_PNG = 2 * 1024 * 1024;
@@ -13,12 +14,34 @@ export const CROP_THUMBNAIL = 110;
 export const SMALL_PNG_SIZE = 110;
 export const mediaPath = /^\/camera\/(?:[a-f0-9]{32}|[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})(?:_small)?\.png$/;
 export const GAMEDATA_FILES = Object.freeze(['FurnitureData.json', 'ProductData.json', 'FigureData.json', 'FigureMap.json', 'EffectMap.json', 'HabboAvatarActions.json']);
-const NITRO_FOLDERS = { furniture: 'furniture/nitro', figure: 'clothes/nitro', effect: 'effects/nitro', pet: 'pets' };
+const ASSET_LAYOUTS = Object.freeze({
+    nitro: {
+        extension: 'nitro',
+        folders: { furniture: 'furniture/nitro', figure: 'clothes/nitro', effect: 'effects/nitro', pet: 'pets' },
+        gamedata: {
+            'FurnitureData.json': 'furniture/json/FurnitureData.json', 'ProductData.json': 'furniture/json/ProductData.json',
+            'FigureData.json': 'clothes/json/FigureData.json', 'FigureMap.json': 'clothes/json/FigureMap.json',
+            'EffectMap.json': 'effects/json/EffectMap.json', 'HabboAvatarActions.json': 'gamedata/json/HabboAvatarActions.json'
+        }
+    },
+    // The installer's hotel files pack.
+    'hotel-files': {
+        extension: 'hab',
+        folders: { furniture: 'assets/furniture', figure: 'assets/figure', effect: 'assets/effect', pet: 'assets/pet' },
+        gamedata: Object.fromEntries(GAMEDATA_FILES.map(name => [name, `gamedata/${name}`]))
+    }
+});
 
-export function nitroAssetRelative(pathname) {
+export function assetLayout(name) {
+    name ||= 'nitro';
+    if (!Object.hasOwn(ASSET_LAYOUTS, name)) throw new Error(`CAMERA_ASSET_LAYOUT must be one of: ${Object.keys(ASSET_LAYOUTS).join(', ')}`);
+    return ASSET_LAYOUTS[name];
+}
+
+export function nitroAssetRelative(pathname, layout = ASSET_LAYOUTS.nitro) {
     const match = /^\/assets\/(furniture|figure|effect|pet)\/([A-Za-z0-9_.-]+\.(?:nitro|hab))$/.exec(pathname);
     if (!match || match[2].includes('..')) return null;
-    return `${NITRO_FOLDERS[match[1]]}/${match[2]}`;
+    return `${layout.folders[match[1]]}/${match[2]}`;
 }
 
 export function containedPath(base, target) {
@@ -153,12 +176,29 @@ function validateViewport(view) {
 
 function validateScene(scene) {
     if (!scene || !Number.isInteger(scene.roomId) || scene.roomId <= 0 || typeof scene.heightmap !== 'string' || scene.heightmap.length > 65536 || !Array.isArray(scene.items) || scene.items.length > 5000 || !Array.isArray(scene.users) || scene.users.length > 1000) throw new Error('Invalid server scene');
-    // URLs are never a scene instruction. Photographs refer only to previously minted files.
+    // URLs are never a scene instruction. Photographs refer only to previously minted files, and a room ad only to its image.
     const scan = value => {
         if (typeof value === 'string' && (/(?:https?:|data:|blob:|javascript:|file:|\/\/)/i.test(value) || value.includes('\0'))) throw new Error('URL in scene');
         if (Array.isArray(value)) value.forEach(scan);
         else if (value && typeof value === 'object') Object.values(value).forEach(scan);
     };
-    scan(scene);
+    const { items, ...rest } = scene;
+    scan(rest);
+    scene.items = items.filter(item => {
+        if (!item || typeof item !== 'object' || Array.isArray(item)) { scan(item); return true; }
+        const { branding, ...fields } = item;
+        scan(fields);
+        return adShown(branding);
+    });
     for (const user of scene.users) if (user && typeof user === 'object' && user.gesture === '0') user.gesture = '';
+}
+
+const BRANDING_NUMBERS = ['offsetX', 'offsetY', 'offsetZ', 'scale', 'alpha'];
+
+// A room ad whose image address the camera cannot load stays out of the photo; the photo itself still renders.
+function adShown(branding) {
+    if (branding === undefined || branding === null) return true;
+    if (typeof branding !== 'object' || Array.isArray(branding) || Object.keys(branding).length !== BRANDING_NUMBERS.length + 1
+        || typeof branding.imageUrl !== 'string' || BRANDING_NUMBERS.some(key => !Number.isInteger(branding[key]))) throw new Error('Invalid room ad');
+    return adImageAddress(branding.imageUrl) !== null;
 }

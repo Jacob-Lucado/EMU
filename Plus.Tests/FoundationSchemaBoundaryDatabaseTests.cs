@@ -139,7 +139,7 @@ public sealed class FoundationSchemaBoundaryDatabaseTests
             connection.Open();
             connection.Execute("CREATE TABLE users_settings (user_id INT PRIMARY KEY, home_room INT UNSIGNED NOT NULL); INSERT INTO users_settings VALUES (7,0)");
             var rooms = new HomeRooms();
-            var navigator = new NavigatorManager(new HabbiconDatabaseTests.TestDatabase(options.ConnectionString), NullLogger<NavigatorManager>.Instance, rooms);
+            var navigator = new NavigatorManager(new HabbiconDatabaseTests.TestDatabase(options.ConnectionString), NullLogger<NavigatorManager>.Instance, rooms, TestRoomSettings.Empty);
             var habbo = new Habbo { Id = 7 };
             var (client, sent) = HabbiconTestSupport.Client(habbo);
             await navigator.SaveHomeRoom(client, 42);
@@ -167,7 +167,7 @@ public sealed class FoundationSchemaBoundaryDatabaseTests
                 entered.Set();
                 Assert.True(release.Wait(TimeSpan.FromSeconds(10)));
             };
-            var gatedNavigator = new NavigatorManager(gatedDatabase, NullLogger<NavigatorManager>.Instance, rooms);
+            var gatedNavigator = new NavigatorManager(gatedDatabase, NullLogger<NavigatorManager>.Instance, rooms, TestRoomSettings.Empty);
             habbo.Access = UserAccess.Empty;
             var persistence = DispatchProxy.Create<IUserPersistenceService, SaveHome>();
             ((SaveHome)(object)persistence).Save = () =>

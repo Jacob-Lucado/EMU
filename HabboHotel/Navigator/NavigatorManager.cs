@@ -5,6 +5,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Data;
 using Dapper;
 using Microsoft.Extensions.Logging;
+using Plus.Core.Settings;
 using Plus.Database;
 using Plus.HabboHotel.Rooms;
 using Plus.HabboHotel.Users;
@@ -16,16 +17,18 @@ public sealed class NavigatorManager : INavigatorManager, IStartable
 {
     private readonly IDatabase _database;
     private readonly IRoomDataLoader _rooms;
+    private readonly ISettingsManager _settings;
     private readonly ILogger<NavigatorManager> _logger;
 
     private readonly Dictionary<uint, FeaturedRoom> _featuredRooms;
     private readonly Dictionary<int, SearchResultList> _searchResultLists;
     private readonly Dictionary<int, TopLevelItem> _topLevelItems;
 
-    public NavigatorManager(IDatabase database, ILogger<NavigatorManager> logger, IRoomDataLoader rooms)
+    public NavigatorManager(IDatabase database, ILogger<NavigatorManager> logger, IRoomDataLoader rooms, ISettingsManager settings)
     {
         _database = database;
         _rooms = rooms;
+        _settings = settings;
         _logger = logger;
         _topLevelItems = new();
         _searchResultLists = new();
@@ -126,7 +129,7 @@ public sealed class NavigatorManager : INavigatorManager, IStartable
             }
         }
 
-        session.Send(new NavigatorSettingsComposer(roomId));
+        session.Send(new NavigatorSettingsComposer(GlobalHomeRoom.For(roomId, _settings)));
 
         return Task.CompletedTask;
     }

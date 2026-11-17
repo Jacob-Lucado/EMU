@@ -8,5 +8,22 @@ public sealed class PetTreatedComposer(int respect, int ownerId, int petId, stri
 {
     public uint MessageId => ServerPacketHeader.RespectPetNotificationComposer;
 
-    public void Compose(IOutgoingPacket packet) => throw new NotImplementedException();
+    public void Compose(IOutgoingPacket packet)
+    {
+        packet.WriteInteger(respect);
+        packet.WriteInteger(ownerId);
+        packet.WriteInteger(petId);
+        packet.WriteString(name);
+        packet.WriteInteger(type);
+        packet.WriteInteger(race);
+        packet.WriteString(color.ToLowerInvariant());
+        packet.WriteInteger(0);
+
+        foreach (var part in customParts.Split(' ', StringSplitOptions.RemoveEmptyEntries)) {
+            packet.WriteInteger(int.Parse(part));
+        }
+
+        packet.WriteInteger(level);
+        packet.WriteInteger(rarity);
+    }
 }

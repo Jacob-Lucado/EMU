@@ -132,6 +132,17 @@ public class Freeze
     {
         var changed = new List<Item>();
 
+        foreach (var tile in _freezeTiles.Values) {
+            if (tile.InteractingUser > 0) {
+                tile.InteractingUser = 0;
+                tile.InteractionCountHelper = 0;
+                tile.UpdateNeeded = false;
+                tile.UpdateCounter = 0;
+                tile.LegacyDataString = "0";
+                changed.Add(tile);
+            }
+        }
+
         foreach (var block in _freezeBlocks.Values) {
             if (int.TryParse(block.LegacyDataString, out var data) && data / 1000 is >= 1 and <= 7) {
                 block.LegacyDataString = ((data / 1000 + 10) * 1000).ToString();

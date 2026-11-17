@@ -9,6 +9,32 @@ namespace Plus.Tests;
 
 public partial class PlacedFurniRoomTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ClosingTheFieldCancelsAnArmedSnowball(bool restart)
+    {
+        var (tile, _, _, _) = PlayedFreezeField();
+        tile.InteractingUser = 7;
+        tile.InteractionCountHelper = 1;
+        tile.LegacyDataString = "1000";
+        tile.RequestUpdate(4, true);
+        var freeze = _room.GetFreeze();
+        freeze.StopGame();
+
+        if (restart) {
+            freeze.StartGame();
+        }
+
+        _client.Packets.Clear();
+
+        for (var tick = 0; tick < 4; tick++) {
+            tile.ProcessUpdates();
+        }
+
+        Assert.DoesNotContain(_client.Packets, packet => packet.Header is ServerPacketHeader.ObjectUpdateComposer or ServerPacketHeader.ObjectsDataUpdateComposer);
+    }
+
     [Fact]
     public void EndingAFreezeGameKeepsTheTilesAndClosesTheBrokenBlocks()
     {

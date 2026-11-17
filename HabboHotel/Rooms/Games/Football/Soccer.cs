@@ -56,6 +56,11 @@ public class Soccer
     public void RemoveBall(uint itemId)
     {
         _balls.TryRemove(itemId, out _);
+
+        if (_room.GetRoomItemHandler().GetItem(itemId) == null) {
+            _flights.Remove(itemId);
+            _dribbles.Remove(itemId);
+        }
     }
 
     /// <summary>
@@ -190,7 +195,7 @@ public class Soccer
         var previous = ball.LegacyDataString;
         ball.LegacyDataString = data;
 
-        if (!_room.GetRoomItemHandler().SetFloorItem(null, ball, x, y, ball.Rotation, false, false, false)) {
+        if (!_room.GetRoomItemHandler().SetFloorItem(null, ball, x, y, ball.Rotation, false, false, false, deferPositionSave: true)) {
             ball.LegacyDataString = previous;
 
             return false;

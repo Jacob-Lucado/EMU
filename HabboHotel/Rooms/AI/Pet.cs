@@ -21,7 +21,7 @@ public class Pet
     public int Energy;
     public int Experience;
 
-    public int[] ExperienceLevels = { 100, 200, 400, 600, 1000, 1300, 1800, 2400, 3200, 4300, 7200, 8500, 10100, 13300, 17500, 23000, 51900, 75000, 128000, 150000 };
+    public int[] ExperienceLevels = { 100, 200, 400, 600, 900, 1300, 1800, 2400, 3200, 4300, 7200, 8500, 10100, 13300, 17500, 23000, 51900, 75000, 128000, 150000 };
 
     public string GnomeClothing;
     public int HairDye;
@@ -168,23 +168,25 @@ public class Pet
 
             if (Room != null) {
                 Room.SendPacket(new AddExperiencePointsComposer(PetId, VirtualId, amount));
-
-                if (Experience >= ExperienceGoal && !Room.Behavior.MuteAllPets) {
-                    Room.SendChat(receiver => new ChatComposer(VirtualId, $"*leveled up to level {Level} *", 0, 0, receiver));
-                }
             }
         }
 
         var gained = Level - before;
 
-        if (gained < 1 || OwnerId <= 0) {
+        if (gained < 1) {
             return;
         }
 
-        var client = _clients?.GetClientByUserId(OwnerId);
+        var client = OwnerId > 0 ? _clients?.GetClientByUserId(OwnerId) : null;
 
         if (client != null) {
+            client.Send(new PetLevelNotificationComposer(PetId, Name, Level, Look));
+            client.Send(new PetTrainingPanelComposer(PetId, Level));
             _rewards!.Progress(client, RewardTrackActions.PetLevel, gained);
+        }
+
+        if (Room != null && !Room.Behavior.MuteAllPets) {
+            Room.SendChat(receiver => new ChatComposer(VirtualId, "Leveling up", 0, 0, receiver));
         }
     }
 

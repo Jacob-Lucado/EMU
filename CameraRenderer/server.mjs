@@ -482,8 +482,9 @@ const server = http.createServer(async (request, response) => {
 });
 server.headersTimeout=5000;
 server.requestTimeout=JOB_DEADLINE_MS;
-await avatarStore?.open();
 refill();
+// Pages boot while the stored avatar images are counted.
+await avatarStore?.open();
 setInterval(revalidateCatalogue, 15000).unref();
 server.listen(port,host,() => console.log(`Trusted camera renderer listening on ${host}:${port}`));
 for (const signal of ['SIGTERM','SIGINT']) process.on(signal,async () => {shuttingDown = true; server.close(); await (await browser?.catch(() => null))?.close(); process.exit(0);});

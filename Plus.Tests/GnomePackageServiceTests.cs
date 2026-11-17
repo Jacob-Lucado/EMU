@@ -4,7 +4,11 @@ using System.Reflection;
 using Dapper;
 using Microsoft.Extensions.Logging.Abstractions;
 using MySqlConnector;
+using Plus.Communication.Packets;
 using Plus.Communication.Packets.Incoming.Catalog;
+using Plus.Communication.Packets.Outgoing;
+using Plus.Communication.Packets.Outgoing.Catalog;
+using Plus.Communication.Packets.Outgoing.Rooms.Furni;
 using Plus.Database;
 using Plus.HabboHotel.Catalog;
 using Plus.HabboHotel.GameClients;
@@ -115,6 +119,101 @@ public sealed class GnomePackageServiceTests
         Assert.NotEmpty(world.Packets);
     }
 
+    [Fact]
+    public void OpenPetPackageRequestCarriesThePackageFigure()
+    {
+        var (client, packets) = HabbiconTestSupport.Client(new Habbo { Id = 1 });
+
+        client.Send(new GnomeBoxComposer(7, new PetPackageFigure(1, 0, "ABABAB")));
+        client.Send(new GnomeBoxComposer(8));
+
+        Assert.Equal(Bytes(7, 1, 0, "ABABAB", 0, 0), packets[0].Payload);
+        Assert.Equal(Bytes(8), packets[1].Payload);
+    }
+
+    [Fact]
+    public void OpenPetPackageResultNamesThePackage()
+    {
+        var (client, packets) = HabbiconTestSupport.Client(new Habbo { Id = 1 });
+
+        client.Send(new CheckGnomeNameComposer(7, "Smokey", PetPackageNameError.None));
+        client.Send(new CheckGnomeNameComposer(7, "bad name!", PetPackageNameError.InvalidName));
+
+        Assert.Equal(Bytes(7, 0, ""), packets[0].Payload);
+        Assert.Equal(Bytes(7, 1, "bad name!"), packets[1].Payload);
+    }
+
+    [Theory]
+    [InlineData("1 0 ABABAB", 1, 0, "ABABAB")]
+    [InlineData("2 0 88E70D", 2, 0, "88E70D")]
+    [InlineData("", 37, 0, "FFFFFF")]
+    [InlineData("cat 0 ABABAB", 37, 0, "FFFFFF")]
+    [InlineData("1 0 ABABA", 37, 0, "FFFFFF")]
+    public void PackageFigureIsReadFromItsState(string state, int type, int palette, string colour) =>
+        Assert.Equal(new PetPackageFigure(type, palette, colour), PetPackageFigure.Of(new PetPackage(37, "newbie_nest"), state));
+
+    [Fact]
+    public void OpeningAPetPackageLeavesItsFurniWithTheNamedPetOnIt()
+    {
+        var world = World(package: true);
+
+        world.Service.Open(world.Room, world.Client, 7, "Smokey");
+
+        var request = Assert.Single(world.Store.PetRequests);
+        Assert.Equal((7u, 100u, 1, "owner", 42u, 1, 1, "Smokey", new PetPackageFigure(1, 0, "ABABAB"), 101u, 4, 0.1),
+            (request.ItemId, request.BaseItem, request.OwnerId, request.OwnerName, request.RoomId, request.X, request.Y, request.Name,
+                request.Figure, request.FurniBaseItem, request.FurniRotation, request.PetZ));
+        Assert.Empty(world.Store.Requests);
+        Assert.Null(world.Room.GetRoomItemHandler().GetItem(7));
+        var nest = Assert.IsType<Item>(world.Room.GetRoomItemHandler().GetItem(13));
+        Assert.Equal((101u, 1, 1, 4), (nest.Definition.Id, nest.GetX, nest.GetY, nest.Rotation));
+        Assert.True(world.Room.GetRoomUserManager().TryGetPet(12, out var actor));
+        var pet = Assert.IsType<Pet>(actor.PetData);
+        Assert.Equal(("Smokey", 1, "0", "ABABAB"), (pet.Name, pet.Type, pet.Race, pet.Color));
+        var result = world.Packets.FindLastIndex(packet => packet.Header == ServerPacketHeader.CheckGnomeNameComposer);
+        Assert.Equal(Bytes(7, 0, ""), world.Packets[result].Payload);
+        Assert.True(world.Packets.FindIndex(packet => packet.Header == ServerPacketHeader.UsersComposer) < result);
+        Assert.DoesNotContain(world.Packets, packet => packet.Header == ServerPacketHeader.FurniListNotificationComposer);
+    }
+
+    [Fact]
+    public void InvalidPetNameKeepsThePackageAndRepliesWithItsId()
+    {
+        var world = World(package: true);
+
+        world.Service.Open(world.Room, world.Client, 7, "bad name!");
+
+        Assert.Empty(world.Store.PetRequests);
+        Assert.Equal(Bytes(7, 1, "bad name!"), Assert.Single(world.Packets).Payload);
+        Assert.Same(world.Item, world.Room.GetRoomItemHandler().GetItem(7));
+    }
+
+    [Fact]
+    public void PetPackageWithoutItsFurniStaysClosed()
+    {
+        var world = World(package: true, withNest: false);
+
+        world.Service.Open(world.Room, world.Client, 7, "Smokey");
+
+        Assert.Empty(world.Store.PetRequests);
+        Assert.Empty(world.Packets);
+        Assert.Same(world.Item, world.Room.GetRoomItemHandler().GetItem(7));
+    }
+
+    [Fact]
+    public void FailedPetPackageWriteKeepsThePackage()
+    {
+        var world = World(package: true);
+        world.Store.Fail = true;
+
+        world.Service.Open(world.Room, world.Client, 7, "Smokey");
+
+        Assert.Single(world.Store.PetRequests);
+        Assert.Same(world.Item, world.Room.GetRoomItemHandler().GetItem(7));
+        Assert.False(world.Room.GetRoomUserManager().TryGetPet(12, out _));
+        Assert.Null(world.Room.GetRoomItemHandler().GetItem(13));
+    }
+
     [PetPlacementDatabaseFact]
     public void StoreCommitsPetAndPackageTogetherAndRollsBackExactMismatchOrSecondWriteFailure()
     {
@@ -173,7 +272,7 @@ public sealed class GnomePackageServiceTests
         }
     }
 
-    private static Fixture World(bool temporary = false)
+    private static Fixture World(bool temporary = false, bool package = false, bool withNest = true)
     {
         var model = new RoomModel("gnome-test", 0, 0, 0, 0, "000\r000\r000", 0, 0, false);
         var room = new Room(new RoomData { Id = 42, Model = model }, [], TestLogging.Navigation, TestLogging.Logger, TestRoomAchievements.Unused, TestRoomOwners.Unused);
@@ -189,8 +288,10 @@ public sealed class GnomePackageServiceTests
             OwnerId = 1,
             RoomId = 42,
             IsTemporary = temporary,
-            Definition = new() { Id = 100, Type = ItemType.Floor, InteractionType = InteractionType.GnomeBox },
-            ExtraData = new LegacyDataFormat { Data = "" }
+            Definition = package
+                ? new() { Id = 100, ItemName = "newbie_cat_package", Type = ItemType.Floor, InteractionType = InteractionType.None, PetPackage = new(1, "newbie_nest") }
+                : new() { Id = 100, Type = ItemType.Floor, InteractionType = InteractionType.GnomeBox },
+            ExtraData = new LegacyDataFormat { Data = package ? "1 0 ABABAB" : "" }
         };
         item.SetState(1, 1, 0);
         item.Attach(room, TestItemRuntime.Interactors, TestItemRuntime.Travel, TestItemRuntime.Rewards);
@@ -206,7 +307,14 @@ public sealed class GnomePackageServiceTests
         });
         var store = new RecordingStore();
         var clock = new CountingClock();
-        var definitions = CatalogSnapshotTestSupport.Proxy<IItemDataManager>((method, _) => method == "get_Items" ? new Dictionary<uint, ItemDefinition>() : null);
+        var nest = new ItemDefinition { Id = 101, ItemName = "newbie_nest", Type = ItemType.Floor, Height = 0.1, Stackable = true, Width = 1, Length = 1 };
+        var known = withNest ? new Dictionary<uint, ItemDefinition> { [nest.Id] = nest } : new Dictionary<uint, ItemDefinition>();
+        var definitions = CatalogSnapshotTestSupport.Proxy<IItemDataManager>((method, args) => method switch
+        {
+            "get_Items" => known,
+            "GetItemByName" => known.Values.FirstOrDefault(definition => definition.ItemName == (string?)args[0]),
+            _ => null
+        });
         var factory = CatalogSnapshotTestSupport.Proxy<IItemFactory>((_, _) => throw new InvalidOperationException("No food definition supplied."));
 
         return new(room, item, client, packets, store, clock, new(store, definitions, factory, clock));
@@ -221,9 +329,22 @@ public sealed class GnomePackageServiceTests
         public (uint, string)? Request;
         public void Open(Room room, GameClient session, uint itemId, string petName) => Request = (itemId, petName);
     }
+    private static byte[] Bytes(params object[] values) => HabbiconTestSupport.Incoming(values).Buffer.ToArray();
+
     private sealed class RecordingStore : IGnomePackageStore
     {
         public List<GnomePackageRequest> Requests { get; } = [];
+        public List<PetPackageRequest> PetRequests { get; } = [];
+
+        public PetPackageOpening? OpenPetPackage(PetPackageRequest request)
+        {
+            PetRequests.Add(request);
+
+            return Fail ? null : new PetPackageOpening(new Pet(12, request.OwnerId, request.RoomId, request.Name, request.Figure.Type,
+                request.Figure.Palette.ToString(), request.Figure.Colour, 0, 100, 100, 0, request.CreatedAt, request.X, request.Y, request.PetZ,
+                0, 0, 0, -1, "-1", request.OwnerName), 13);
+        }
+
         public Action<GnomePackageRequest>? Before;
         public bool Fail;
         public Pet? Open(GnomePackageRequest request)

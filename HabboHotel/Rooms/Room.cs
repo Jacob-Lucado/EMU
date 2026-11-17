@@ -411,6 +411,8 @@ public class Room
     public bool IsGroupAdmin(GameClient? session) =>
         Type == "private" && Group != null && session?.GetHabbo() is { } habbo && Group.IsAdmin(habbo.Id);
 
+    internal void OnGoalScored(RoomUser kicker) => throw new NotImplementedException();
+
     public void OnUserShoot(RoomUser user, Item ball)
     {
         Func<Item, bool>? predicate = null;

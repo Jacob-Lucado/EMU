@@ -12,7 +12,7 @@ public class Soccer
     private Item[] _gates;
     private Room _room;
 
-    public Soccer(Room room)
+    public Soccer(Room room, Action<double, Action>? schedule = null, Func<int, int>? random = null)
     {
         _room = room;
         _gates = new Item[4];
@@ -45,6 +45,8 @@ public class Soccer
     {
         _balls.TryRemove(itemId, out var item);
     }
+
+    public void OnStepAnnounced(RoomUser actor, int x, int y, bool lastStep) => throw new NotImplementedException();
 
     public void OnUserWalk(RoomUser user)
     {

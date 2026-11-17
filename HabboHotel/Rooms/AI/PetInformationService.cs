@@ -1,5 +1,6 @@
 using Plus.Communication.Packets.Outgoing.Rooms.AI.Pets;
 using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Rooms.AI.MonsterPlants;
 using Plus.HabboHotel.Users;
 
 namespace Plus.HabboHotel.Rooms.AI;
@@ -78,6 +79,15 @@ public sealed class PetInformationService(TimeProvider clock) : IPetInformationS
         var now = clock.GetUtcNow();
         var age = pet.CreatedAt is { } createdAt ? (now - createdAt).Ticks / TimeSpan.TicksPerDay : 0;
         var days = (int)Math.Clamp(age, 0, int.MaxValue);
+
+        if (pet.Plant is { } plant) {
+            return new(pet.PetId, pet.Name, plant.Level(now), MonsterPlant.AdultLevel, plant.Experience(now),
+                plant.ExperienceGoal(now), plant.Energy(now), MonsterPlant.BarMaximum, 100, 100, pet.Respect, pet.OwnerId,
+                days, pet.OwnerName, false, pet.AnyoneCanRide,
+                new(int.TryParse(pet.Race, out var breed) ? breed : 0, plant.CanBreedNow(now), plant.IsDead(now), plant.Rarity,
+                    (int)plant.MaxWellbeing(now).TotalSeconds, (int)Math.Ceiling(plant.RemainingWellbeing(now).TotalSeconds),
+                    (int)Math.Ceiling(plant.RemainingGrowth(now).TotalSeconds), plant.BreedingPermission));
+        }
 
         return new(pet.PetId, pet.Name, pet.Level, Pet.MaxLevel, pet.Experience, pet.ExperienceGoal,
             pet.Energy, Pet.MaxEnergy, pet.Nutrition, Pet.MaxNutrition, pet.Respect, pet.OwnerId,

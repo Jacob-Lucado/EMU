@@ -11,7 +11,8 @@ public static class PetAppearanceSnapshots
 {
     public static PetInventorySnapshot Inventory(IEnumerable<Pet> pets, TimeProvider? clock = null) => new(pets.Select(pet => new PetInventoryEntry(
         pet.PetId, pet.Name, pet.Type, int.Parse(pet.Race, CultureInfo.InvariantCulture), pet.Color,
-        pet.CustomParts.Split(' ').Select(part => int.Parse(part, CultureInfo.InvariantCulture)).ToImmutableArray(), pet.Level)).ToImmutableArray());
+        pet.CustomParts.Split(' ').Select(part => int.Parse(part, CultureInfo.InvariantCulture)).ToImmutableArray(),
+        pet.Plant?.Level((clock ?? TimeProvider.System).GetUtcNow()) ?? pet.Level, pet.Plant?.Rarity ?? -1)).ToImmutableArray());
 
     public static HorseAppearanceSnapshot Horse(RoomUser user)
     {

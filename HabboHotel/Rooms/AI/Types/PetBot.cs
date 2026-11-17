@@ -205,6 +205,7 @@ public class PetBot : BotAi
 
         if (!commands.HasLearned(commandId, petData.Level)) {
             pet.Statusses["gst"] = "puz";
+            PetVocals.Say(pet, PetVocal.UnknownCommand);
 
             return;
         }
@@ -220,6 +221,7 @@ public class PetBot : BotAi
         // Without a bowl or food in the room a pet refuses to drink or eat.
         if (commandId is PetCommandSet.Drink or PetCommandSet.Eat || !petData.ObeysCommand(commandId)) {
             petData.SpendEnergy(2);
+            PetVocals.Say(pet, PetVocal.Refusal);
 
             return;
         }

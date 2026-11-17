@@ -73,6 +73,7 @@ public sealed class PetRespectService(IAchievementManager achievements, IQuestMa
         actor.CarryItemId = 999999999;
         actor.CarryTimer = 5;
         pet.PetData.OnRespect();
+        PetVocals.Say(pet, PetVocal.Scratched);
         rewards.Progress(session, RewardTrackActions.PetRespect);
         room.SendPacket(new CarryObjectComposer(actor.VirtualId, actor.CarryItemId));
     }

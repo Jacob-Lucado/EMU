@@ -18,14 +18,6 @@ public class InteractorVendor : IFurniInteractor, IApproachInteractor
 
         item.LegacyDataString = "0";
         item.UpdateNeeded = true;
-
-        if (item.InteractingUser > 0) {
-            var user = itemRoom.GetRoomUserManager().GetRoomUserByHabbo(item.InteractingUser);
-
-            if (user != null) {
-                user.CanWalk = true;
-            }
-        }
     }
 
     public void OnRemove(GameClient? session, Item item)
@@ -37,14 +29,6 @@ public class InteractorVendor : IFurniInteractor, IApproachInteractor
         }
 
         item.LegacyDataString = "0";
-
-        if (item.InteractingUser > 0) {
-            var user = itemRoom.GetRoomUserManager().GetRoomUserByHabbo(item.InteractingUser);
-
-            if (user != null) {
-                user.CanWalk = true;
-            }
-        }
     }
 
     public void OnTrigger(GameClient? session, Item item, int request, bool hasRights)
@@ -95,7 +79,6 @@ public class InteractorVendor : IFurniInteractor, IApproachInteractor
     private static void StartDispensing(Room room, Item item, RoomUser user, int habboId)
     {
         item.InteractingUser = habboId;
-        user.CanWalk = false;
         user.ClearMovement(true);
         user.SetRot(Rotation.Calculate(user.X, user.Y, item.GetX, item.GetY), false);
         item.LegacyDataString = "1";
@@ -120,7 +103,6 @@ public class InteractorVendor : IFurniInteractor, IApproachInteractor
 
     public static void Finish(Room room, Item item)
     {
-        room.GetRoomUserManager().GetRoomUserByHabbo(item.InteractingUser)?.UnlockWalking();
         item.InteractingUser = 0;
         item.LegacyDataString = "0";
         item.UpdateState(false, false);

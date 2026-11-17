@@ -3,6 +3,7 @@ using System.Data;
 using Plus.Database;
 using Plus.HabboHotel.Rooms;
 using Plus.HabboHotel.Rooms.AI;
+using Plus.HabboHotel.Rooms.AI.MonsterPlants;
 
 namespace Plus.HabboHotel.Users.Inventory.Pets;
 
@@ -14,7 +15,10 @@ internal sealed class PetLoader(IDatabase database) : IPetLoader
 
         return Load(connection, userId).Select(row => new Pet(checked((int)row.Id), checked((int)row.UserId), row.RoomId, row.Name, checked((int)row.Type), row.Race,
                 row.Color, row.Experience, row.Energy, row.Nutrition, row.Respect, row.CreatedAt,
-                row.X, row.Y, row.Z, row.HaveSaddle, row.AnyoneRide, row.Hairdye, row.Pethair, row.GnomeClothing, row.OwnerName)).ToList();
+                row.X, row.Y, row.Z, row.HaveSaddle, row.AnyoneRide, row.Hairdye, row.Pethair, row.GnomeClothing, row.OwnerName)
+        {
+            Plant = row.Type == MonsterPlant.PetType ? MonsterPlantStore.Load(connection, checked((int)row.Id)) : null
+        }).ToList();
     }
 
     internal static IEnumerable<PetRow> Load(IDbConnection connection, int userId) => connection.Query<PetRow>("""

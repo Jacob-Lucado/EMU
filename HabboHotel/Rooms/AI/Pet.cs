@@ -3,6 +3,7 @@ using Plus.Communication.Packets.Outgoing.Pets;
 using Plus.Communication.Packets.Outgoing.Rooms.AI.Pets;
 using Plus.Communication.Packets.Outgoing.Rooms.Chat;
 using Plus.HabboHotel.Quests;
+using Plus.HabboHotel.Rooms.AI.MonsterPlants;
 using Plus.HabboHotel.GameClients;
 using Plus.Utilities;
 
@@ -29,6 +30,9 @@ public class Pet
     public int Nutrition;
     public int OwnerId;
     public int PetHair;
+
+    /// <summary>The plant state of a monster plant (pet type 16); null for every other pet.</summary>
+    public MonsterPlant? Plant;
     public int PetId;
     public bool PlacedInRoom;
     public string Race;

@@ -24,7 +24,7 @@ public interface IRoomUserSnapshotService
 }
 
 public sealed class RoomUserSnapshotService(IGroupManager groups, IGameClientManager clients, ICacheManager cache,
-    IDatabase database, IBadgeRarityManager badgeRarity) : IRoomUserSnapshotService
+    IDatabase database, IBadgeRarityManager badgeRarity, TimeProvider? clock = null) : IRoomUserSnapshotService
 {
     /// <summary>A generic bot's Users entry lists skills 1-5 and 19-23.</summary>
     private static readonly short[] GenericBotSkills = [1, 2, 3, 4, 5, 19, 20, 21, 22, 23];

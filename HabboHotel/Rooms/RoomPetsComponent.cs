@@ -1,6 +1,7 @@
 using Dapper;
 using Plus.Database;
 using Plus.HabboHotel.Rooms.AI;
+using Plus.HabboHotel.Rooms.AI.MonsterPlants;
 using Plus.HabboHotel.Rooms.AI.Speech;
 
 namespace Plus.HabboHotel.Rooms;
@@ -23,7 +24,10 @@ public sealed class RoomPetsComponent(IDatabase database) : IRoomComponent
 
             var pet = new Pet(row.Id, row.UserId, row.RoomId, row.Name, data.Type, data.Race, data.Color,
                 data.Experience, data.Energy, data.Nutrition, data.Respect, data.CreatedAt, row.X, row.Y, row.Z,
-                data.HaveSaddle, data.AnyoneRide, data.Hairdye, data.Pethair, data.GnomeClothing, row.OwnerName);
+                data.HaveSaddle, data.AnyoneRide, data.Hairdye, data.Pethair, data.GnomeClothing, row.OwnerName)
+            {
+                Plant = data.Type == MonsterPlant.PetType ? MonsterPlantStore.Load(connection, row.Id) : null
+            };
             var speeches = new List<RandomSpeech>();
             _room.GetRoomUserManager().DeployBot(new(pet.PetId, _room.Id, "pet", "freeroam", pet.Name, "", pet.Look,
                 pet.X, pet.Y, pet.Z, 0, 0, 0, 0, 0, ref speeches, "", 0, pet.OwnerId, false, 0, false, 0), pet);

@@ -1,12 +1,13 @@
 import http from 'node:http';
-import { mkdir, readFile, realpath, rename, writeFile } from 'node:fs/promises';
-import { dirname, resolve, extname } from 'node:path';
+import { readFile, realpath } from 'node:fs/promises';
+import { resolve, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 import stripJsonComments from 'strip-json-comments';
 import { adImageAddress, createAdImages } from './ad-images.mjs';
 import { createAssetCache, freshness } from './asset-cache.mjs';
-import { animatedPng, avatarRequest, AVATAR_ROOM_ID, loopLength } from './avatar.mjs';
+import { createAvatarStore } from './avatar-store.mjs';
+import { animatedPng, avatarRequest, avatarSettings, AVATAR_ROOM_ID, loopLength } from './avatar.mjs';
 import { createFurnitureDataSource, fetchCameraData } from './furniture-data.mjs';
 import { allowedBrowserRequest, assetLayout, authorized, buildEffectCatalogue, cameraEffectAsset, containedPath, JOB_DEADLINE_MS, MAX_ACTIVE, MAX_AVATAR_QUEUE, MAX_BODY, MAX_QUEUE, mediaPath, nitroAssetRelative, pageConfiguration, PREPARE_DEADLINE_MS, QUEUE_WAIT_MS, SMALL_PNG_SIZE, validPng, validateJob, validatePreparation } from './security.mjs';
 
@@ -26,10 +27,8 @@ const pageRoot = rooted(process.env.CAMERA_PAGE_ROOT, '../../Volt/dist');
 // Chromium's sandbox needs user namespaces; hosts without them (proot, some containers) set CAMERA_CHROMIUM_SANDBOX=0.
 const chromiumSandbox = process.env.CAMERA_CHROMIUM_SANDBOX !== '0';
 // Avatar images are on only when the hotel's site and this service share a secret and a folder that nginx serves.
-const avatarSecret = process.env.AVATAR_IMAGER_SECRET;
-if (avatarSecret !== undefined && avatarSecret.length < 32) throw new Error('AVATAR_IMAGER_SECRET must contain at least 32 characters');
-const avatarRoot = process.env.AVATAR_IMAGER_ROOT ? resolve(process.env.AVATAR_IMAGER_ROOT) : null;
-if (Boolean(avatarSecret) !== Boolean(avatarRoot)) throw new Error('AVATAR_IMAGER_SECRET and AVATAR_IMAGER_ROOT must be set together');
+const avatars = avatarSettings(process.env);
+const avatarStore = avatars ? createAvatarStore(avatars) : null;
 const assetOrigin = process.env.CAMERA_ASSET_ORIGIN ? new URL(process.env.CAMERA_ASSET_ORIGIN) : null;
 if (assetOrigin && (assetOrigin.protocol !== 'https:' || assetOrigin.username || assetOrigin.password || assetOrigin.pathname !== '/' || assetOrigin.search || assetOrigin.hash)) throw new Error('CAMERA_ASSET_ORIGIN must be an HTTPS origin');
 const furnitureData = createFurnitureDataSource({ url: process.env.CAMERA_FURNIDATA_URL, filename: resolve(assets, layout.gamedata['FurnitureData.json']) });
@@ -385,10 +384,7 @@ async function drawAvatar({ job, file }) {
     if (!Array.isArray(frames) || !frames.length || frames.length > job.frames) throw new Error('Invalid avatar frames');
     const images = frames.map(frame => Buffer.from(frame, 'base64'));
     const image = animatedPng(images.slice(0, loopLength(images)));
-    const target = resolve(avatarRoot, file);
-    await mkdir(dirname(target), { recursive: true });
-    await writeFile(`${target}.${process.pid}.tmp`, image);
-    await rename(`${target}.${process.pid}.tmp`, target);
+    await avatarStore.save(file, image);
     return image;
 }
 // One avatar at a time, so a photo always finds a free page. Requests for the same image share one drawing.
@@ -409,11 +405,11 @@ function avatarImage(request) {
     return drawn;
 }
 async function serveAvatar(pathname, response) {
-    const request = avatarSecret ? avatarRequest(pathname, avatarSecret) : null;
+    const request = avatars ? avatarRequest(pathname, avatars.secret) : null;
     if (!request) { response.writeHead(404).end(); return; }
     let image;
     try {
-        image = await readFile(resolve(avatarRoot, request.file)).catch(() => avatarImage(request));
+        image = await readFile(resolve(avatars.root, request.file)).catch(() => avatarImage(request));
     } catch (error) {
         console.error(`Avatar image failed: ${request.file}: ${error.message}`);
         response.writeHead(error.busy ? 503 : 502).end();
@@ -475,6 +471,7 @@ const server = http.createServer(async (request, response) => {
 });
 server.headersTimeout=5000;
 server.requestTimeout=JOB_DEADLINE_MS;
+await avatarStore?.open();
 refill();
 setInterval(revalidateCatalogue, 15000).unref();
 server.listen(port,host,() => console.log(`Trusted camera renderer listening on ${host}:${port}`));

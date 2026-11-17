@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import { resolve } from 'node:path';
 import { crc32 } from 'node:zlib';
 
 // The page draws at most this many frames for one moving image.
@@ -15,14 +16,21 @@ const SCALES = { s: 0.5, m: 1, l: 2 };
 const POSTURES = { std: 'std', sit: 'sit', lay: 'lay', wlk: 'mv' };
 const EXPRESSIONS = { none: 0, wave: 1, kiss: 2, laugh: 3 };
 
-// The signature covers the figure and the version, so only the hotel's own site can ask for a new figure.
-export function avatarSignature(secret, version, figure) {
-    return createHmac('sha256', secret).update(`v${version}/${figure}`).digest('hex').slice(0, 16);
+// The signature covers the whole image: version, figure and variant. Only the hotel's own site can ask for an image.
+export function avatarSignature(secret, version, figure, variant) {
+    return createHmac('sha256', secret).update(`v${version}/${figure}/${variant}`).digest('hex').slice(0, 16);
 }
 
-// Reads the avatar settings from the environment. Null means avatar images are off.
+// Reads the avatar settings from the environment. Null means avatar images are off. An empty value counts as unset.
 export function avatarSettings(env) {
-    throw new Error('Not implemented');
+    const secret = env.AVATAR_IMAGER_SECRET || null;
+    const root = env.AVATAR_IMAGER_ROOT || null;
+    if (!secret && !root) return null;
+    if (!secret || !root) throw new Error('AVATAR_IMAGER_SECRET and AVATAR_IMAGER_ROOT must be set together');
+    if (secret.length < 32) throw new Error('AVATAR_IMAGER_SECRET must contain at least 32 characters');
+    const megabytes = env.AVATAR_IMAGER_MAX_MB || '1024';
+    if (!/^[1-9]\d{0,6}$/.test(megabytes)) throw new Error('AVATAR_IMAGER_MAX_MB must be a whole number of megabytes');
+    return { secret, root: resolve(root), maxBytes: Number(megabytes) * 1024 * 1024 };
 }
 
 // Reads /avatars/v<version>/<figure>/<signature>.<variant>.png. Null means the path is not one this hotel signed.
@@ -31,7 +39,7 @@ export function avatarRequest(pathname, secret) {
     if (!path) return null;
     const [, version, figure, signature, variant] = path;
     if (figure.includes('..') || figure.endsWith('.') || figure.endsWith('-')) return null;
-    if (!timingSafeEqual(Buffer.from(signature), Buffer.from(avatarSignature(secret, version, figure)))) return null;
+    if (!timingSafeEqual(Buffer.from(signature), Buffer.from(avatarSignature(secret, version, figure, variant)))) return null;
     const fields = VARIANT.exec(variant);
     if (!fields) return null;
     const [, gender, size, part, direction, headDirection, posture, expression, gesture, dance, effect, item, motion] = fields;

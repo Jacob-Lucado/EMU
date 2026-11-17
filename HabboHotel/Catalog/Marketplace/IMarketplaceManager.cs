@@ -15,8 +15,6 @@ public interface IMarketplaceManager
     MarketplaceOwnOffers OwnOffers(int userId);
 
     Task<bool> TryCancelOffer(Habbo habbo, uint offerId);
-    Task<MarketOffer?> GetOffer(uint offerId);
-    Task DeleteOffer(uint offerId);
 }
 
 public sealed record MarketplaceItemStats(int AveragePrice, int OfferCount, IReadOnlyList<MarketplaceHistoryDay>? History = null,

@@ -15,8 +15,6 @@ public interface IMarketplaceListingService
 public sealed class MarketplaceListingService(IMarketplaceOfferStore store, IMarketplaceFeePolicy fee, TimeProvider time, ISettingsManager settings) : IMarketplaceListingService
 {
     public const int MaximumOfferCount = 500;
-    public const int MinimumPrice = 1;
-    public const int MaximumPrice = 99999999;
 
     public bool TryList(Habbo habbo, IReadOnlyList<uint> itemIds, int furniType, int price)
     {

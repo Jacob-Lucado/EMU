@@ -668,8 +668,6 @@ public sealed class MarketplaceDatabaseTests
         public MarketplaceItemStats ItemStats(uint spriteId) => new(0, 0);
         public MarketplaceOwnOffers OwnOffers(int userId) => new(0, []);
         public Task<bool> TryCancelOffer(Habbo habbo, uint offerId) => Task.FromResult(false);
-        public Task<MarketOffer?> GetOffer(uint offerId) => Task.FromResult<MarketOffer?>(null);
-        public Task DeleteOffer(uint offerId) => Task.CompletedTask;
     }
 
     private sealed class FixedClock(DateTimeOffset now) : TimeProvider

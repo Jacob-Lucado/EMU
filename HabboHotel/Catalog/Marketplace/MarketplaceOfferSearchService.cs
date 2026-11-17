@@ -15,8 +15,6 @@ public interface IMarketplaceOfferSearchService
     MarketplaceOffersSnapshot Capture(IReadOnlyDictionary<uint, MarketOffer> best, IReadOnlyDictionary<uint, int> counts);
 }
 
-public sealed record MarketplaceOfferRow(uint OfferId, string ItemType, int SpriteId, int TotalPrice, int LimitedNumber, int LimitedStack);
-
 public sealed class MarketplaceOfferSearchService(IDatabase database, IMarketplaceManager marketplace, TimeProvider time, IMarketplaceFeePolicy? policy = null) : IMarketplaceOfferSearchService
 {
     private const string SelectOffers = """

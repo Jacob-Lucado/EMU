@@ -203,20 +203,5 @@ public class MarketplaceManager : IMarketplaceManager
             }
     }
 
-    public async Task<MarketOffer?> GetOffer(uint offerId)
-    {
-        using var connection = _database.Connection();
-
-        return await connection.QuerySingleOrDefaultAsync<MarketOffer>(
-            "SELECT `furni_id`, `sprite_id`, `item_id`, `user_id`, `extra_data`, `offer_id`, `state`, `limited_number`, `limited_stack` FROM `catalog_marketplace_offers` WHERE `offer_id` = @offerId LIMIT 1",
-            new { offerId });
-    }
-
-    public async Task DeleteOffer(uint offerId)
-    {
-        using var connection = _database.Connection();
-        await connection.ExecuteAsync("DELETE FROM `catalog_marketplace_offers` WHERE `offer_id` = @offerId LIMIT 1", new { offerId });
-    }
-
     private sealed record MarketTotals(int AveragePrice, int Sold);
 }

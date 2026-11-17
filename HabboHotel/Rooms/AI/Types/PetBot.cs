@@ -15,11 +15,13 @@ public class PetBot : BotAi
     private int _speechTimer;
     private readonly IPetLocale _locale;
     private readonly IPetCommandManager _commands;
+    private readonly Random _random;
 
     public PetBot(int virtualId, IPetLocale locale, IPetCommandManager commands, Random? random = null)
     {
         _locale = locale;
         _commands = commands;
+        _random = random ?? Random.Shared;
         _speechTimer = Random.Shared.Next(10, 60);
         _actionTimer = Random.Shared.Next(10, 30 + virtualId);
         _energyTimer = EnergyRestTicks - 1;
@@ -124,6 +126,10 @@ public class PetBot : BotAi
             return;
         }
 
+        if (PetChatter.For(petData.Type) is { } chatter && _random.NextDouble() < chatter.ChancePerTick) {
+            pet.Chat(chatter.Lines[_random.Next(chatter.Lines.Length)]);
+        }
+
         if (_speechTimer <= 0) {
             if (petData.DbState != PetDatabaseUpdateState.NeedsInsert) {
                 petData.DbState = PetDatabaseUpdateState.NeedsUpdate;
@@ -131,7 +137,7 @@ public class PetBot : BotAi
 
             if (pet != null) {
                 RemovePetStatus();
-                // A pet never chats on its own; it only shows the three letter gestures from its speech list.
+                // The three letter entries of the speech list are gestures.
                 var gestures = _locale.GetValue($"speech.pet{petData.Type}").Where(entry => entry.Length == 3).ToArray();
 
                 if (gestures.Length > 0) {

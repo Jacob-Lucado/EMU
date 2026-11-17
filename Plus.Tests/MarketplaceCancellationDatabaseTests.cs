@@ -30,24 +30,6 @@ public sealed class MarketplaceCancellationDatabaseTests
     }
 
     [RecyclerDatabaseFact]
-    public async Task ConcurrentOffersCannotSpendTheSameStoredCreditsTwice()
-    {
-        using var fixture = new Fixture();
-        fixture.Connection.Execute("""
-            UPDATE catalog_marketplace_offers SET total_price=700,asking_price=699;
-            INSERT INTO catalog_marketplace_offers(offer_id,state,user_id,furni_id,item_id,extra_data,limited_number,limited_stack,total_price,asking_price,listed_at)
-            VALUES(2,'1',7,78,10,'other',4,10,700,699,'2040-01-01 00:00:00');
-            """);
-        using var start = new Barrier(2);
-        var results = await Task.WhenAll(Task.Run(() => { start.SignalAndWait(); return fixture.Buy(); }),
-            Task.Run(() => { start.SignalAndWait(); return fixture.Buy(offerId: 2); }));
-        Assert.Single(results, result => result.Offer != null);
-        Assert.Single(results, result => result.Refusal == MarketplacePurchaseRefusal.InsufficientCredits);
-        Assert.Equal(300, fixture.Connection.QuerySingle<int>("SELECT credits FROM users WHERE id=8"));
-        Assert.Equal(1, fixture.Connection.QuerySingle<int>("SELECT COUNT(*) FROM items"));
-    }
-
-    [RecyclerDatabaseFact]
     public void ListingRecoversBothCommittedAndRolledBackResponses()
     {
         foreach (var committed in new[] { true, false }) {
@@ -103,12 +85,12 @@ public sealed class MarketplaceCancellationDatabaseTests
     }
 
     [RecyclerDatabaseFact]
-    public void PurchasePreservesPendingLiveCurrencyWithoutSpendingItTwice()
+    public void PurchaseStoresTheChargedLiveBalance()
     {
         using var fixture = new Fixture();
         var result = fixture.Buy(liveCredits: 1010);
         Assert.Equal(910, result.Offer!.BuyerCredits);
-        Assert.Equal(900, fixture.Connection.QuerySingle<int>("SELECT credits FROM users WHERE id=8"));
+        Assert.Equal(910, fixture.Connection.QuerySingle<int>("SELECT credits FROM users WHERE id=8"));
         Assert.Equal(MarketplacePurchaseRefusal.Sold, fixture.Buy().Refusal);
     }
 
@@ -121,6 +103,16 @@ public sealed class MarketplaceCancellationDatabaseTests
         Assert.Equal(900, fixture.Connection.QuerySingle<int>("SELECT credits FROM users WHERE id=8"));
         Assert.Equal(MarketplacePurchaseRefusal.Sold, fixture.Buy().Refusal);
         Assert.Equal(1, fixture.Connection.QuerySingle<int>("SELECT COUNT(*) FROM marketplace_operations"));
+        Assert.Equal(1, fixture.Connection.QuerySingle<int>("SELECT COUNT(*) FROM items"));
+    }
+
+    [RecyclerDatabaseFact]
+    public void PurchaseRecoversACommittedLostResponseOfAnyErrorType()
+    {
+        using var fixture = new Fixture();
+        var result = fixture.Buy(new MarketplaceCommitFaultDatabase(fixture.Source, true, plainError: true));
+        Assert.NotNull(result.Offer);
+        Assert.Equal(900, fixture.Connection.QuerySingle<int>("SELECT credits FROM users WHERE id=8"));
         Assert.Equal(1, fixture.Connection.QuerySingle<int>("SELECT COUNT(*) FROM items"));
     }
 

@@ -5,7 +5,7 @@ using Plus.Database;
 
 namespace Plus.Tests;
 
-internal sealed class MarketplaceCommitFaultDatabase(IDatabase source, bool commit, bool recoveryAvailable = true) : IDatabase
+internal sealed class MarketplaceCommitFaultDatabase(IDatabase source, bool commit, bool recoveryAvailable = true, bool plainError = false) : IDatabase
 {
     private int _connections;
     public bool IsConnected() => source.IsConnected();
@@ -15,19 +15,19 @@ internal sealed class MarketplaceCommitFaultDatabase(IDatabase source, bool comm
             return recoveryAvailable ? source.Connection() : throw new CommitFailure();
         }
 
-        return new ConnectionWrapper(source.Connection(), commit);
+        return new ConnectionWrapper(source.Connection(), commit, plainError);
     }
 
     internal sealed class CommitFailure() : DbException("Connection lost during commit.");
 
-    private sealed class ConnectionWrapper(IDbConnection inner, bool commit) : IDbConnection
+    private sealed class ConnectionWrapper(IDbConnection inner, bool commit, bool plainError) : IDbConnection
     {
         [AllowNull] public string ConnectionString { get => inner.ConnectionString; set => inner.ConnectionString = value; }
         public int ConnectionTimeout => inner.ConnectionTimeout;
         public string Database => inner.Database;
         public ConnectionState State => inner.State;
-        public IDbTransaction BeginTransaction() => new TransactionWrapper(inner.BeginTransaction(), this, commit);
-        public IDbTransaction BeginTransaction(IsolationLevel level) => new TransactionWrapper(inner.BeginTransaction(level), this, commit);
+        public IDbTransaction BeginTransaction() => new TransactionWrapper(inner.BeginTransaction(), this, commit, plainError);
+        public IDbTransaction BeginTransaction(IsolationLevel level) => new TransactionWrapper(inner.BeginTransaction(level), this, commit, plainError);
         public void ChangeDatabase(string name) => inner.ChangeDatabase(name);
         public void Close() => inner.Close();
         public IDbCommand CreateCommand() => new CommandWrapper(inner.CreateCommand());
@@ -35,7 +35,7 @@ internal sealed class MarketplaceCommitFaultDatabase(IDatabase source, bool comm
         public void Dispose() => inner.Dispose();
     }
 
-    private sealed class TransactionWrapper(IDbTransaction inner, IDbConnection connection, bool commit) : IDbTransaction
+    private sealed class TransactionWrapper(IDbTransaction inner, IDbConnection connection, bool commit, bool plainError) : IDbTransaction
     {
         public IDbTransaction Inner => inner;
         public IDbConnection Connection => connection;
@@ -49,7 +49,7 @@ internal sealed class MarketplaceCommitFaultDatabase(IDatabase source, bool comm
                 inner.Rollback();
             }
 
-            throw new CommitFailure();
+            throw plainError ? new InvalidOperationException("Connection lost during commit.") : new CommitFailure();
         }
         public void Rollback() => inner.Rollback();
         public void Dispose() => inner.Dispose();

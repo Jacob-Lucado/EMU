@@ -166,10 +166,7 @@ public class MarketplacePurchaseTests
         Assert.Equal(899, client.GetHabbo().Credits);
         Assert.Equal(new[] { "commit", "dispose" }, database.Transactions);
         Assert.Single(database.Writes, write => write.Sql.StartsWith("INSERT INTO `items`", StringComparison.Ordinal));
-        var debit = Assert.Single(database.Writes, write => write.Sql.StartsWith("UPDATE `users` SET `credits` = `credits` -", StringComparison.Ordinal));
-        Assert.Contains("`credits` >= @TotalPrice", debit.Sql);
-        Assert.Contains(8, debit.Parameters.Values);
-        Assert.Contains(101, debit.Parameters.Values);
+        MarketplaceRedemptionTests.AssertCreditsWritten(database, userId: 8, credits: 899);
     }
 
     [Fact]

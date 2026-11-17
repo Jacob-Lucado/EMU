@@ -264,14 +264,14 @@ public class MarketplaceListingTests
         new(new MarketplaceListingService(store, Fee(), new FixedClock(Now), Settings(), MarketplaceTestAccess.Allowed));
 
     [Fact]
-    public void MissingTradingPassRejectsTheSaleBeforeRemovingAnything()
+    public void AUserWithoutTradingPassOrCitizenshipCanListFurni()
     {
         var store = new RecordingStore();
         var (habbo, item) = Owner(ItemType.Floor);
-        var listing = new MarketplaceListingService(store, Fee(), new FixedClock(Now), Settings(), new MarketplaceTestAccess(false));
-        Assert.False(listing.TryList(habbo, [item.Id], 1, 100));
-        Assert.Empty(store.Listings);
-        Assert.Same(item, habbo.Inventory!.Furniture.GetItem(item.Id));
+        var listing = new MarketplaceListingService(store, Fee(), new FixedClock(Now), Settings(), MarketplaceAccessTests.NewUserAccess());
+        Assert.True(listing.TryList(habbo, [item.Id], 1, 100));
+        Assert.Single(store.Listings);
+        Assert.Null(habbo.Inventory!.Furniture.GetItem(item.Id));
     }
 
     private static (Habbo Habbo, InventoryItem Item) Owner(ItemType type, bool staffTest = false)

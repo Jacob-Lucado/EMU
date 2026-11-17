@@ -138,6 +138,56 @@ public sealed class MarketplaceDatabaseTests
     }
 
     [MarketplaceDatabaseFact]
+    public async Task ExpiredOffersStayListedWithTheirExpiryTimeUntilTheOwnerTakesThemBack()
+    {
+        Insert(1, sprite: 100, asking: 50, total: 55, state: "1", timestamp: Now.ToUnixTimeSeconds() - 172800 - 600, seller: SellerId, furniId: 77);
+        Insert(2, sprite: 200, asking: 30, total: 33, state: "1", timestamp: 0, seller: SellerId, furniId: 78);
+        var definitions = new Dictionary<uint, ItemDefinition> { [900] = new() { Id = 900, SpriteId = 100, PublicName = "Probe", ItemName = "probe", Type = ItemType.Floor } };
+        var items = CatalogSnapshotTestSupport.Proxy<IItemDataManager>((method, _) => method == "get_Items" ? definitions : throw new InvalidOperationException(method));
+        var manager = new MarketplaceManager(new MySqlDatabase(_connectionString), items, CatalogSnapshotTestSupport.Proxy<IItemFactory>((method, _) => throw new InvalidOperationException(method)), new FixedClock(Now));
+
+        var own = manager.OwnOffers(SellerId);
+
+        Assert.Equal(new[] { (1, 3, Now.AddSeconds(-600).ToUnixTimeMilliseconds()), (2, 3, 0L) },
+            own.Offers.Select(offer => (offer.OfferId, offer.State, offer.StatusTime)).ToArray());
+        var seller = new Habbo { Id = SellerId, Username = "seller", Inventory = new InventoryComponent { Furniture = new FurnitureInventoryComponent([], []) } };
+        Assert.True(await manager.TryCancelOffer(seller, 1));
+        Assert.NotNull(seller.Inventory.Furniture.GetItem(77));
+        Assert.Equal(new uint[] { 2 }, OfferIds("1 = 1"));
+    }
+
+    [MarketplaceDatabaseFact]
+    public void PurchaseCanSpendCreditsThatAreOnlyInTheLiveWallet()
+    {
+        Insert(1, sprite: 55, asking: 99, total: 100, state: "1", timestamp: Now.ToUnixTimeSeconds() - 1000, seller: SellerId, furniId: 77);
+        var buyer = Buyer(credits: 90);
+        buyer.Client.GetHabbo().Credits = 110;
+
+        Assert.Equal(MarketplacePurchaseOutcome.Bought, Purchase(buyer).Buy(buyer.Client, 1));
+
+        Assert.Equal(10, buyer.Client.GetHabbo().Credits);
+        Assert.Equal(10, StoredCredits(BuyerId));
+    }
+
+    [MarketplaceDatabaseFact]
+    public async Task OneSessionCannotSpendTheSameCreditsOnTwoOffersAtOnce()
+    {
+        Insert(1, sprite: 55, asking: 699, total: 700, state: "1", timestamp: Now.ToUnixTimeSeconds() - 1000, seller: SellerId, furniId: 77);
+        Insert(2, sprite: 55, asking: 699, total: 700, state: "1", timestamp: Now.ToUnixTimeSeconds() - 1000, seller: SellerId, furniId: 78);
+        var buyer = Buyer(credits: 1000);
+        var purchase = Purchase(buyer);
+        using var start = new Barrier(2);
+
+        var outcomes = await Task.WhenAll(Task.Run(() => { start.SignalAndWait(); return purchase.Buy(buyer.Client, 1); }),
+            Task.Run(() => { start.SignalAndWait(); return purchase.Buy(buyer.Client, 2); }));
+
+        Assert.Single(outcomes, outcome => outcome == MarketplacePurchaseOutcome.Bought);
+        Assert.Single(outcomes, outcome => outcome == MarketplacePurchaseOutcome.InsufficientCredits);
+        Assert.Equal(300, buyer.Client.GetHabbo().Credits);
+        Assert.Equal(300, StoredCredits(BuyerId));
+    }
+
+    [MarketplaceDatabaseFact]
     public void StagedMigrationConvertsLegacyEpochsAndKeepsZeroAndNegativeUnknown()
     {
         var table = "probe_legacy_offers";

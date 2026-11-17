@@ -102,6 +102,8 @@ public class ItemDataManager : IItemDataManager, IStartable
                         Directions = FurnitureDirections.For(Convert.ToString(row["item_name"])),
                         DefaultDirection = row.Table.Columns.Contains("default_dir") && row["default_dir"] is not DBNull ? Convert.ToInt32(row["default_dir"], CultureInfo.InvariantCulture) : 0,
                         FigureSetIds = ReadFigureSetIds(row.Table.Columns.Contains("custom_params") ? row["custom_params"] : null),
+                        CustomParams = row.Table.Columns.Contains("custom_params") ? Convert.ToString(row["custom_params"], CultureInfo.InvariantCulture) ?? "" : "",
+                        FurniLine = row.Table.Columns.Contains("furni_line") ? Convert.ToString(row["furni_line"], CultureInfo.InvariantCulture) ?? "" : "",
                     };
 
                     // Rows sharing a classname take the defaultdir of its furnidata row.

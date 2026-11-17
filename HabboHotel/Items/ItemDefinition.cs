@@ -43,6 +43,12 @@ public class ItemDefinition
     /// <summary>The figure set ids a purchasable clothing item unlocks: its Habbo furnidata customparams.</summary>
     public IReadOnlyList<int> FigureSetIds { get; set; } = [];
 
+    /// <summary>The Habbo furnidata customparams, as in "15 2,3 50,50" for a horse hair dye.</summary>
+    public string CustomParams { get; set; } = string.Empty;
+
+    /// <summary>The Habbo furnidata furniline, as in "pet_food".</summary>
+    public string FurniLine { get; set; } = string.Empty;
+
     public int Modes { get; set; }
     public List<int> VendingIds { get; set; } = new();
     public List<double> AdjustableHeights { get; set; } = new();

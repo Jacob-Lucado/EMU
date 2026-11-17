@@ -554,6 +554,9 @@ public partial class RoomItemHandling
         return RemoveRoomItemCore(item, true, announcing);
     }
 
+    /// <summary>Takes a used-up furni out of the room and deletes it, as when a pet eats the last bite of its food.</summary>
+    public bool DeleteFurniture(Item item) => throw new NotImplementedException();
+
     private bool RemoveRoomItem(Item item) => RemoveRoomItemCore(item, true);
 
     // Remove Temporary Furni sends its own batch, so its removals are not announced one by one.

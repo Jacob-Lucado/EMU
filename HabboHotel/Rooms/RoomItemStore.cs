@@ -18,6 +18,7 @@ public interface IRoomItemStore
     void Restore(uint roomId, IReadOnlyList<RoomItemSave> items) => throw new NotSupportedException("Restoring loaded furni is unavailable.");
     void PlaceFloor(uint itemId, uint roomId, int x, int y, double z, int rotation);
     void PlaceWall(uint itemId, uint roomId, int x, int y, double z, int rotation, string wallPosition);
+    void Delete(uint itemId, uint roomId) => throw new NotSupportedException("Deleting furni is unavailable.");
 }
 
 public sealed class RoomItemStore(IDatabase database) : IRoomItemStore

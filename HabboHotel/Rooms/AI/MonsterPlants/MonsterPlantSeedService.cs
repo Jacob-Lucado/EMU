@@ -56,6 +56,7 @@ public sealed class MonsterPlantSeedService(IMonsterPlantStore store, IMonsterPl
             }
 
             room.GetRoomItemHandler().RemoveFurniture(session, item.Id);
+            rewards.Progress(session, RewardTrackActions.PlantMonsterPlant);
             var speeches = new List<RandomSpeech>();
             room.GetRoomUserManager().DeployBot(new(pet.PetId, pet.RoomId, "pet", "stand", pet.Name, "", pet.Look,
                 pet.X, pet.Y, pet.Z, 0, 0, 0, 0, 0, ref speeches, "", 0, pet.OwnerId, false, 0, false, 0), pet);

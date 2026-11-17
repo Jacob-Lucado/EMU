@@ -104,5 +104,6 @@ public sealed class PetRespectService(IAchievementManager achievements, IQuestMa
         room.SendPacket(new PetTreatedComposer(pet.Respect, pet.OwnerId, pet.PetId, pet.Name, pet.Type,
             int.TryParse(pet.Race, out var race) ? race : 0, pet.Color, pet.CustomParts, plant.Level(now), plant.Rarity));
         achievements.ProgressAchievement(session, "ACH_MonsterPlantTreater", 1);
+        rewards.Progress(session, RewardTrackActions.TreatMonsterPlant);
     }
 }

@@ -12,7 +12,7 @@ namespace Plus.HabboHotel.Catalog.Marketplace;
 
 public enum MarketplacePurchaseOutcome
 {
-    Bought, NotFound, Sold, Expired, UnknownItem, OwnOffer, InsufficientCredits, InvalidOffer, WalletClosed, TradingLocked
+    Bought, NotFound, Sold, Expired, UnknownItem, OwnOffer, InsufficientCredits, InvalidOffer, WalletClosed, TradingLocked, RolledBack
 }
 
 public interface IMarketplacePurchaseService
@@ -51,7 +51,7 @@ public sealed class MarketplacePurchaseService(IMarketplacePurchaseStore store, 
 
                 result = MarketplaceCommit.Guard(habbo, () => store.Claim(new MarketplacePurchaseRequest(offerId, habbo.Id, habbo.Credits, listedBefore,
                     itemId => items.Items.TryGetValue(itemId, out var definition) ? definition : null,
-                    delivery => PrepareDelivery(habbo, delivery))));
+                    delivery => PrepareDelivery(habbo, delivery))), new MarketplacePurchaseResult(MarketplacePurchaseRefusal.RolledBack, null));
 
                 if (result.Refusal is { } refusal) {
                     outcome = Outcome(refusal);
@@ -110,7 +110,7 @@ public sealed class MarketplacePurchaseService(IMarketplacePurchaseStore store, 
                 session.Send(new MarketplaceBuyOfferResultComposer(MarketplaceBuyResult.RefreshOffers, offerId));
 
                 return;
-            case MarketplacePurchaseOutcome.Bought:
+            case MarketplacePurchaseOutcome.Bought or MarketplacePurchaseOutcome.TradingLocked or MarketplacePurchaseOutcome.RolledBack:
                 session.Send(new MarketplaceBuyOfferResultComposer(MarketplaceBuyResult.RefreshOffers, offerId));
 
                 return;
@@ -133,6 +133,7 @@ public sealed class MarketplacePurchaseService(IMarketplacePurchaseStore store, 
         MarketplacePurchaseRefusal.UnknownItem => MarketplacePurchaseOutcome.UnknownItem,
         MarketplacePurchaseRefusal.OwnOffer => MarketplacePurchaseOutcome.OwnOffer,
         MarketplacePurchaseRefusal.InvalidOffer => MarketplacePurchaseOutcome.InvalidOffer,
+        MarketplacePurchaseRefusal.RolledBack => MarketplacePurchaseOutcome.RolledBack,
         _ => MarketplacePurchaseOutcome.InsufficientCredits,
     };
 }

@@ -8,7 +8,7 @@ namespace Plus.HabboHotel.Catalog.Marketplace;
 
 public enum MarketplacePurchaseRefusal
 {
-    NotFound, Sold, Expired, UnknownItem, OwnOffer, InsufficientCredits, InvalidOffer
+    NotFound, Sold, Expired, UnknownItem, OwnOffer, InsufficientCredits, InvalidOffer, RolledBack
 }
 
 // Everything the delivered furni needs, already converted to its unsigned wire types.

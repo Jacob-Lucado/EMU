@@ -188,7 +188,7 @@ public class MarketplaceManager : IMarketplaceManager
                         };
 
                         return item.ToInventoryItem() ?? throw new InvalidOperationException("Marketplace return could not be prepared.");
-                    }));
+                    }), null);
 
                 if (returned is null) {
                     return Task.FromResult(false);

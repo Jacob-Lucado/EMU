@@ -22,6 +22,17 @@ internal static class MarketplaceCommit
         }
     }
 
+    // A rolled-back operation changed nothing, so the client gets the same answer as for a refusal.
+    public static T Guard<T>(Habbo habbo, Func<T> action, T rolledBack)
+    {
+        try {
+            return Guard(habbo, action);
+        }
+        catch (MarketplaceCommitFailedException) {
+            return rolledBack;
+        }
+    }
+
     public static void LockUser(IDbConnection connection, IDbTransaction transaction, int userId)
     {
         if (connection.QuerySingleOrDefault<int?>("SELECT id FROM users WHERE id=@userId FOR UPDATE", new { userId }, transaction) == null) {

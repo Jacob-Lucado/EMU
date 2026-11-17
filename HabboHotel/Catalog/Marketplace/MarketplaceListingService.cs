@@ -61,7 +61,7 @@ public sealed class MarketplaceListingService(IMarketplaceOfferStore store, IMar
                 var listedAt = time.GetUtcNow();
 
                 if (!MarketplaceCommit.Guard(habbo, () => store.ListFurni(items.Select(item => new MarketplaceListing(item.Id, item.Definition.Id, habbo.Id, seller, price, item.Definition.PublicName,
-                    item.Definition.SpriteId, furniType == 2 ? "2" : "1", listedAt, item.ExtraData.Serialize(), item.UniqueNumber, item.UniqueSeries)).ToArray()))) {
+                    item.Definition.SpriteId, furniType == 2 ? "2" : "1", listedAt, item.ExtraData.Serialize(), item.UniqueNumber, item.UniqueSeries)).ToArray()), false)) {
                     return false;
                 }
 

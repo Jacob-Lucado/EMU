@@ -375,31 +375,42 @@ const avatarRenders = new Map();
 const avatarFailures = new Map();
 let avatarTurn = Promise.resolve();
 let avatarsWaiting = 0;
+const lasting = message => Object.assign(new Error(message), { lasting: true });
 // Draws one avatar image and stores it where nginx finds it for every later request.
 async function drawAvatar({ job, file }) {
-    const frames = await onPage(AVATAR_ROOM_ID, null, page => page.evaluate(body => {
-        if (typeof window.cameraAvatar !== 'function') throw new Error('The client build cannot draw avatar images');
-        return window.cameraAvatar(JSON.parse(body));
+    // An error the page answers with belongs to the image. A closed page or a timeout rejects instead and does not.
+    const drawn = await onPage(AVATAR_ROOM_ID, null, page => page.evaluate(async body => {
+        if (typeof window.cameraAvatar !== 'function') return { error: 'The client build cannot draw avatar images' };
+        try { return { frames: await window.cameraAvatar(JSON.parse(body)) }; }
+        catch (error) { return { error: String(error?.message ?? error) }; }
     }, JSON.stringify(job)));
-    if (!Array.isArray(frames) || !frames.length || frames.length > job.frames) throw new Error('Invalid avatar frames');
+    if (drawn.error) throw lasting(drawn.error);
+    const { frames } = drawn;
+    if (!Array.isArray(frames) || !frames.length || frames.length > job.frames) throw lasting('Invalid avatar frames');
     const images = frames.map(frame => Buffer.from(frame, 'base64'));
-    const image = animatedPng(images.slice(0, loopLength(images)));
+    let image;
+    try { image = animatedPng(images.slice(0, loopLength(images))); }
+    catch (error) { throw lasting(error.message); }
     await avatarStore.save(file, image);
     return image;
 }
-// One avatar at a time, so a photo always finds a free page. Requests for the same image share one drawing.
+// An avatar starts only while no photo waits, so photos keep the other page.
+async function photosFirst() {
+    while (photoWaiting()) await new Promise(next => setTimeout(next, 50));
+}
+// One avatar at a time. Requests for the same image share one drawing.
 function avatarImage(request) {
     const running = avatarRenders.get(request.file);
     if (running) return running;
     if ((avatarFailures.get(request.file) ?? 0) > Date.now()) return Promise.reject(new Error('Avatar image failed a moment ago'));
     if (avatarsWaiting >= MAX_AVATAR_QUEUE) return Promise.reject(Object.assign(new Error('Avatar queue is full'), { busy: true }));
     avatarsWaiting++;
-    const drawn = avatarTurn.then(() => drawAvatar(request));
+    const drawn = avatarTurn.then(photosFirst).then(() => drawAvatar(request));
     avatarTurn = drawn.then(() => {}, () => {});
     avatarRenders.set(request.file, drawn);
     drawn.catch(error => {
         // A figure or effect that cannot be drawn is not tried again on every page view.
-        if (!/timed out|queue|pool/i.test(error.message)) avatarFailures.set(request.file, Date.now() + AVATAR_FAILURE_MS);
+        if (error.lasting) avatarFailures.set(request.file, Date.now() + AVATAR_FAILURE_MS);
         if (avatarFailures.size > 4096) avatarFailures.clear();
     }).finally(() => { avatarsWaiting--; avatarRenders.delete(request.file); });
     return drawn;
@@ -421,7 +432,7 @@ const server = http.createServer(async (request, response) => {
     response.setHeader('X-Content-Type-Options','nosniff');
     response.setHeader('Cache-Control','no-store');
     // An avatar path carries its own signature, so nginx can pass these requests on without the camera password.
-    if (request.method === 'GET' && request.url.startsWith('/avatars/')) { await serveAvatar(request.url, response).catch(() => response.destroy()); return; }
+    if ((request.method === 'GET' || request.method === 'HEAD') && request.url.startsWith('/avatars/')) { await serveAvatar(request.url, response).catch(() => response.destroy()); return; }
     if (!authorized(request.headers.authorization,secret)) {response.writeHead(401).end(); return;}
     // A closed page drops its requests; their downloads then stop unless another request still needs them.
     const lifetime = new AbortController();

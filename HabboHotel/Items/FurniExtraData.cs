@@ -54,7 +54,7 @@ internal static class FurniExtraData
     {
         ["offsetX"] = (-10000, 10000),
         ["offsetY"] = (-10000, 10000),
-        ["offsetZ"] = (-1000, 1000),
+        ["offsetZ"] = (int.MinValue, int.MaxValue),
         ["scale"] = (10, 500),
         ["alpha"] = (0, 100)
     };

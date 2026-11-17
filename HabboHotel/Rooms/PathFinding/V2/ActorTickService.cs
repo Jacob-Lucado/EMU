@@ -23,7 +23,7 @@ public sealed class ActorTickService(Room room)
         // A sign lasts its own time while the avatar stands still too.
         room.GetRoomUserManager().UpdateSignStatus(actor);
 
-        if (!actor.IsBot && !actor.IsAsleep && actor.IdleTime >= 600) {
+        if (!actor.IsBot && !actor.IsAsleep && room.Behavior.IdleSleepTicks is { } sleepTicks && actor.IdleTime >= sleepTicks) {
             actor.IsAsleep = true;
             room.SendPacket(new SleepComposer(actor.VirtualId, true));
         }

@@ -111,6 +111,7 @@ public static class ServerPacketHeader
     // Room Settings
     public const uint RoomSettingsDataComposer = 933;
     public const uint RoomSettingsSavedComposer = 1000;
+    public const uint RoomSettingsSaveErrorComposer = 889;
     public const uint FlatControllerRemovedComposer = 3184;
     public const uint FlatControllerAddedComposer = 1907;
     public const uint RoomRightsListComposer = 3347;

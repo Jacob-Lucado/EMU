@@ -338,7 +338,10 @@ public class Soccer
         _dribbles.Clear();
     }
 
-    private enum Tile { Open, Blocked, Avatar, Stop }
+    private enum Tile
+    {
+        Open, Blocked, Avatar, Stop
+    }
 
     private sealed class Flight(int direction, int power, RoomUser kicker)
     {

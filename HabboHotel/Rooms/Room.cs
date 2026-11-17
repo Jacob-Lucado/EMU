@@ -510,6 +510,7 @@ public class Room
             RunRoomPhase(CycleRollers);
             RunRoomPhase(() => GetWired().OnRoomTickEnd());
             RunRoomPhase(() => _gameItemHandler?.OnCycle());
+            RunRoomPhase(() => _banzai?.OnCycle());
             RunRoomPhase(CycleWired);
         }
         catch (Exception error) {

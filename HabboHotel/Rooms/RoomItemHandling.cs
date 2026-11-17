@@ -1256,6 +1256,25 @@ public partial class RoomItemHandling
         }
     }
 
+    // A pet package opening has already stored the replacement's room, height and rotation.
+    internal void PublishStoredFloorItem(Item item)
+    {
+        var map = _room.GetGameMap();
+
+        lock (map.PlacementSync) {
+            if (!AdmitFloorItem(item)) {
+                return;
+            }
+
+            map.AddItemToMap(item, handleGameItem: false);
+            _restorePoint[item.Id] = RestorePoint(item);
+        }
+
+        map.AddItemEffects(item);
+        _room.GetWired()?.AttachRoomItem(item);
+        _room.SendObject(item);
+    }
+
     // Admission serializes membership and record publication with pickup. Only
     // that transaction shares NavSync; callbacks do not.
     internal bool AdmitFloorItem(Item item)

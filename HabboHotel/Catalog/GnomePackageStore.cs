@@ -1,3 +1,5 @@
+using System.Globalization;
+using Dapper;
 using Microsoft.Extensions.Logging;
 using Plus.Database;
 using Plus.HabboHotel.Catalog.Utilities;
@@ -53,5 +55,34 @@ public sealed class GnomePackageStore(IDatabase database, ILogger<GnomePackageSt
         }
     }
 
-    public PetPackageOpening? OpenPetPackage(PetPackageRequest request) => throw new NotImplementedException();
+    public PetPackageOpening? OpenPetPackage(PetPackageRequest request)
+    {
+        try {
+            using var connection = database.Connection();
+            connection.Open();
+            using var transaction = connection.BeginTransaction();
+            var pet = PetUtility.CreatePet(connection, transaction, request.CreatedAt, request.OwnerName, request.OwnerId, request.Name,
+                request.Figure.Type, request.Figure.Palette.ToString(CultureInfo.InvariantCulture), request.Figure.Colour,
+                new(request.ItemId, request.BaseItem, request.RoomId, request.X, request.Y, request.PetZ));
+
+            if (pet == null) {
+                return null;
+            }
+
+            connection.Execute(
+                "INSERT INTO `items` (base_item,user_id,room_id,x,y,z,wall_pos,rot,extra_data) VALUES (@baseItem,@ownerId,@roomId,@x,@y,@z,'',@rotation,'')",
+                new { baseItem = request.FurniBaseItem, ownerId = request.OwnerId, roomId = request.RoomId, x = request.X, y = request.Y, z = request.Z, rotation = request.FurniRotation },
+                transaction);
+            var furniId = connection.QuerySingle<uint>("SELECT LAST_INSERT_ID()", transaction: transaction);
+            transaction.Commit();
+
+            return new(pet, furniId);
+        }
+        catch (Exception exception) {
+            logger.LogError(exception, "Could not open pet package {ItemId} for user {OwnerId} in room {RoomId}",
+                request.ItemId, request.OwnerId, request.RoomId);
+
+            return null;
+        }
+    }
 }

@@ -6,6 +6,7 @@ using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Items;
 using Plus.HabboHotel.Rooms;
 using Plus.HabboHotel.Rooms.AI.Speech;
+using Plus.HabboHotel.Users.Inventory.Furniture;
 using Plus.Utilities.DependencyInjection;
 
 namespace Plus.HabboHotel.Catalog;
@@ -40,13 +41,24 @@ public sealed class GnomePackageService(
             if (!ReferenceEquals(room.GetRoomItemHandler().GetItem(itemId), item)
                 || item.IsTemporary || item.RoomId != room.RoomId
                 || item.OwnerId != habbo.Id
-                || item.Definition?.InteractionType != InteractionType.GnomeBox
                 || habbo.Inventory is not { } inventory) {
+                return;
+            }
+
+            var furni = PetPackageFurni(item.Definition);
+
+            if (item.Definition?.InteractionType != InteractionType.GnomeBox && furni == null) {
                 return;
             }
 
             if (!PetUtility.CheckPetName(petName)) {
                 session.Send(new CheckGnomeNameComposer(itemId, petName, PetPackageNameError.InvalidName));
+
+                return;
+            }
+
+            if (furni != null) {
+                OpenPetPackage(room, session, item, furni, petName);
 
                 return;
             }
@@ -77,6 +89,56 @@ public sealed class GnomePackageService(
             }
         }
     }
+
+    /// <summary>The furni a pet package leaves behind; null when the furni is no pet package or its furni is unknown.</summary>
+    private ItemDefinition? PetPackageFurni(ItemDefinition? definition) =>
+        definition is { InteractionType: InteractionType.None, PetPackage: { } package }
+        && definitions.GetItemByName(package.FurniName) is { Type: ItemType.Floor } furni
+            ? furni
+            : null;
+
+    // Habbo replaces the package with its furni facing direction 4 and puts the named pet on top of it.
+    private void OpenPetPackage(Room room, GameClient session, Item item, ItemDefinition furni, string petName)
+    {
+        var habbo = session.GetHabbo();
+        var figure = PetPackageFigure.Of(item.Definition.PetPackage!, item.LegacyDataString);
+        var opened = store.OpenPetPackage(new(item.Id, item.Definition.Id, habbo.Id, habbo.Username, room.RoomId, item.GetX, item.GetY, item.GetZ,
+            petName, figure, item.GetZ + furni.Height, furni.Id, PetPackageFurniRotation, clock.GetUtcNow()));
+
+        if (opened == null) {
+            session.SendNotification("Oops, an error occoured. Please report this!");
+
+            return;
+        }
+
+        room.GetRoomItemHandler().RemoveFurniture(session, item.Id);
+        var placed = new Item
+        {
+            Id = opened.FurniId,
+            BaseItem = checked((int)furni.Id),
+            OwnerId = item.OwnerId,
+            RoomId = room.RoomId,
+            Definition = furni,
+            ExtraData = FurniExtraData.Load(furni, "", keepLegacy: true),
+            GetX = item.GetX,
+            GetY = item.GetY,
+            GetZ = item.GetZ,
+            Rotation = PetPackageFurniRotation
+        };
+
+        if (!room.GetRoomItemHandler().SetFloorItem(session, placed, placed.GetX, placed.GetY, placed.Rotation, true, false, true)
+            && habbo.Inventory is { } inventory && inventory.Furniture.AddItem(placed.ToInventoryItem())) {
+            session.Send(new FurniListNotificationComposer(placed.Id, 1));
+        }
+
+        var pet = opened.Pet;
+        var speeches = new List<RandomSpeech>();
+        room.GetRoomUserManager().DeployBot(new(pet.PetId, pet.RoomId, "pet", "freeroam", pet.Name, "", pet.Look,
+            pet.X, pet.Y, pet.Z, 0, 0, 0, 0, 0, ref speeches, "", 0, pet.OwnerId, false, 0, false, 0), pet);
+        session.Send(new CheckGnomeNameComposer(item.Id, petName, PetPackageNameError.None));
+    }
+
+    private const int PetPackageFurniRotation = 4;
 
     private static string RandomClothing() => Random.Shared.Next(1, 7) switch
     {

@@ -218,6 +218,7 @@ public class RewardTrackLiveTests
     {
         var database = TrackDatabase(8, currency.ToString(System.Globalization.CultureInfo.InvariantCulture), 5);
         var (client, habbo, manager) = await Claimer(database, new BadgeDefinitions());
+
         if (currency == -1) {
             habbo.Credits = int.MaxValue;
         }

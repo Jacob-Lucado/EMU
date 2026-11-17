@@ -318,6 +318,10 @@ public class BattleBanzai
         }
     }
 
+    internal void OnCycle()
+    {
+    }
+
     public void Dispose()
     {
         _banzaiTiles.Clear();

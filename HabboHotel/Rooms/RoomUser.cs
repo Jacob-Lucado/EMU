@@ -57,6 +57,7 @@ public class RoomUser
     public bool Freezed;
     public bool FreezeInteracting;
     public int FreezeLives;
+    public int FreezeExitTicks;
     public bool Frozen;
     public uint GateId;
 

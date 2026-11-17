@@ -85,7 +85,7 @@ public sealed class PetPlacementService(
             var placed = room.GetRoomUserManager().DeployBot(roomBot, pet);
             pet.DbState = PetDatabaseUpdateState.Updated;
             inventory.Pets.RemovePet(pet.PetId);
-            session.Send(new PetInventoryComposer(PetAppearanceSnapshots.Inventory(inventory.Pets.Pets.Values)));
+            session.Send(new PetRemovedFromInventoryComposer(pet.PetId));
             (placed.BotAi as Types.PetBot)?.Greet();
         }
     }
@@ -129,7 +129,7 @@ public sealed class PetPlacementService(
 
             // The pet is already back in storage; an owner whose inventory is not loaded picks it up later.
             if (owner?.GetHabbo()?.Inventory is { } ownerInventory && ownerInventory.Pets.AddPet(data)) {
-                owner.Send(new PetInventoryComposer(PetAppearanceSnapshots.Inventory(ownerInventory.Pets.Pets.Values)));
+                owner.Send(new PetAddedToInventoryComposer(PetAppearanceSnapshots.Inventory([data]).Pets[0]));
             }
 
             room.GetRoomUserManager().RemoveBot(pet.VirtualId, false);

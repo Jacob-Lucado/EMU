@@ -8,5 +8,10 @@ public sealed class FurniListRemoveMultipleComposer(IReadOnlyList<uint> ids) : I
 
     public void Compose(IOutgoingPacket packet)
     {
+        packet.WriteInteger(ids.Count);
+
+        foreach (var id in ids) {
+            packet.WriteUInteger(id);
+        }
     }
 }

@@ -177,6 +177,33 @@ public sealed class GnomePackageServiceTests
     }
 
     [Fact]
+    public void NestKeepsTheStoredHeightOfARaisedPackage()
+    {
+        var world = World(package: true);
+        world.Item.SetState(1, 1, 1.5);
+
+        world.Service.Open(world.Room, world.Client, 7, "Smokey");
+
+        var request = Assert.Single(world.Store.PetRequests);
+        var nest = Assert.IsType<Item>(world.Room.GetRoomItemHandler().GetItem(13));
+        Assert.Equal(1.5, request.Z);
+        Assert.Equal(request.Z, nest.GetZ);
+        Assert.False(world.Client.GetHabbo().Inventory!.Furniture.HasItem(nest.Id));
+    }
+
+    [Fact]
+    public void PackageStaysClosedWhenItsNestWouldExtendOutsideTheRoom()
+    {
+        var world = World(package: true, nestWidth: 4);
+
+        world.Service.Open(world.Room, world.Client, 7, "Smokey");
+
+        Assert.Empty(world.Store.PetRequests);
+        Assert.Same(world.Item, world.Room.GetRoomItemHandler().GetItem(7));
+        Assert.False(world.Client.GetHabbo().Inventory!.Furniture.HasItem(13));
+    }
+
+    [Fact]
     public void InvalidPetNameKeepsThePackageAndRepliesWithItsId()
     {
         var world = World(package: true);
@@ -272,7 +299,7 @@ public sealed class GnomePackageServiceTests
         }
     }
 
-    private static Fixture World(bool temporary = false, bool package = false, bool withNest = true)
+    private static Fixture World(bool temporary = false, bool package = false, bool withNest = true, int nestWidth = 1)
     {
         var model = new RoomModel("gnome-test", 0, 0, 0, 0, "000\r000\r000", 0, 0, false);
         var room = new Room(new RoomData { Id = 42, Model = model }, [], TestLogging.Navigation, TestLogging.Logger, TestRoomAchievements.Unused, TestRoomOwners.Unused);
@@ -307,7 +334,7 @@ public sealed class GnomePackageServiceTests
         });
         var store = new RecordingStore();
         var clock = new CountingClock();
-        var nest = new ItemDefinition { Id = 101, ItemName = "newbie_nest", Type = ItemType.Floor, Height = 0.1, Stackable = true, Width = 1, Length = 1 };
+        var nest = new ItemDefinition { Id = 101, ItemName = "newbie_nest", Type = ItemType.Floor, Height = 0.1, Stackable = true, Width = nestWidth, Length = 1 };
         var known = withNest ? new Dictionary<uint, ItemDefinition> { [nest.Id] = nest } : new Dictionary<uint, ItemDefinition>();
         var definitions = CatalogSnapshotTestSupport.Proxy<IItemDataManager>((method, args) => method switch
         {

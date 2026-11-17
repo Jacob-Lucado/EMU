@@ -381,7 +381,7 @@ public class HabbiconDatabaseTests
             Credits = 100,
             Duckets = 20,
             Diamonds = 20,
-            HabboStats = new HabboStats(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, "", 0)
+            HabboStats = new HabboStats(0, 0, 0, 0, 0, 0, 0, 0, 0, "")
         };
         var (client, sent) = HabbiconTestSupport.Client(habbo);
         var clients = new Plus.HabboHotel.GameClients.GameClientManager(null!, null!);
@@ -481,7 +481,7 @@ public class HabbiconDatabaseTests
             Credits = 100,
             Duckets = 20,
             Diamonds = 20,
-            HabboStats = new HabboStats(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, "", 0)
+            HabboStats = new HabboStats(0, 0, 0, 0, 0, 0, 0, 0, 0, "")
         };
         var (client, _) = HabbiconTestSupport.Client(habbo);
         var clients = new Plus.HabboHotel.GameClients.GameClientManager(null!, null!);
@@ -523,7 +523,7 @@ public class HabbiconDatabaseTests
         {
             Id = UserId,
             Credits = 100,
-            HabboStats = new HabboStats(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, "", 0),
+            HabboStats = new HabboStats(0, 0, 0, 0, 0, 0, 0, 0, 0, ""),
             Inventory = new Plus.HabboHotel.Users.Inventory.InventoryComponent
             {
                 Furniture = new Plus.HabboHotel.Users.Inventory.Furniture.FurnitureInventoryComponent(Array.Empty<Plus.HabboHotel.Users.Inventory.Furniture.InventoryItem>(), Array.Empty<Plus.HabboHotel.Users.Inventory.Furniture.InventoryItem>())

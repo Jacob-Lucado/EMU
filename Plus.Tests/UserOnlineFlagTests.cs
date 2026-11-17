@@ -172,7 +172,7 @@ public sealed class UserOnlineFlagTests
         {
             Id = UserId,
             SessionStartedAt = DateTimeOffset.UtcNow,
-            HabboStats = new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, "", 0)
+            HabboStats = new(0, 0, 0, 0, 0, 0, 0, 0, 0, "")
         };
         var (session, _) = HabbiconTestSupport.Client(habbo);
         habbo.Client = session;

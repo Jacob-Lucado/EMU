@@ -16,7 +16,7 @@ public sealed class RecyclerAchievementServiceTests
         {
             Id = 7,
             Inventory = new InventoryComponent { Furniture = new FurnitureInventoryComponent([], []) },
-            HabboStats = new HabboStats(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, "", 0)
+            HabboStats = new HabboStats(0, 0, 0, 0, 0, 0, 0, 0, 0, "")
         };
         habbo.Achievements["ACH_RecycledItems"] = new("ACH_RecycledItems", 0, 5);
         var (client, _) = HabbiconTestSupport.Client(habbo);
@@ -47,7 +47,7 @@ public sealed class RecyclerAchievementServiceTests
         {
             Id = 7,
             Inventory = new InventoryComponent { Furniture = new FurnitureInventoryComponent([], []) },
-            HabboStats = new HabboStats(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, "", 0)
+            HabboStats = new HabboStats(0, 0, 0, 0, 0, 0, 0, 0, 0, "")
         };
         habbo.Achievements["ACH_RecycledItems"] = new("ACH_RecycledItems", 1, 7);
         habbo.Achievements["ACH_RecycleBoxOpener"] = new("ACH_RecycleBoxOpener", 1, 2);

@@ -166,7 +166,7 @@ public sealed class HabbiconAchievementTests
     private static Habbo LevelUpReady() => new()
     {
         Id = 7,
-        HabboStats = new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, "old", 0),
+        HabboStats = new(0, 0, 0, 0, 0, 0, 0, 0, 0, "old"),
         Inventory = new InventoryComponent()
     };
 

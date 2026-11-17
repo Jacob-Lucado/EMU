@@ -23,6 +23,9 @@ public static class RewardTrackRules
         return new RewardTrackStep(true, task.Id, after, peak, granted, state.Points + granted);
     }
 
+    public static RewardTrackStep PlanScore(RewardTrack track, UserRewardTrackState state, RewardTrackTask task, int score, bool addToExisting) =>
+        throw new NotImplementedException();
+
     public static RewardTrackStep Advance(RewardTrack track, UserRewardTrackState state, RewardTrackTask task, int amount)
     {
         var step = Plan(track, state, task, amount);

@@ -131,6 +131,9 @@ public sealed class RewardTrackManager : IRewardTrackManager, IStartable
         }
     }
 
+    public void ProgressWiredTask(GameClient session, string trackId, string taskId, int score, bool addToExisting) =>
+        throw new NotImplementedException();
+
     public void SendTracks(GameClient session)
     {
         if (session == null) {

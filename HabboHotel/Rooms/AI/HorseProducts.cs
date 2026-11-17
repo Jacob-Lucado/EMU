@@ -66,7 +66,9 @@ public static class HorseProducts
     public static int HairPalette(int stored) => stored > 0 ? stored : DefaultHairPalette;
 
     /// <summary>The furniture a horse gets back when its saddle comes off: the saddle product that puts this saddle part on.</summary>
-    public static ItemDefinition? SaddleProduct(IEnumerable<ItemDefinition> definitions, int saddle) => throw new NotImplementedException();
+    public static ItemDefinition? SaddleProduct(IEnumerable<ItemDefinition> definitions, int saddle) => definitions
+        .Where(definition => Apply(default, definition.InteractionType, definition.CustomParams) is { Saddle: var part } && part == saddle && saddle > 0)
+        .MinBy(definition => definition.Id);
 
     private static HorseStyle? Dye(HorseStyle style, string tag)
     {

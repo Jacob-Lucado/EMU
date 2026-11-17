@@ -5,7 +5,6 @@ using Plus.Communication.Packets.Outgoing.Inventory.Furni;
 using Plus.Communication.Packets.Outgoing.Rooms.AI.Pets;
 using Plus.Communication.Packets.Outgoing.Rooms.Engine;
 using Plus.Database;
-using Plus.HabboHotel.Catalog.Utilities;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Items;
 
@@ -80,20 +79,21 @@ public sealed class HorseCustomizationService(
             return;
         }
 
-        var saddleId = ItemUtility.GetSaddleId(petUser.PetData.Saddle);
+        if (HorseProducts.SaddleProduct(itemDataManager.Items.Values, petUser.PetData.Saddle) is not { } itemData) {
+            return;
+        }
+
         store.UpdatePet(petUser.PetData.PetId, "have_saddle", 0);
         petUser.PetData.Saddle = 0;
 
-        if (itemDataManager.Items.TryGetValue(saddleId, out var itemData)) {
-            var item = itemFactory.CreateSingleItemNullable(itemData, habbo, "", "")?.ToInventoryItem();
+        var item = itemFactory.CreateSingleItemNullable(itemData, habbo, "", "")?.ToInventoryItem();
 
-            if (item != null) {
-                inventory.Furniture.AddItem(item);
-                session.Send(new FurniListNotificationComposer(item.Id, 1));
-                session.Send(new PurchaseOKComposer());
-                session.Send(new FurniListAddComposer(InventoryItemSnapshot.Capture(item)));
-                session.Send(new FurniListUpdateComposer());
-            }
+        if (item != null) {
+            inventory.Furniture.AddItem(item);
+            session.Send(new FurniListNotificationComposer(item.Id, 1));
+            session.Send(new PurchaseOKComposer());
+            session.Send(new FurniListAddComposer(InventoryItemSnapshot.Capture(item)));
+            session.Send(new FurniListUpdateComposer());
         }
 
         room.SendUser(petUser);

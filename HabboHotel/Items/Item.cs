@@ -1178,8 +1178,6 @@ public class Item
                         }
                     case InteractionType.FreezeTile: {
                             if (InteractingUser > 0) {
-                                LegacyDataString = "11000";
-                                UpdateState(false, true);
                                 room.GetFreeze().OnFreezeTiles(this, FreezePowerUp);
                                 InteractingUser = 0;
                                 InteractionCountHelper = 0;

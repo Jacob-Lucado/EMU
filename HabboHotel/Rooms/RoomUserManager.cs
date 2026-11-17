@@ -448,17 +448,15 @@ public partial class RoomUserManager
             return 4;
         }
 
-        if (_room.Group == null) {
-            return _room.CheckRights(session, false) ? 1 : 0;
+        if (_room.IsGroupAdmin(session)) {
+            return 3;
         }
 
-        var habboId = session.GetHabbo().Id;
-
-        if (!_room.Group.IsAdmin(habboId) && _room.UsersWithRights?.Contains(habboId) == true) {
+        if (_room.CheckRights(session, false)) {
             return 1;
         }
 
-        return _room.CheckRights(session, false, true) ? (_room.Group.IsAdmin(habboId) ? 3 : 1) : 0;
+        return _room.CheckRights(session, false, true) ? 2 : 0;
     }
 
     public void RefreshControllerRights(GameClient session)

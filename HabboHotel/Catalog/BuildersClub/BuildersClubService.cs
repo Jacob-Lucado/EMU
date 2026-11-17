@@ -178,7 +178,7 @@ public sealed class BuildersClubService(ICatalogManager catalog, IBuildersClubSt
         }
 
         if (item.UserId != habbo.Id && !habbo.Access.Can(PermissionKeys.RoomItemTake) && !room.CheckRights(session, false) &&
-            !(room.Group != null && room.CheckRights(session, false, true))) {
+            !room.IsGroupAdmin(session)) {
             return false;
         }
 
@@ -306,7 +306,7 @@ public sealed class BuildersClubService(ICatalogManager catalog, IBuildersClubSt
     {
         var habbo = session.GetHabbo();
 
-        if (!room.CheckRights(session, true) && !(room.Group != null && room.CheckRights(session, false, true))) {
+        if (!room.CheckRights(session, true) && !room.IsGroupAdmin(session)) {
             return false;
         }
 

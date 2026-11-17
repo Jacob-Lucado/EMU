@@ -406,6 +406,10 @@ public class Room
         return false;
     }
 
+    // Group membership alone only lets a member decorate. Admin powers need a group admin.
+    public bool IsGroupAdmin(GameClient? session) =>
+        Type == "private" && Group != null && session?.GetHabbo() is { } habbo && Group.IsAdmin(habbo.Id);
+
     public void OnUserShoot(RoomUser user, Item ball)
     {
         Func<Item, bool>? predicate = null;

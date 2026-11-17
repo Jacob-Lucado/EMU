@@ -4,6 +4,7 @@ using System.Runtime.CompilerServices;
 using Dapper;
 using MySqlConnector;
 using Plus.Communication.Packets.Incoming.Rooms.AI.Pets;
+using Plus.Communication.Packets.Outgoing;
 using Plus.Database;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Rooms;
@@ -225,6 +226,33 @@ public sealed class PetPlacementServiceTests
             method == "TryGetValue" && (string)arguments![0]! == "room.pets.placement_limit" ? "5" : null);
 
         return new(room, pet, client, packets, store, new(store, clients, settings));
+    }
+
+    [Fact]
+    public void PlacingAPetOnlyTellsTheInventoryThatThePetLeft()
+    {
+        var world = World();
+
+        world.Service.Place(world.Room, world.Client, world.Pet.PetId, 1, 1);
+
+        var packet = Assert.Single(world.Packets);
+        Assert.Equal(ServerPacketHeader.PetRemovedFromInventoryComposer, packet.Header);
+        Assert.Equal(new byte[] { 0, 0, 0, 12 }, packet.Payload);
+    }
+
+    [Fact]
+    public void PickingUpAPetAddsOnlyThatPetToTheInventory()
+    {
+        var world = World();
+        world.Service.Place(world.Room, world.Client, world.Pet.PetId, 1, 1);
+        world.Packets.Clear();
+
+        world.Service.PickUp(world.Room, world.Client, world.Pet.PetId);
+
+        var packet = Assert.Single(world.Packets);
+        Assert.Equal(ServerPacketHeader.PetAddedToInventoryComposer, packet.Header);
+        Assert.Equal(new byte[] { 0, 0, 0, 12 }, packet.Payload[..4]);
+        Assert.Equal(1, packet.Payload[^1]);
     }
 
     private static Room Room()

@@ -49,17 +49,7 @@ public sealed class UnusedSchemaCleanupTests
 
         try {
             var scripts = MigrationScripts.Load();
-            var configuration = new DatabaseConfiguration
-            {
-                Hostname = server.Server,
-                Port = server.Port,
-                Username = server.UserID,
-                Password = server.Password,
-                Name = schema,
-                Migrations = new MigrationConfiguration { DumpCommand = string.Empty }
-            };
-            var migrator = new SchemaMigrator(configuration, NullLogger<SchemaMigrator>.Instance, scripts,
-                () => File.ReadAllText(HabbiconPacketTests.Repo("Database/FreshInstall.sql")));
+            var migrator = NewMigrator(server, schema, scripts);
 
             Assert.True(await migrator.Run(MigrationMode.Startup));
 
@@ -67,6 +57,33 @@ public sealed class UnusedSchemaCleanupTests
             var applied = root.Query<string>($"SELECT migration FROM `{schema}`.schema_migrations WHERE source = 'applied'").ToList();
             Assert.Contains("131_DropUnusedColumnsAndLogs.sql", applied);
             Assert.DoesNotContain(applied, unsafeToRerun.Contains);
+        }
+        finally {
+            root.Execute($"DROP DATABASE `{schema}`");
+        }
+    }
+
+    // Migration 131 is lower than the migrations a hotel may already have. The ledger decides, not the number.
+    [SchemaMigrationDatabaseFact]
+    public async Task TheMigrationRunsOnAHotelThatAlreadyHasALaterMigration()
+    {
+        var server = new MySqlConnectionStringBuilder(Environment.GetEnvironmentVariable(SchemaMigrationDatabaseFactAttribute.Variable));
+        var schema = "unused_schema_later_" + Guid.NewGuid().ToString("N");
+        using var root = new MySqlConnection(server.ConnectionString);
+        root.Execute($"CREATE DATABASE `{schema}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+
+        try {
+            var scripts = MigrationScripts.Load();
+            Assert.True(await NewMigrator(server, schema, scripts).Run(MigrationMode.Startup));
+            root.Execute($"DELETE FROM `{schema}`.schema_migrations WHERE migration = '131_DropUnusedColumnsAndLogs.sql'; " +
+                $"INSERT INTO `{schema}`.schema_migrations (migration, checksum, source, applied_at) VALUES ('999_Later.sql', REPEAT('0', 64), 'applied', UTC_TIMESTAMP(6)); " +
+                $"ALTER TABLE `{schema}`.users ADD COLUMN vip TINYINT(1) DEFAULT 1; CREATE TABLE `{schema}`.furni_editor_log (id INT PRIMARY KEY)");
+
+            Assert.True(await NewMigrator(server, schema, scripts).Run(MigrationMode.Startup));
+
+            Assert.Equal(0, root.ExecuteScalar<int>($"SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = '{schema}' AND TABLE_NAME = 'users' AND COLUMN_NAME = 'vip'"));
+            Assert.Equal(0, root.ExecuteScalar<int>($"SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = '{schema}' AND TABLE_NAME = 'furni_editor_log'"));
+            Assert.Equal("applied", root.ExecuteScalar<string>($"SELECT source FROM `{schema}`.schema_migrations WHERE migration = '131_DropUnusedColumnsAndLogs.sql'"));
         }
         finally {
             root.Execute($"DROP DATABASE `{schema}`");
@@ -159,6 +176,18 @@ public sealed class UnusedSchemaCleanupTests
             Assert.Equal(["Shown for rooms"], moderation.RoomMessagePresets);
         });
     }
+
+    private static SchemaMigrator NewMigrator(MySqlConnectionStringBuilder server, string schema, IReadOnlyList<MigrationScript> scripts) => new(
+        new DatabaseConfiguration
+        {
+            Hostname = server.Server,
+            Port = server.Port,
+            Username = server.UserID,
+            Password = server.Password,
+            Name = schema,
+            Migrations = new MigrationConfiguration { DumpCommand = string.Empty }
+        },
+        NullLogger<SchemaMigrator>.Instance, scripts, () => File.ReadAllText(HabbiconPacketTests.Repo("Database/FreshInstall.sql")));
 
     private static string CreateTable(string sql, string table)
     {

@@ -169,6 +169,9 @@ public class PetBot : BotAi
                     else if (Random.Shared.Next(DrinkChance) == 0 && FindWater(botRoom, botUser) is { } water) {
                         GoTo(botRoom, botUser, water);
                     }
+                    else if (Random.Shared.Next(NestChance) == 0 && FindNearest(botRoom, botUser, item => PetNest.Is(item.Definition) && item.Definition.Walkable) is { } nest) {
+                        GoTo(botRoom, botUser, nest);
+                    }
                     else if (botUser.CanWalk && botRoom.GetGameMap().TryGetRandomWalkableSquare(out var nextCoord)) {
                         botUser.MoveTo(nextCoord.X, nextCoord.Y);
                     }
@@ -183,7 +186,6 @@ public class PetBot : BotAi
         }
 
         if (_energyTimer <= 0) {
-            RemovePetStatus(); // Remove Status
             petData.PetEnergy(true); // Add Energy
             _energyTimer = EnergyRestTicks - 1;
         }
@@ -267,8 +269,10 @@ public class PetBot : BotAi
         .Where(item => PetFood.Of(item.Definition)?.Feeds(petData.Type) == true)
         .MinBy(item => Math.Abs(item.GetX - pet.X) + Math.Abs(item.GetY - pet.Y));
 
-    private static Item? FindWater(Room room, RoomUser pet) => room.GetRoomItemHandler().GetFloor
-        .Where(item => PetWater.Is(item.Definition))
+    private static Item? FindWater(Room room, RoomUser pet) => FindNearest(room, pet, item => PetWater.Is(item.Definition));
+
+    private static Item? FindNearest(Room room, RoomUser pet, Func<Item, bool> wanted) => room.GetRoomItemHandler().GetFloor
+        .Where(wanted)
         .MinBy(item => Math.Abs(item.GetX - pet.X) + Math.Abs(item.GetY - pet.Y));
 
     // A pet stands on food and bowls; it stands next to furni it cannot walk on, such as the trough.
@@ -322,6 +326,12 @@ public class PetBot : BotAi
             return true;
         }
 
+        if (PetNest.Is(item.Definition)) {
+            Sleep(pet);
+
+            return true;
+        }
+
         return PetFood.Of(item.Definition) is { } values && values.Feeds(petData.Type) && Eat(room, item, values, pet, petData);
     }
 
@@ -334,6 +344,17 @@ public class PetBot : BotAi
         PetVocals.Say(pet, PetVocal.Drinking);
         PetWater.Drink(water, DateTimeOffset.UtcNow);
         water.UpdateState(true, true);
+    }
+
+    // A pet sleeps in a nest for about a minute.
+    private void Sleep(RoomUser pet)
+    {
+        RemovePetStatus();
+        pet.Statusses["lay"] = TextHandling.GetString(pet.Z);
+        pet.UpdateNeeded = true;
+        _actionTimer = Random.Shared.Next(80, 190 + 1);
+        _speechTimer = _actionTimer;
+        PetVocals.Say(pet, PetVocal.Sleeping);
     }
 
     // On the food the pet takes one bite, and more while it is below its maximum energy.
@@ -397,6 +418,9 @@ public class PetBot : BotAi
 
     // About one action in six a pet goes to drink when there is water in the room.
     private const int DrinkChance = 6;
+
+    // About one action in twenty a pet goes to sleep in a nest.
+    private const int NestChance = 20;
 
     private static readonly Dictionary<int, string> Postures = new()
     {

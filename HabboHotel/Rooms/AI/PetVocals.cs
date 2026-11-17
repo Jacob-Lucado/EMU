@@ -7,7 +7,8 @@ public enum PetVocal
     UnknownCommand,
     Scratched,
     Eating,
-    Drinking
+    Drinking,
+    Sleeping
 }
 
 /// <summary>
@@ -61,7 +62,16 @@ public static class PetVocals
         [(20, PetVocal.Drinking)] = ["This is literally the greatest drink I have ever had!"],
         [(21, PetVocal.Drinking)] = ["Yes... not too much, but not too little either."],
         [(29, PetVocal.Drinking)] = ["I love to drink! Love it, love it, love it!", "H-2-Whoa!", "Oops, did I spill some?", "*slurp slurp slurp*"],
-        [(35, PetVocal.Drinking)] = ["Drinking water after an entire day eating grass is simply heavenly.", "*Gulp* ..if it wasn't for water.. *Gulp* ..life wouldn't exist on this planet.."]
+        [(35, PetVocal.Drinking)] = ["Drinking water after an entire day eating grass is simply heavenly.", "*Gulp* ..if it wasn't for water.. *Gulp* ..life wouldn't exist on this planet.."],
+        [(15, PetVocal.Sleeping)] = ["Zzzz.... Marston!", "Zzzz... Old Dan Tucker....", "Zzzz... I have a heart that can never be tamed..."],
+        [(21, PetVocal.Sleeping)] =
+        [
+            "Zzzz... shira uo ya, kuroki me o aku, nori no ami...", "Zzz... otoroi ya, ha ni kuiateshim haru no ame...",
+            "Zzzz... suisen ya, shiroki shoji no, tomo utsuri..."
+        ],
+        [(22, PetVocal.Sleeping)] = ["Zzz..."],
+        [(29, PetVocal.Sleeping)] = ["Zzz... Say goodbye, cat."],
+        [(35, PetVocal.Sleeping)] = ["*Dreams of electric sheep*", "*zzZZzz..zz..zzZZzz*", "*Rolls over and has a mouthful of grass mid-sleep*"]
     };
 
     public static IReadOnlyList<string> For(int type, PetVocal vocal)

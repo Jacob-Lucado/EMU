@@ -8,7 +8,7 @@ namespace Plus.HabboHotel.Catalog.Marketplace;
 public sealed class MarketplaceCancellationStore(IDatabase database)
 {
     public InventoryItem? Cancel(int ownerId, uint offerId, Func<uint, ItemDefinition?> definitionOf,
-        Func<MarketplaceDelivery, InventoryItem> prepare, DateTimeOffset? expiredBefore = null)
+        Func<MarketplaceDelivery, InventoryItem> prepare)
     {
         using var connection = database.Connection();
         connection.Open();
@@ -16,12 +16,11 @@ public sealed class MarketplaceCancellationStore(IDatabase database)
         MarketplaceCommit.LockUser(connection, transaction, ownerId);
         var row = connection.QuerySingleOrDefault<OfferRow>(
             "SELECT state AS State,user_id AS UserId,furni_id AS FurniId,item_id AS ItemId,extra_data AS ExtraData," +
-            "limited_number AS LimitedNumber,limited_stack AS LimitedStack,listed_at AS ListedAt FROM catalog_marketplace_offers WHERE offer_id=@offerId FOR UPDATE",
+            "limited_number AS LimitedNumber,limited_stack AS LimitedStack FROM catalog_marketplace_offers WHERE offer_id=@offerId FOR UPDATE",
             new { offerId }, transaction);
 
         if (row is null || row.UserId != ownerId || row.State != "1" || row.FurniId == 0
-            || row.LimitedNumber < 0 || row.LimitedStack < 0 || definitionOf(row.ItemId) is not { } definition
-            || expiredBefore is { } cutoff && row.ListedAt >= cutoff) {
+            || row.LimitedNumber < 0 || row.LimitedStack < 0 || definitionOf(row.ItemId) is not { } definition) {
             return null;
         }
 
@@ -51,6 +50,5 @@ public sealed class MarketplaceCancellationStore(IDatabase database)
         public string ExtraData { get; set; } = "";
         public int LimitedNumber { get; set; }
         public int LimitedStack { get; set; }
-        public DateTimeOffset? ListedAt { get; set; }
     }
 }

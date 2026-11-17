@@ -111,7 +111,8 @@ public class MarketplaceManager : IMarketplaceManager
         var now = _time.GetUtcNow();
         var offers = rows.Select(row =>
         {
-            var minutes = MinutesRemaining(row.ListedAt, now, _policy?.OfferExpirationHours ?? 48);
+            var lifetimeHours = _policy?.OfferExpirationHours ?? 48;
+            var minutes = MinutesRemaining(row.ListedAt, now, lifetimeHours);
             // The state column is an enum of '1' (listed) and '2' (sold); an unsold offer past its lifetime is shown as expired.
             var state = int.Parse(row.State);
 
@@ -120,8 +121,16 @@ public class MarketplaceManager : IMarketplaceManager
                 minutes = 0;
             }
 
+            // The client shows when the offer was sold or expired; an expired offer stays listed until its owner takes it back.
+            var statusTime = state switch
+            {
+                2 => row.SoldAt?.ToUnixTimeMilliseconds() ?? 0,
+                3 => row.ListedAt?.ToUnixTimeMilliseconds() + lifetimeHours * 3_600_000L ?? 0,
+                _ => 0
+            };
+
             return new MarketplaceOwnOffer(Convert.ToInt32(row.OfferId), state, row.SpriteId, row.LimitedNumber, row.LimitedStack,
-                row.TotalPrice, minutes, row.ItemType, row.ExtraData, row.AveragePrice, row.SoldAt?.ToUnixTimeMilliseconds() ?? 0);
+                row.TotalPrice, minutes, row.ItemType, row.ExtraData, row.AveragePrice, statusTime);
         }).ToArray();
 
         return new(accumulated, offers);

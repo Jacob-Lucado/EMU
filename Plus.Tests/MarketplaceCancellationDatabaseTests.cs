@@ -5,9 +5,6 @@ using Plus.HabboHotel.Catalog.Marketplace;
 using Plus.HabboHotel.Items;
 using Plus.HabboHotel.Items.DataFormat;
 using Plus.HabboHotel.Users.Inventory.Furniture;
-using Plus.HabboHotel.GameClients;
-using Plus.HabboHotel.Users.Authentication;
-using Microsoft.Extensions.Logging;
 using Xunit;
 
 namespace Plus.Tests;
@@ -215,53 +212,10 @@ public sealed class MarketplaceCancellationDatabaseTests
         Assert.Equal(1, fixture.Connection.ExecuteScalar<int>("SELECT COUNT(*) FROM catalog_marketplace_offers"));
     }
 
-    [RecyclerDatabaseFact]
-    public async Task ExpiredOffersReturnToAnOfflineOwnerOnlyOnce()
-    {
-        using var fixture = new Fixture();
-        var definitions = CatalogSnapshotTestSupport.Proxy<IItemDataManager>((method, _) => method == "get_Items"
-            ? new Dictionary<uint, ItemDefinition> { [10] = fixture.Definition } : throw new InvalidOperationException(method));
-        var clients = CatalogSnapshotTestSupport.Proxy<IGameClientManager>((method, _) => method == "GetClientByUserId" ? null : throw new InvalidOperationException(method));
-        var policy = new MarketplaceFeePolicy(new TestRoomSettings(new() { ["catalog.marketplace.expiration_hours"] = "168" }));
-        var clock = new Microsoft.Extensions.Time.Testing.FakeTimeProvider(new DateTimeOffset(2040, 1, 8, 0, 0, 1, TimeSpan.Zero));
-        var logger = new ExpiryLogger();
-        using var service = new MarketplaceExpiryService(fixture.Source, definitions, clients, new AccountSessionGate(), policy, clock, logger);
-        var returned = await service.RunBatch();
-        Assert.Empty(logger.Errors);
-        Assert.Equal(1, returned);
-        Assert.Equal(0, await service.RunBatch());
-        Assert.Equal((7, 10u, "hello", 3, 10), fixture.Connection.QuerySingle<(int, uint, string, int, int)>(
-            "SELECT user_id,base_item,extra_data,limited_number,limited_stack FROM items WHERE id=77"));
-        Assert.Equal(0, fixture.Connection.ExecuteScalar<int>("SELECT COUNT(*) FROM catalog_marketplace_offers"));
-    }
-
-    [RecyclerDatabaseFact]
-    public void ExpirationIsRevalidatedUnderTheOfferLock()
-    {
-        using var fixture = new Fixture();
-        Assert.Null(fixture.Store.Cancel(7, 1, _ => fixture.Definition, _ => throw new InvalidOperationException("Must not prepare an active offer"),
-            new DateTimeOffset(2040, 1, 1, 0, 0, 0, TimeSpan.Zero)));
-        Assert.Equal(1, fixture.Connection.ExecuteScalar<int>("SELECT COUNT(*) FROM catalog_marketplace_offers"));
-        Assert.Equal(0, fixture.Connection.ExecuteScalar<int>("SELECT COUNT(*) FROM items"));
-    }
-
     private sealed class Database(string connectionString) : IDatabase
     {
         public bool IsConnected() => true;
         public System.Data.IDbConnection Connection() => new MySqlConnection(connectionString);
-    }
-
-    private sealed class ExpiryLogger : ILogger<MarketplaceExpiryService>
-    {
-        public List<Exception> Errors { get; } = [];
-        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
-        public bool IsEnabled(LogLevel level) => true;
-        public void Log<TState>(LogLevel level, EventId id, TState state, Exception? error, Func<TState, Exception?, string> format)
-        {
-            if (level >= LogLevel.Error) {
-                Errors.Add(error ?? new InvalidOperationException(format(state, error)));
-            }
-        }
     }
 
     private sealed class Fixture : IDisposable

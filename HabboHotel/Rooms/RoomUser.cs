@@ -99,6 +99,9 @@ public class RoomUser
     public int RotHead; //byte
 
     public bool SetStep;
+
+    /// <summary>The effect a vending machine gave this user. It starts on the user's next step and stays until then.</summary>
+    public int PendingVendingEffect;
     public int SetX; //byte
     public int SetY; //byte
     public double SetZ;

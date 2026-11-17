@@ -106,8 +106,15 @@ public class InteractorVendor : IFurniInteractor, IApproachInteractor
 
     public static void HandOver(Room room, Item item)
     {
-        if (item.Definition.VendingIds.Count > 0 && room.GetRoomUserManager().GetRoomUserByHabbo(item.InteractingUser) is { } user) {
+        if (room.GetRoomUserManager().GetRoomUserByHabbo(item.InteractingUser) is not { } user) {
+            return;
+        }
+
+        if (item.Definition.VendingIds.Count > 0) {
             user.CarryItem(item.Definition.VendingIds[Random.Shared.Next(item.Definition.VendingIds.Count)]);
+        }
+        else if (item.Definition.EffectId > 0) {
+            user.PendingVendingEffect = item.Definition.EffectId;
         }
     }
 

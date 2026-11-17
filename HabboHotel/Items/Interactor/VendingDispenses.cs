@@ -4,7 +4,7 @@ using Plus.HabboHotel.Rooms;
 namespace Plus.HabboHotel.Items.Interactor;
 
 /// <summary>
-/// A used vending machine runs on its own timer, not on the room tick: it hands its item over 1250 ms after the use and goes back to 0
+/// A used vending machine runs on its own timer, not on the room tick: it hands its item or effect over 1250 ms after the use and goes back to 0
 /// at 1500 ms. A machine with an avatar effect goes back to 0 at 1500 ms too. A machine with neither goes back to 0 at 1000 ms.
 /// </summary>
 public sealed class VendingDispenses
@@ -35,11 +35,11 @@ public sealed class VendingDispenses
         }
     }
 
-    /// <summary>The machines whose hand item is due, then the machines whose reset to 0 is due.</summary>
+    /// <summary>The machines whose hand item or effect is due, then the machines whose reset to 0 is due.</summary>
     public (Item[] HandOver, Item[] Reset) TakeDue(long nowMs)
     {
         lock (_pending) {
-            var handOver = _pending.Where(dispense => dispense.HandItem && !dispense.HandedOver && nowMs >= dispense.StartMs + HandItemMilliseconds).ToArray();
+            var handOver = _pending.Where(dispense => (dispense.HandItem || dispense.Effect) && !dispense.HandedOver && nowMs >= dispense.StartMs + HandItemMilliseconds).ToArray();
 
             foreach (var dispense in handOver) {
                 dispense.HandedOver = true;

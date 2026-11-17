@@ -227,7 +227,7 @@ public class PetBot : BotAi
         Obey(botRoom, pet, user, commandId);
 
         if (commandId != PetCommandSet.Free) {
-            petData.Addexperience(5);
+            petData.Addexperience(PetCommandSet.Experience(petData.Type, commandId));
             petData.SpendEnergy(5);
         }
     }

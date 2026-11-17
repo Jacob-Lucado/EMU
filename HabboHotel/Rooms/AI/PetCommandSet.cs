@@ -22,11 +22,32 @@ public sealed class PetCommandSet(int[] commands, int startCount)
         [29] = new([0, 1, 14, 43, 2, 3, 4, 17, 6, 7, 8, 11, 13, 15, 16, 24, 25, 26], 4)
     };
 
+    private const int DefaultExperience = 5;
+
+    private static readonly Dictionary<int, int> ExperienceByCommand = new()
+    {
+        [1] = 10,
+        [Eat] = 0
+    };
+
+    private static readonly Dictionary<(int Type, int Command), int> ExperienceByTypeAndCommand = new()
+    {
+        [(8, 2)] = 10,
+        [(17, 2)] = 15,
+        [(20, 2)] = 25
+    };
+
     public IReadOnlyList<int> Commands => commands;
 
     public int StartCount => startCount;
 
     public static PetCommandSet For(int petType) => ByType.GetValueOrDefault(petType, Dog);
+
+    /// <summary>The experience a pet of this type gets for obeying the command.</summary>
+    public static int Experience(int petType, int command) =>
+        ExperienceByTypeAndCommand.TryGetValue((petType, command), out var experience)
+            ? experience
+            : ExperienceByCommand.GetValueOrDefault(command, DefaultExperience);
 
     public IReadOnlyList<int> Learned(int level) => commands.Take(Math.Max(0, startCount + level - 1)).ToArray();
 

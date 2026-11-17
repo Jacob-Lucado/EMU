@@ -50,7 +50,8 @@ public sealed class MarketplacePurchaseStore(IDatabase database, TimeProvider? t
             try {
                 return ClaimOnce(request);
             }
-            catch (MySqlException error) when (attempt < 3 && error.Number is 1020 or 1205 or 1213) { }
+            // A lock wait timeout is not retried: the buyer's locks were already held for the whole wait.
+            catch (MySqlException error) when (attempt < 3 && error.Number is 1020 or 1213) { }
         }
     }
 
@@ -104,13 +105,11 @@ public sealed class MarketplacePurchaseStore(IDatabase database, TimeProvider? t
                 return Refuse(transaction, MarketplacePurchaseRefusal.InsufficientCredits);
             }
 
-            // Debit stored credits without discarding rewards still pending in the live wallet.
-            var charged = connection.Execute("UPDATE `users` SET `credits` = `credits` - @TotalPrice " +
-                "WHERE `id` = @BuyerId AND `credits` >= @TotalPrice LIMIT 1",
-                new { offer.TotalPrice, BuyerId = request.BuyerId }, transaction);
+            // The live wallet is the balance while the buyer is online, so rewards it holds that are not saved yet are spendable and get saved here.
+            var credits = request.BuyerCredits - offer.TotalPrice;
 
-            if (charged != 1) {
-                return Refuse(transaction, MarketplacePurchaseRefusal.InsufficientCredits);
+            if (connection.Execute("UPDATE users SET credits = @credits WHERE id = @BuyerId LIMIT 1", new { credits, request.BuyerId }, transaction) != 1) {
+                throw new InvalidOperationException($"User {request.BuyerId} was not charged; nothing was delivered.");
             }
 
             var sold = connection.Execute("UPDATE `catalog_marketplace_offers` SET `state` = '2' WHERE `offer_id` = @OfferId AND `state` = '1' LIMIT 1",
@@ -156,7 +155,7 @@ public sealed class MarketplacePurchaseStore(IDatabase database, TimeProvider? t
             RecordSale(connection, transaction, definition.SpriteId, offer.TotalPrice);
             MarketplaceCommit.Complete(database, connection, transaction, request.BuyerId, "buy");
 
-            return new MarketplacePurchaseResult(null, new MarketplaceClaimedOffer(offer.TotalPrice, definition.SpriteId, prepared, request.BuyerCredits - offer.TotalPrice));
+            return new MarketplacePurchaseResult(null, new MarketplaceClaimedOffer(offer.TotalPrice, definition.SpriteId, prepared, credits));
         }
         catch {
             MarketplaceCommit.Rollback(transaction);

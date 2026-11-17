@@ -1,5 +1,4 @@
 using System.Data;
-using System.Data.Common;
 using Dapper;
 using Plus.Database;
 using Plus.HabboHotel.Users;
@@ -39,7 +38,8 @@ internal static class MarketplaceCommit
         try {
             transaction.Commit();
         }
-        catch (DbException error) {
+        // Any commit error can come after the server committed, so every one is checked against the operation row.
+        catch (Exception error) {
             Rollback(transaction);
 
             try {

@@ -4,6 +4,7 @@ using Plus.Communication.Packets.Outgoing;
 using Plus.Communication.Packets.Outgoing.Quests;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Quests;
+using Plus.HabboHotel.Users.Inventory.Furniture;
 using Xunit;
 
 namespace Plus.Tests;
@@ -87,10 +88,47 @@ public class RewardTrackTests
         ready.MarkClaimed("track_champ");
         Assert.Equal(RewardTrackResults.AlreadyClaimed, RewardTrackRules.PreviewClaim(track, ready, "track_champ"));
         Assert.Equal(RewardTrackResults.Unknown, RewardTrackRules.PreviewClaim(track, ready, "missing"));
+    }
 
-        track.AddPrize(new RewardTrackPrize("furni", 1, 1, "furni", "", 1, false, 3));
-        var rich = new UserRewardTrackState(track.Id, 50, false);
-        Assert.Equal(RewardTrackResults.Unknown, RewardTrackRules.PreviewClaim(track, rich, "furni"));
+    [Fact]
+    public void FurniPrizeInHabboFormatIsClaimable()
+    {
+        var track = ChatTrack();
+        track.AddPrize(new RewardTrackPrize("free_010", 50, 1, "1534", "", 10, false, 3));
+        var state = new UserRewardTrackState(track.Id, 50, false);
+
+        Assert.Equal(RewardTrackResults.Ok, RewardTrackRules.PreviewClaim(track, state, "free_010"));
+    }
+
+    [Fact]
+    public void EachHabboPrizeTypeGrantsItsProduct()
+    {
+        Assert.Equal(new RewardTrackFurniGrant(ItemType.Floor, 1534, 10), RewardTrackRules.Grant(Prize(1, "1534", "", 10)));
+        Assert.Equal(new RewardTrackFurniGrant(ItemType.Wall, 4001, 1), RewardTrackRules.Grant(Prize(0, "4001", "", 1)));
+        Assert.Equal(new RewardTrackBadgeGrant("ACH_TraderPass1"), RewardTrackRules.Grant(Prize(4, "ACH_TraderPass1", "", 1)));
+        Assert.Equal(new RewardTrackCurrencyGrant(0, 50), RewardTrackRules.Grant(Prize(8, "0", "", 50)));
+        Assert.Equal(new RewardTrackCurrencyGrant(5, 25), RewardTrackRules.Grant(Prize(8, "5", "", 25)));
+        Assert.Equal(new RewardTrackCurrencyGrant(104, 100), RewardTrackRules.Grant(Prize(8, "104", "", 100)));
+        Assert.Equal(new RewardTrackCurrencyGrant(-1, 5), RewardTrackRules.Grant(Prize(8, "-1", "", 5)));
+    }
+
+    [Theory]
+    [InlineData(10, "1", "1 0 ABABAB", 1)]
+    [InlineData(6, "GENERIC", "hr-3020-34.hd-3091-2", 1)]
+    [InlineData(1, "furni", "club_sofa", 1)]
+    [InlineData(1, "1534", "", 0)]
+    [InlineData(8, "0", "", 0)]
+    [InlineData(8, "-2", "", 5)]
+    [InlineData(8, "duckets", "", 5)]
+    [InlineData(4, " ", "", 1)]
+    public void PrizesTheServerCannotGrantAreUnknown(int productType, string rewardType, string extraParams, int amount)
+    {
+        var track = ChatTrack();
+        track.AddPrize(new RewardTrackPrize("odd", 1, productType, rewardType, extraParams, amount, false, 3));
+        var state = new UserRewardTrackState(track.Id, 50, false);
+
+        Assert.Null(RewardTrackRules.Grant(track.GetPrize("odd")!));
+        Assert.Equal(RewardTrackResults.Unknown, RewardTrackRules.PreviewClaim(track, state, "odd"));
     }
 
     [Fact]
@@ -154,8 +192,8 @@ public class RewardTrackTests
             25, 20, false,
             100, 40, false,
             2,
-            "track_champ", 50, (short)4, "badge", "ACH_RewardTracksCompleted1", 1, false, false, false,
-            "track_champ_premium", 200, (short)4, "badge", "ACH_RewardTracksCompleted2", 1, true, false, false,
+            "track_champ", 50, (short)4, "ACH_RewardTracksCompleted1", "", 1, false, false, false,
+            "track_champ_premium", 200, (short)4, "ACH_RewardTracksCompleted2", "", 1, true, false, false,
             false
         }, packet.Writes);
 
@@ -179,11 +217,14 @@ public class RewardTrackTests
             new RewardTrackLevel(25, 20, false),
             new RewardTrackLevel(100, 40, false)
         }));
-        track.AddPrize(new RewardTrackPrize("track_champ", 50, 4, "badge", "ACH_RewardTracksCompleted1", 1, false, 1));
-        track.AddPrize(new RewardTrackPrize("track_champ_premium", 200, 4, "badge", "ACH_RewardTracksCompleted2", 1, true, 2));
+        track.AddPrize(new RewardTrackPrize("track_champ", 50, 4, "ACH_RewardTracksCompleted1", "", 1, false, 1));
+        track.AddPrize(new RewardTrackPrize("track_champ_premium", 200, 4, "ACH_RewardTracksCompleted2", "", 1, true, 2));
 
         return track;
     }
+
+    private static RewardTrackPrize Prize(int productType, string rewardType, string extraParams, int amount) =>
+        new("prize", 1, productType, rewardType, extraParams, amount, false, 1);
 
     private sealed class RecordingPacket : IOutgoingPacket
     {

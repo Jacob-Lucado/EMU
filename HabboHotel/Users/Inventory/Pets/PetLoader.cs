@@ -14,7 +14,8 @@ internal sealed class PetLoader(IDatabase database) : IPetLoader
 
         return Load(connection, userId).Select(row => new Pet(checked((int)row.Id), checked((int)row.UserId), row.RoomId, row.Name, checked((int)row.Type), row.Race,
                 row.Color, row.Experience, row.Energy, row.Nutrition, row.Respect, row.CreatedAt,
-                row.X, row.Y, row.Z, row.HaveSaddle, row.AnyoneRide, row.Hairdye, row.Pethair, row.GnomeClothing, row.OwnerName) { AllowBreeding = row.AllowBreeding }).ToList();
+                row.X, row.Y, row.Z, row.HaveSaddle, row.AnyoneRide, row.Hairdye, row.Pethair, row.GnomeClothing, row.OwnerName)
+        { AllowBreeding = row.AllowBreeding }).ToList();
     }
 
     internal static IEnumerable<PetRow> Load(IDbConnection connection, int userId) => connection.Query<PetRow>("""

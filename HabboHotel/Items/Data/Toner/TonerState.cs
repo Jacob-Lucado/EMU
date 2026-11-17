@@ -23,4 +23,21 @@ internal static class TonerState
 
         return new IntArrayDataFormat { Data = [toner.Enabled, toner.Hue, toner.Saturation, toner.Lightness] };
     }
+
+    /// <summary>Reads the stored [state, hue, saturation, lightness], or null when the text holds no valid toner data.</summary>
+    internal static IntArrayDataFormat? Load(string stored)
+    {
+        var parts = stored.Split('\n');
+        var values = new List<int>(4);
+
+        foreach (var part in parts) {
+            if (!int.TryParse(part, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var value) || value > 255) {
+                return null;
+            }
+
+            values.Add(value);
+        }
+
+        return values.Count == 4 && values[0] <= 1 ? new IntArrayDataFormat { Data = values } : null;
+    }
 }

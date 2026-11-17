@@ -41,14 +41,18 @@ public sealed class RoomItemMetadataStore(IDatabase database) : IRoomItemMetadat
         }
     }
 
+    // A colour write keeps the on/off state. items.extra_data mirrors the four values for the inventory.
     public void SetToner(uint itemId, uint roomId, int hue, int saturation, int lightness)
     {
         using var connection = database.Connection();
-
-        if (connection.Execute("UPDATE room_items_toner toner JOIN items item ON item.id=toner.id SET toner.enabled=TRUE,toner.data1=@hue,toner.data2=@saturation,toner.data3=@lightness WHERE toner.id=@itemId AND item.room_id=@roomId",
-                new { itemId, roomId, hue, saturation, lightness }) != 1) {
-            throw new InvalidOperationException("Toner data was not persisted.");
-        }
+        connection.Open();
+        using var transaction = connection.BeginTransaction();
+        var row = connection.Query<TonerRow>("SELECT toner.enabled AS Enabled FROM room_items_toner toner JOIN items item ON item.id=toner.id WHERE toner.id=@itemId AND item.room_id=@roomId FOR UPDATE",
+            new { itemId, roomId }, transaction).FirstOrDefault() ?? throw new InvalidOperationException("Toner data was not persisted.");
+        var data = new TonerRecord { Enabled = row.Enabled, Hue = hue, Saturation = saturation, Lightness = lightness }.Serialize();
+        connection.Execute("UPDATE room_items_toner SET data1=@hue,data2=@saturation,data3=@lightness WHERE id=@itemId", new { itemId, hue, saturation, lightness }, transaction);
+        connection.Execute("UPDATE items SET extra_data=@data WHERE id=@itemId", new { itemId, data }, transaction);
+        transaction.Commit();
     }
 
     // The row must exist in the room; MySQL reports zero affected rows for an identical value, so existence is checked instead of the update count.
@@ -297,8 +301,7 @@ public sealed class RoomItemMetadataService(IRoomItemMetadataStore store, IFigur
 
     public void SetToner(Room room, GameClient session, TonerSettingsRequest request)
     {
-        if (!room.CheckRights(session, true) || room.TonerData == null || room.TonerData.ItemId != request.ItemId ||
-            request.Hue is < 0 or > 255 || request.Saturation is < 0 or > 255 || request.Lightness is < 0 or > 255) {
+        if (!room.CheckRights(session, true) || room.TonerData == null || room.TonerData.ItemId != request.ItemId) {
             return;
         }
 
@@ -308,7 +311,12 @@ public sealed class RoomItemMetadataService(IRoomItemMetadataStore store, IFigur
             return;
         }
 
-        SetTonerFromWired(room, item, request, store);
+        SetTonerFromWired(room, item, request with
+        {
+            Hue = Math.Clamp(request.Hue, 0, 255),
+            Saturation = Math.Clamp(request.Saturation, 0, 255),
+            Lightness = Math.Clamp(request.Lightness, 0, 255)
+        }, store);
     }
 
     internal static bool SetTonerFromWired(Room room, Item item, TonerSettingsRequest request, IRoomItemMetadataStore store)
@@ -323,7 +331,6 @@ public sealed class RoomItemMetadataService(IRoomItemMetadataStore store, IFigur
         room.TonerData.Hue = request.Hue;
         room.TonerData.Saturation = request.Saturation;
         room.TonerData.Lightness = request.Lightness;
-        room.TonerData.Enabled = 1;
         Plus.HabboHotel.Items.Data.Toner.TonerState.Synchronize(room, item);
         item.UpdateState();
 

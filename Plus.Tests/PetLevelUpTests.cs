@@ -7,7 +7,7 @@ using Xunit;
 namespace Plus.Tests;
 
 // On Habbo a pet that levels up tells its owner with a level notification and a fresh command list,
-// and says "Leveling up" in the room. Level 5 needs 900 experience.
+// and says its type's level up line in the room. Level 5 needs 900 experience.
 public partial class PlacedFurniRoomTests
 {
     [Theory]
@@ -48,6 +48,42 @@ public partial class PlacedFurniRoomTests
         Assert.Single(chats);
         Assert.Contains("Leveling up", chats[0]);
     }
+
+    [Theory]
+    [InlineData(1, "*pet leveled up - new trick learned!*")]
+    [InlineData(11, "Level up! Nice one!")]
+    [InlineData(17, "I just leveled up! Awesome-sauce!")]
+    [InlineData(20, "Leveling up")]
+    [InlineData(22, "I just leveled up. My power grows!")]
+    [InlineData(0, "Leveling up")]
+    public void LevelUpMakesThePetSayItsTypesLine(int type, string line)
+    {
+        LegacyRider();
+        var pet = LevellingHorse(95);
+        pet.Type = type;
+        _client.Packets.Clear();
+
+        pet.Addexperience(5);
+
+        Assert.Contains(line, Assert.Single(Chats()));
+    }
+
+    [Fact]
+    public void AKittenNamesItsOwnerWhenItLevelsUp()
+    {
+        LegacyRider();
+        var pet = LevellingHorse(95);
+        pet.Type = 28;
+        pet.OwnerName = "johndoe";
+        _client.Packets.Clear();
+
+        pet.Addexperience(5);
+
+        Assert.Contains("YIPPEE - I just leveled up, johndoe!", Assert.Single(Chats()));
+    }
+
+    private List<string> Chats() =>
+        _client.Packets.Where(packet => packet.Header == ServerPacketHeader.ChatComposer).Select(packet => Encoding.UTF8.GetString(packet.Body)).ToList();
 
     [Fact]
     public void ExperienceWithoutLevelUpSendsNoLevelPackets()

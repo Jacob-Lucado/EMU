@@ -117,13 +117,13 @@ public class Pet
         //will error index out of range (need to look into this sometime)
         ExperienceLevels[Level - 1];
 
-    public static int MaxEnergy => 100;
+    public int MaxEnergy => 100 + 20 * Level;
 
     public bool IsTired => Energy <= 10;
 
     public bool ObeysCommand(int commandId) => !IsTired && (Level > 15 || commandId == 8 || Random.Shared.Next(1, 9) < 6);
 
-    public static int MaxNutrition => 150;
+    public static int MaxNutrition => 100;
 
     public string CustomParts => !string.IsNullOrEmpty(GnomeClothing) && GnomeClothing != "-1"
         ? GnomeClothing
@@ -190,41 +190,24 @@ public class Pet
 
     public void PetEnergy(bool add)
     {
-        int maxE;
-
         if (add) {
-            if (Energy == 100) // If Energy is 100, no point.
-{
+            if (Energy >= MaxEnergy) {
                 return;
             }
 
-            if (Energy > 85) {
-                maxE = MaxEnergy - Energy;
+            Energy++;
+
+            if (DbState != PetDatabaseUpdateState.NeedsInsert) {
+                DbState = PetDatabaseUpdateState.NeedsUpdate;
             }
-            else {
-                maxE = 10;
-            }
-        }
-        else {
-            maxE = 15; // Remove Max Energy as 15
+
+            return;
         }
 
-        if (maxE <= 4) {
-            maxE = 15;
-        }
+        Energy -= Random.Shared.Next(4, 16);
 
-        var r = Random.Shared.Next(4, maxE + 1);
-
-        if (!add) {
-            Energy = Energy - r;
-
-            if (Energy < 0) {
-                Energy = 1;
-                r = 1;
-            }
-        }
-        else {
-            Energy = Energy + r;
+        if (Energy < 0) {
+            Energy = 1;
         }
 
         if (DbState != PetDatabaseUpdateState.NeedsInsert) {

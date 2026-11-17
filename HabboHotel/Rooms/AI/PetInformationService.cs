@@ -76,7 +76,7 @@ public sealed class PetInformationService(TimeProvider clock) : IPetInformationS
         var days = (int)Math.Clamp(age, 0, int.MaxValue);
 
         return new(pet.PetId, pet.Name, pet.Level, Pet.MaxLevel, pet.Experience, pet.ExperienceGoal,
-            pet.Energy, Pet.MaxEnergy, pet.Nutrition, Pet.MaxNutrition, pet.Respect, pet.OwnerId,
+            pet.Energy, pet.MaxEnergy, pet.Nutrition, Pet.MaxNutrition, pet.Respect, pet.OwnerId,
             days, pet.OwnerName, pet.Saddle > 0, pet.AnyoneCanRide);
     }
 

@@ -9,6 +9,16 @@ namespace Plus.Tests;
 public partial class PlacedFurniRoomTests
 {
     [Fact]
+    public void PickedUpWinnerTileStopsBlinking()
+    {
+        var (tile, _, _, _) = EndedBanzai();
+        _room.GetBanzai().RemoveTile(tile.Id);
+        _room.GetBanzai().OnCycle();
+
+        Assert.Equal("5", tile.LegacyDataString);
+    }
+
+    [Fact]
     public void TheWinningBanzaiTeamsLockedTilesBlinkFiveTimesAndStayLit()
     {
         var (red1, red2, blue, free) = EndedBanzai();

@@ -330,6 +330,7 @@ public class BattleBanzai
             return;
         }
 
+        _blinking.RemoveAll(tile => !_banzaiTiles.TryGetValue(tile.Id, out var current) || !ReferenceEquals(current, tile));
         var lit = _blinksLeft-- % 2 == 1;
 
         foreach (var tile in _blinking) {
@@ -338,6 +339,10 @@ public class BattleBanzai
         }
 
         _room.SendObjectsData(_blinking);
+
+        if (_blinksLeft == 0) {
+            _blinking.Clear();
+        }
     }
 
     public void Dispose()

@@ -121,6 +121,34 @@ public class MarketplacePurchaseTests
     }
 
     [Fact]
+    public async Task ARolledBackPurchaseKeepsTheOfferListedAndTheSessionOpen()
+    {
+        var store = new ClaimStore(new MarketplaceCommitFailedException(new InvalidOperationException("rolled back")));
+        var (client, sent) = HabbiconTestSupport.Client(Buyer(credits: 1000));
+
+        await Buy(store, new(), new()).Parse(client, Packet(5));
+
+        Assert.Equal(1000, client.GetHabbo().Credits);
+        var answer = Assert.Single(sent, message => message.Header == ServerPacketHeader.MarketplaceBuyOfferResultComposer);
+        Assert.Equal(new byte[] { 0, 0, 0, (byte)MarketplaceBuyResult.RefreshOffers, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5 }, answer.Payload);
+    }
+
+    [Fact]
+    public async Task ATradingLockedBuyerIsNotToldTheOfferIsGone()
+    {
+        var store = new ClaimStore(Claim());
+        var buyer = Buyer(credits: 1000);
+        buyer.TradingLockExpiresAt = Now.AddHours(1);
+        var (client, sent) = HabbiconTestSupport.Client(buyer);
+
+        await Buy(store, new(), new()).Parse(client, Packet(5));
+
+        Assert.Empty(store.Requests);
+        var answer = Assert.Single(sent, message => message.Header == ServerPacketHeader.MarketplaceBuyOfferResultComposer);
+        Assert.Equal(new byte[] { 0, 0, 0, (byte)MarketplaceBuyResult.RefreshOffers, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5 }, answer.Payload);
+    }
+
+    [Fact]
     public async Task ASecondBuyOfTheSameOfferIsRefusedAndDeliversNothing()
     {
         var store = new ClaimStore(Claim(), MarketplacePurchaseRefusal.Sold);

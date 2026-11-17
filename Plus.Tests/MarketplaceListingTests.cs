@@ -178,6 +178,19 @@ public class MarketplaceListingTests
     }
 
     [Fact]
+    public async Task ARolledBackListingIsRejectedAndKeepsTheFurni()
+    {
+        var store = new RecordingStore { BeforeWrite = () => throw new MarketplaceCommitFailedException(new InvalidOperationException("rolled back")) };
+        var (habbo, item) = Owner(ItemType.Floor);
+        var (client, sent) = HabbiconTestSupport.Client(habbo);
+
+        await Offer(store).Parse(client, Packet(100, 1, 1, (int)item.Id));
+
+        Assert.NotNull(Assert.IsType<InventoryComponent>(habbo.Inventory).Furniture.GetItem(item.Id));
+        Assert.Equal(new byte[] { 0, 0, 0, 0 }, Assert.Single(sent).Payload);
+    }
+
+    [Fact]
     public void RealStoreCommitsTheOfferAndFurniDeleteTogether()
     {
         var database = new GroupManagementTests.RecordingDatabase();

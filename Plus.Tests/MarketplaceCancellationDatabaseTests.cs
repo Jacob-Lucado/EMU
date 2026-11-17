@@ -4,6 +4,7 @@ using Plus.Database;
 using Plus.HabboHotel.Catalog.Marketplace;
 using Plus.HabboHotel.Items;
 using Plus.HabboHotel.Items.DataFormat;
+using Plus.HabboHotel.Users.Inventory;
 using Plus.HabboHotel.Users.Inventory.Furniture;
 using Xunit;
 
@@ -135,6 +136,36 @@ public sealed class MarketplaceCancellationDatabaseTests
         Assert.True(habbo.WalletClosed);
         Assert.Equal(900, fixture.Connection.QuerySingle<int>("SELECT credits FROM users WHERE id=8"));
         Assert.Equal(1, fixture.Connection.QuerySingle<int>("SELECT COUNT(*) FROM items"));
+    }
+
+    [RecyclerDatabaseFact]
+    public async Task ARolledBackCancellationFailsAndKeepsTheOffer()
+    {
+        using var fixture = new Fixture();
+        var definitions = CatalogSnapshotTestSupport.Proxy<IItemDataManager>((method, _) => method == "get_Items"
+            ? new Dictionary<uint, ItemDefinition> { [10] = fixture.Definition } : throw new InvalidOperationException(method));
+        var factory = CatalogSnapshotTestSupport.Proxy<IItemFactory>((method, _) => throw new InvalidOperationException(method));
+        var manager = new MarketplaceManager(new MarketplaceCommitFaultDatabase(fixture.Source, false), definitions, factory, TimeProvider.System);
+        var owner = new Plus.HabboHotel.Users.Habbo { Id = 7, Inventory = new InventoryComponent { Furniture = new FurnitureInventoryComponent([], []) } };
+
+        Assert.False(await manager.TryCancelOffer(owner, 1));
+
+        Assert.Null(owner.Inventory.Furniture.GetItem(77));
+        Assert.Equal(1, fixture.Connection.QuerySingle<int>("SELECT COUNT(*) FROM catalog_marketplace_offers"));
+    }
+
+    [RecyclerDatabaseFact]
+    public void ARolledBackRedemptionKeepsTheSalesQueued()
+    {
+        using var fixture = new Fixture();
+        fixture.Connection.Execute("UPDATE catalog_marketplace_offers SET state='2'");
+        var (client, sent) = HabbiconTestSupport.Client(new Plus.HabboHotel.Users.Habbo { Id = 7, Credits = 1000 });
+
+        new MarketplaceRedemptionService(new MarketplaceOfferStore(new MarketplaceCommitFaultDatabase(fixture.Source, false))).Redeem(client);
+
+        Assert.Equal(1000, client.GetHabbo().Credits);
+        Assert.Empty(sent);
+        Assert.Equal(1, fixture.Connection.QuerySingle<int>("SELECT COUNT(*) FROM catalog_marketplace_offers"));
     }
 
     [RecyclerDatabaseFact]

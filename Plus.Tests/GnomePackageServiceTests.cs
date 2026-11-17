@@ -176,6 +176,40 @@ public sealed class GnomePackageServiceTests
         Assert.DoesNotContain(world.Packets, packet => packet.Header == ServerPacketHeader.FurniListNotificationComposer);
     }
 
+    [Theory]
+    [InlineData("velociraptor_egg", 34, 0, 19)]
+    [InlineData("pterosaur_egg", 33, 0, 20)]
+    [InlineData("cowbox", 35, 1, 20)]
+    [InlineData("cowbox_gold", 35, 0, 0)]
+    public void EggsAndBoxesHatchTheirPetInARandomBreedAndLeaveNoFurni(string itemName, int type, int firstBreed, int lastBreed)
+    {
+        var world = World(hatchling: itemName);
+
+        world.Service.Open(world.Room, world.Client, 7, "Rexo");
+
+        var request = Assert.Single(world.Store.PetRequests);
+        Assert.Equal((type, "ffffff", (uint?)null, 0d), (request.Figure.Type, request.Figure.Colour, request.FurniBaseItem, request.PetZ));
+        Assert.InRange(request.Figure.Palette, firstBreed, lastBreed);
+        Assert.Null(world.Room.GetRoomItemHandler().GetItem(7));
+        Assert.Null(world.Room.GetRoomItemHandler().GetItem(13));
+        Assert.True(world.Room.GetRoomUserManager().TryGetPet(12, out var actor));
+        Assert.Equal(("Rexo", type), (Assert.IsType<Pet>(actor.PetData).Name, Assert.IsType<Pet>(actor.PetData).Type));
+        var result = world.Packets.FindLastIndex(packet => packet.Header == ServerPacketHeader.CheckGnomeNameComposer);
+        Assert.Equal(Bytes(7, 0, ""), world.Packets[result].Payload);
+        Assert.DoesNotContain(world.Packets, packet => packet.Header == ServerPacketHeader.FurniListNotificationComposer);
+    }
+
+    [Fact]
+    public void AnEggShowsNoPetUntilItHatchesButAPackageShowsItsFigure()
+    {
+        var egg = PetPackage.Hatchling("velociraptor_egg");
+
+        Assert.NotNull(egg);
+        Assert.Null(egg.FigureToShow(""));
+        Assert.Equal(new PetPackageFigure(1, 0, "ABABAB"), new PetPackage(1, "newbie_nest").FigureToShow("1 0 ABABAB"));
+        Assert.Null(PetPackage.Hatchling("newbie_cat_package"));
+    }
+
     [Fact]
     public void InvalidPetNameKeepsThePackageAndRepliesWithItsId()
     {
@@ -272,7 +306,7 @@ public sealed class GnomePackageServiceTests
         }
     }
 
-    private static Fixture World(bool temporary = false, bool package = false, bool withNest = true)
+    private static Fixture World(bool temporary = false, bool package = false, bool withNest = true, string? hatchling = null)
     {
         var model = new RoomModel("gnome-test", 0, 0, 0, 0, "000\r000\r000", 0, 0, false);
         var room = new Room(new RoomData { Id = 42, Model = model }, [], TestLogging.Navigation, TestLogging.Logger, TestRoomAchievements.Unused, TestRoomOwners.Unused);
@@ -288,7 +322,9 @@ public sealed class GnomePackageServiceTests
             OwnerId = 1,
             RoomId = 42,
             IsTemporary = temporary,
-            Definition = package
+            Definition = hatchling != null
+                ? new() { Id = 100, ItemName = hatchling, Type = ItemType.Floor, InteractionType = InteractionType.None, PetPackage = PetPackage.Hatchling(hatchling) }
+                : package
                 ? new() { Id = 100, ItemName = "newbie_cat_package", Type = ItemType.Floor, InteractionType = InteractionType.None, PetPackage = new(1, "newbie_nest") }
                 : new() { Id = 100, Type = ItemType.Floor, InteractionType = InteractionType.GnomeBox },
             ExtraData = new LegacyDataFormat { Data = package ? "1 0 ABABAB" : "" }
@@ -342,7 +378,7 @@ public sealed class GnomePackageServiceTests
 
             return Fail ? null : new PetPackageOpening(new Pet(12, request.OwnerId, request.RoomId, request.Name, request.Figure.Type,
                 request.Figure.Palette.ToString(), request.Figure.Colour, 0, 100, 100, 0, request.CreatedAt, request.X, request.Y, request.PetZ,
-                0, 0, 0, -1, "-1", request.OwnerName), 13);
+                0, 0, 0, -1, "-1", request.OwnerName), request.FurniBaseItem == null ? null : 13);
         }
 
         public Action<GnomePackageRequest>? Before;

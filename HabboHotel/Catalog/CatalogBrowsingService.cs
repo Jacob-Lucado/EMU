@@ -3,7 +3,6 @@ using Plus.Communication.Packets.Outgoing.Catalog;
 using Plus.HabboHotel.Catalog.BuildersClub;
 using Plus.HabboHotel.Catalog.Pets;
 using Plus.HabboHotel.GameClients;
-using Plus.HabboHotel.Items;
 using Plus.HabboHotel.Rooms;
 
 namespace Plus.HabboHotel.Catalog;
@@ -27,7 +26,7 @@ public interface ICatalogBrowsingService
     void ShowOffer(GameClient session, int offerId);
 }
 
-public sealed class CatalogBrowsingService(IItemDataManager items, IPetRaceManager races, IRoomDataLoader rooms,
+public sealed class CatalogBrowsingService(IPetRaceManager races, IRoomDataLoader rooms,
     TimeProvider clock, ICatalogManager catalog, ICatalogSnapshotService snapshots, IBuildersClubService? buildersClub = null) : ICatalogBrowsingService
 {
     public void ShowPetPalettes(GameClient session, string type)

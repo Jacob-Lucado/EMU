@@ -40,10 +40,9 @@ public sealed class CatalogBrowsingSnapshotTests
         var dog = new CatalogOffer { Id = 448, LocalizationKey = "a0 pet0", Products = [new CatalogProduct { Type = CatalogProductType.Pet, PetType = 0 }] };
         var pages = new List<CatalogPage> { new() { Id = 1, Offers = { [448] = dog } }, new() { Id = 2, Offers = { [11197] = pigeon } } };
         var catalog = CatalogSnapshotTestSupport.Proxy<ICatalogManager>((method, _) => method == "get_Pages" ? pages : throw new InvalidOperationException(method));
-        var noFurniture = CatalogSnapshotTestSupport.Proxy<IItemDataManager>((method, _) => method == nameof(IItemDataManager.GetItemByName) ? null : throw new InvalidOperationException(method));
         var pigeonRace = new PetRace(22, 0, 0, true, false);
         var races = new Races([new PetRace(0, 3, 3, true, false), pigeonRace]);
-        var service = new CatalogBrowsingService(noFurniture, races, null!, TimeProvider.System, catalog, null!);
+        var service = new CatalogBrowsingService(races, null!, TimeProvider.System, catalog, null!);
         var (client, sent) = HabbiconTestSupport.Client(EditorTestSupport.Player());
 
         service.ShowPetPalettes(client, "a0 pet22");
@@ -67,7 +66,7 @@ public sealed class CatalogBrowsingSnapshotTests
             Data = [new() { Id = 1, Name = "available" }, exact,
                 new() { Id = 3, Name = "active", Promotion = new("p", "d", 0, now, now.AddMinutes(1), new ThrowingClock()) }]
         };
-        var service = new CatalogBrowsingService(null!, null!, loader, clock, null!, null!);
+        var service = new CatalogBrowsingService(null!, loader, clock, null!, null!);
         var composer = new PromotableRoomsComposer(service.CapturePromotableRooms(42));
         var before = new HabbiconTestSupport.RecordingPacket();
         composer.Compose(before);
@@ -135,7 +134,7 @@ public sealed class CatalogBrowsingSnapshotTests
             _ => throw new InvalidOperationException(method)
         });
         var snapshots = new RecordingSnapshots(new CatalogSnapshotService(catalog, TimeProvider.System));
-        var service = new CatalogBrowsingService(null!, null!, null!, TimeProvider.System, catalog, snapshots);
+        var service = new CatalogBrowsingService(null!, null!, TimeProvider.System, catalog, snapshots);
         var (client, sent) = HabbiconTestSupport.Client(EditorTestSupport.Player());
 
         service.ShowPage(client, new(7, 44, "IGNORED"));
@@ -172,7 +171,7 @@ public sealed class CatalogBrowsingSnapshotTests
             _ => throw new InvalidOperationException(method)
         });
         var snapshots = new RecordingSnapshots(CatalogSnapshotTestSupport.Snapshots());
-        var service = new CatalogBrowsingService(null!, null!, null!, TimeProvider.System, catalog, snapshots);
+        var service = new CatalogBrowsingService(null!, null!, TimeProvider.System, catalog, snapshots);
         var (client, sent) = HabbiconTestSupport.Client(EditorTestSupport.Player());
 
         service.ShowIndex(client, "BUILDERS_CLUB");
@@ -206,7 +205,7 @@ public sealed class CatalogBrowsingSnapshotTests
             return found;
         });
         var snapshots = new RecordingSnapshots(CatalogSnapshotTestSupport.Snapshots());
-        var service = new CatalogBrowsingService(null!, null!, null!, TimeProvider.System, catalog, snapshots);
+        var service = new CatalogBrowsingService(null!, null!, TimeProvider.System, catalog, snapshots);
 
         service.ShowOffer(client, 44);
 

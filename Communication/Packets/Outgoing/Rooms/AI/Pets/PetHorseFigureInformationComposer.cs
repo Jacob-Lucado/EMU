@@ -14,28 +14,19 @@ public sealed class PetHorseFigureInformationComposer(HorseAppearanceSnapshot da
         packet.WriteInteger(data.Race);
         packet.WriteString(data.Color);
 
+        packet.WriteInteger(data.Breed);
+        packet.WriteInteger(data.Saddle > 0 ? 3 : 2);
+        packet.WriteInteger(2);
+        packet.WriteInteger(data.Hair);
+        packet.WriteInteger(data.HairDye);
+        packet.WriteInteger(3);
+        packet.WriteInteger(data.Hair);
+        packet.WriteInteger(data.HairDye);
+
         if (data.Saddle > 0) {
-            packet.WriteInteger(4);
-            packet.WriteInteger(3);
-            packet.WriteInteger(3);
-            packet.WriteInteger(data.Hair);
-            packet.WriteInteger(data.HairDye);
-            packet.WriteInteger(2);
-            packet.WriteInteger(data.Hair);
-            packet.WriteInteger(data.HairDye);
             packet.WriteInteger(4);
             packet.WriteInteger(data.Saddle);
             packet.WriteInteger(0);
-        }
-        else {
-            packet.WriteInteger(1);
-            packet.WriteInteger(2);
-            packet.WriteInteger(2);
-            packet.WriteInteger(data.Hair);
-            packet.WriteInteger(data.HairDye);
-            packet.WriteInteger(3);
-            packet.WriteInteger(data.Hair);
-            packet.WriteInteger(data.HairDye);
         }
 
         packet.WriteBoolean(data.Saddle > 0);

@@ -9,6 +9,7 @@ public readonly record struct HorseStyle(int Palette, int Hair, int HairPalette,
 public static class HorseProducts
 {
     public const int HorseType = 15;
+    private const int DefaultHairPalette = 1;
 
     // The first body palette of each colour tag in the horse asset. Breeds 1 to 4 follow it in order.
     private static readonly Dictionary<string, int> BodyColours = new(StringComparer.Ordinal)
@@ -58,10 +59,11 @@ public static class HorseProducts
     }
 
     /// <summary>The breed (1 to 4) of a horse body palette, or 0 for a palette without one.</summary>
-    public static int Breed(int palette) => throw new NotImplementedException();
+    public static int Breed(int palette) => BodyColours.Values
+        .Where(first => palette >= first && palette < first + 4).Select(first => palette - first + 1).FirstOrDefault();
 
     /// <summary>The hair palette a horse shows: hair without a colour of its own wears the default palette.</summary>
-    public static int HairPalette(int stored) => throw new NotImplementedException();
+    public static int HairPalette(int stored) => stored > 0 ? stored : DefaultHairPalette;
 
     private static HorseStyle? Dye(HorseStyle style, string tag)
     {

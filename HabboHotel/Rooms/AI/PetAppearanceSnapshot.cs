@@ -5,7 +5,10 @@ namespace Plus.HabboHotel.Rooms.AI;
 
 public sealed record PetInventoryEntry(int Id, string Name, int Type, int Race, string Color, ImmutableArray<int> CustomParts, int Level);
 public sealed record PetInventorySnapshot(ImmutableArray<PetInventoryEntry> Pets);
-public sealed record HorseAppearanceSnapshot(int VirtualId, int PetId, int Type, int Race, string Color, int Hair, int HairDye, int Saddle, bool Riding);
+public sealed record HorseAppearanceSnapshot(int VirtualId, int PetId, int Type, int Race, string Color, int Hair, int HairDye, int Saddle, bool Riding)
+{
+    public int Breed => HorseProducts.Breed(Race);
+}
 
 public static class PetAppearanceSnapshots
 {
@@ -18,6 +21,6 @@ public static class PetAppearanceSnapshots
         var pet = user.PetData ?? throw new InvalidOperationException("Only a placed pet has a horse appearance.");
 
         return new(pet.VirtualId, pet.PetId, pet.Type, int.Parse(pet.Race, CultureInfo.InvariantCulture),
-            pet.Color.ToLowerInvariant(), pet.PetHair, pet.HairDye, pet.Saddle, user.RidingHorse);
+            pet.Color.ToLowerInvariant(), pet.PetHair, HorseProducts.HairPalette(pet.HairDye), pet.Saddle, user.RidingHorse);
     }
 }

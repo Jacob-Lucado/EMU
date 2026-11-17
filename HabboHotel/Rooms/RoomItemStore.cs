@@ -26,6 +26,7 @@ public sealed class RoomItemStore(IDatabase database) : IRoomItemStore
     public void AssignOwner(uint itemId, int userId) => Execute("UPDATE items SET user_id = @userId WHERE id = @itemId LIMIT 1", new { userId, itemId });
     public void ClearRoom(uint itemId) => Execute("UPDATE items SET room_id = 0 WHERE id = @itemId LIMIT 1", new { itemId });
     public void SaveWallPosition(uint itemId, string wallPosition) => Execute("UPDATE items SET wall_pos = @wallPosition WHERE id = @itemId LIMIT 1", new { wallPosition, itemId });
+    public void Delete(uint itemId, uint roomId) => Execute("DELETE FROM items WHERE id = @itemId AND room_id = @roomId LIMIT 1", new { itemId, roomId });
     public void MoveWall(uint itemId, uint roomId, string wallPosition)
     {
         using var connection = database.Connection();

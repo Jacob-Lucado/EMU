@@ -5,7 +5,8 @@ public enum PetVocal
 {
     Refusal,
     UnknownCommand,
-    Scratched
+    Scratched,
+    Eating
 }
 
 /// <summary>
@@ -46,7 +47,13 @@ public static class PetVocals
         [(22, PetVocal.UnknownCommand)] = ["Say what?", "I have no idea what you're saying.", "Try again.", "How dare you speak to me like that?", "Eh?"],
         [(28, PetVocal.UnknownCommand)] = ["No comprende, amigo.", "Don't you speak kitten?"],
         [(29, PetVocal.UnknownCommand)] = ["Stop hounding me, I don't understand!", "Let´s paws for a second."],
-        [(30, PetVocal.UnknownCommand)] = ["Hog wash", "You're bacon me crazy!"]
+        [(30, PetVocal.UnknownCommand)] = ["Hog wash", "You're bacon me crazy!"],
+        [(1, PetVocal.Eating)] = ["*eating*"],
+        [(8, PetVocal.Eating)] = ["The fresher the flesh, the greater the taste!"],
+        [(15, PetVocal.Eating)] = ["What a delicacy, yum, yum", "Yum, yum, this is delicious", "This is delicious!"],
+        [(20, PetVocal.Eating)] = ["What a delicacy, yum, yum"],
+        [(29, PetVocal.Eating)] = ["Mmm, I'm wolfing this down!"],
+        [(35, PetVocal.Eating)] = ["Veganism isn't just for Christmas. Veganism is for life.", "*Crunch* I just ADORE meal times. *Crunch*", "Mmmm. Healthy. *Crunch*"]
     };
 
     public static IReadOnlyList<string> For(int type, PetVocal vocal)

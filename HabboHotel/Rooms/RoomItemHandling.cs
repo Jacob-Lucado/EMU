@@ -555,7 +555,16 @@ public partial class RoomItemHandling
     }
 
     /// <summary>Takes a used-up furni out of the room and deletes it, as when a pet eats the last bite of its food.</summary>
-    public bool DeleteFurniture(Item item) => throw new NotImplementedException();
+    public bool DeleteFurniture(Item item)
+    {
+        if (item.IsTemporary || !ReferenceEquals(GetItem(item.Id), item)) {
+            return false;
+        }
+
+        _store.Delete(item.Id, _room.RoomId);
+
+        return RemoveRoomItemCore(item, true);
+    }
 
     private bool RemoveRoomItem(Item item) => RemoveRoomItemCore(item, true);
 

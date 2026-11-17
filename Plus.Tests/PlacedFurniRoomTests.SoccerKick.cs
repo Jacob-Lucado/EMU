@@ -53,6 +53,20 @@ public partial class PlacedFurniRoomTests
     }
 
     [Fact]
+    public void KickedHockeyPuckSlidesNineTiles()
+    {
+        var (puck, kicker) = KickPitch(ballX: 1, ballY: 2, kickerX: 0);
+        puck.Definition.ItemName = "es_puck";
+
+        Step(kicker, 1, 2, lastStep: true);
+
+        Assert.Equal((2, 2, "88", 2), BallAt(puck));
+        var moves = RunBall(puck);
+        Assert.Equal(new[] { (3, 2, "77"), (4, 2, "66"), (5, 2, "55"), (6, 2, "44"), (7, 2, "33"), (8, 2, "22"), (9, 2, "11"), (10, 2, "11") }, moves);
+        Assert.Equal(new[] { 500.0 / 8, 500.0 / 7, 500.0 / 6, 100, 125, 500.0 / 3, 250, 500 }, _ballDelays);
+    }
+
+    [Fact]
     public void KickTurnsTheBallToTheWalkDirectionDiagonalsIncluded()
     {
         var (ball, kicker) = KickPitch(ballX: 4, ballY: 2, kickerX: 5, kickerY: 3);

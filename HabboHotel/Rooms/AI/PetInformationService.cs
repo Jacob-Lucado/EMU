@@ -6,7 +6,8 @@ namespace Plus.HabboHotel.Rooms.AI;
 
 public sealed record PetInformationSnapshot(int Id, string Name, int Level, int MaxLevel, int Experience,
     int ExperienceGoal, int Energy, int MaxEnergy, int Nutrition, int MaxNutrition, int Respect, int OwnerId,
-    int AgeInDays, string OwnerName, bool HasSaddle, int AnyoneCanRide, IReadOnlyList<int> SkillThresholds);
+    int AgeInDays, string OwnerName, bool HasSaddle, int AnyoneCanRide, IReadOnlyList<int> SkillThresholds,
+    bool HasBreedingPermission = false);
 
 public interface IPetInformationService
 {

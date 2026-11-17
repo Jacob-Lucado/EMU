@@ -14,7 +14,7 @@ namespace Plus.HabboHotel.Rooms;
 public sealed record RoomUserSnapshot(int Id, string Name, string Motto, string Look, int VirtualId, int X, int Y,
     string Z, int Rotation, int Kind, string Gender, int GroupId, string GroupName, int AchievementPoints,
     bool IsPet, int PetType, int OwnerId, string OwnerName, bool HasSaddle, bool IsRidden, int PetLevel = 0, IReadOnlyList<short>? BotSkills = null,
-    int BadgesRank = -1);
+    int BadgesRank = -1, bool HasBreedingPermission = false);
 
 [Scoped]
 public interface IRoomUserSnapshotService

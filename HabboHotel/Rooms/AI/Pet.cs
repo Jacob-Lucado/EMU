@@ -14,6 +14,7 @@ public class Pet
     private IGameClientManager? _clients;
     private IRewardTrackManager? _rewards;
     public int AnyoneCanRide;
+    public bool AllowBreeding;
     public string Color;
     public DateTimeOffset? CreatedAt;
     public PetDatabaseUpdateState DbState;

@@ -831,6 +831,9 @@ public class Gamemap
                     case InteractionType.IceSkates:
                         EffectMap[coord.X, coord.Y] = 3;
                         break;
+                    case InteractionType.SnowboardSlope:
+                        EffectMap[coord.X, coord.Y] = 7;
+                        break;
                     case InteractionType.Lowpool:
                         EffectMap[coord.X, coord.Y] = 4;
                         break;

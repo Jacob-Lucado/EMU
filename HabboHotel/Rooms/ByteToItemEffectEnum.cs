@@ -17,6 +17,8 @@ public static class ByteToItemEffectEnum
                 return ItemEffectType.SwimLow;
             case 5:
                 return ItemEffectType.SwimHalloween;
+            case 7:
+                return ItemEffectType.Snowboard;
             default:
                 return ItemEffectType.None;
         }

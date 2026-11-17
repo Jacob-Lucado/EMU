@@ -3,6 +3,7 @@ using Plus.Communication.Packets.Outgoing.Rooms.Avatar;
 using Plus.HabboHotel.Achievements;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Quests;
+using Plus.HabboHotel.Rooms.AI.MonsterPlants;
 
 namespace Plus.HabboHotel.Rooms.AI;
 
@@ -12,7 +13,7 @@ public interface IPetRespectService
 }
 
 public sealed class PetRespectService(IAchievementManager achievements, IQuestManager quests,
-    IRewardTrackManager rewards) : IPetRespectService
+    IRewardTrackManager rewards, IMonsterPlantStore? plants = null, TimeProvider? clock = null) : IPetRespectService
 {
     public void Respect(Room room, GameClient session, int petId)
     {

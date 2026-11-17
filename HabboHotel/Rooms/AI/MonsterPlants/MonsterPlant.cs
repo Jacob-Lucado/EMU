@@ -70,4 +70,7 @@ public sealed class MonsterPlant(int petId, int rarity, DateTimeOffset growthSta
 
         return level < AdultLevel ? $"grw{level}" : "std";
     }
+
+    /// <summary>Treating a living plant fills its wellbeing. A dead plant needs a revival potion instead.</summary>
+    public bool Treat(DateTimeOffset now) => throw new NotImplementedException();
 }

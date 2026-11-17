@@ -1,10 +1,13 @@
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using Plus.Communication.Flash;
 using Plus.Communication.Packets.Incoming.Rooms.Settings;
+using Plus.Communication.Packets.Outgoing;
 using Plus.Core.Settings;
 using Plus.HabboHotel.Achievements;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Navigator;
+using Plus.HabboHotel.Permissions;
 using Plus.HabboHotel.Rooms;
 using Plus.HabboHotel.Rooms.Chat.Filter;
 using Plus.HabboHotel.Users;
@@ -63,13 +66,14 @@ public sealed class RoomSettingsServiceTests
         var target = new RecordingService();
         var (client, _) = HabbiconTestSupport.Client(new Habbo());
         await new SaveRoomSettingsEvent(target).Parse(client, HabbiconTestSupport.Incoming(42, "Name", "Desc", 2, "secret", 25, 36,
-            2, "ONE", "two", 1, true, false, true, false, -1, 1, 1, 2, 0, 2, true, false, 0, false, 0, false));
+            2, "ONE", "two", 1, true, false, true, false, -1, 1, 1, 2, 0, 2, false, true, 45, false, 120, true));
         var request = Assert.IsType<RoomSettingsRequest>(target.Request);
         Assert.Equal((uint)42, request.RoomId);
         Assert.Equal("secret", request.Password);
         Assert.Equal(new[] { "ONE", "two" }, request.Tags.ToArray());
         Assert.Equal(2, request.WhoKick);
         Assert.Equal(2, request.ExtraFlood);
+        Assert.Equal(new RoomBehaviorSettings(false, true, 45, false, 120, true), request.Behavior);
     }
 
     [Fact]
@@ -95,8 +99,96 @@ public sealed class RoomSettingsServiceTests
         Assert.Equal(allowed ? 1 : 0, sent.Count);
     }
 
-    private static RoomSettingsRequest Request() => new(42, "Updated", "Description", 2, "", 25, 36, ["ONE"],
-        1, true, false, true, true, 1, 1, 0, 2, 0, 1);
+    // Without Habbo Club the door tile and idle settings keep their stored values; muting pets saves for everyone.
+    [Fact]
+    public void WithoutClubOnlyMuteAllPetsSaves()
+    {
+        var room = Room();
+        var (service, store, client, sent) = Owner(room, club: false);
+
+        service.Save(client, Request(new(false, false, 10, false, 5, true)));
+
+        var expected = RoomBehaviorSettings.Default with { MuteAllPets = true };
+        Assert.Equal(expected, store.Saved!.Behavior);
+        Assert.Equal(expected, room.Behavior);
+        Assert.Equal(ServerPacketHeader.RoomSettingsSavedComposer, sent[0].Header);
+    }
+
+    [Theory]
+    [InlineData(false, true, 30, true, 60, true)]
+    [InlineData(true, true, 3600, true, 36000, false)]
+    [InlineData(true, true, 300, true, 330, false)]
+    [InlineData(true, false, 300, true, 60, false)]
+    public void WithClubValidSettingsSaveAndApplyToTheLoadedRoom(bool leave, bool sleep, int sleepSeconds, bool kick, int kickSeconds, bool mute)
+    {
+        var room = Room();
+        var (service, store, client, sent) = Owner(room, club: true);
+        var requested = new RoomBehaviorSettings(leave, sleep, sleepSeconds, kick, kickSeconds, mute);
+
+        service.Save(client, Request(requested));
+
+        Assert.Equal(requested, store.Saved!.Behavior);
+        Assert.Equal(requested, room.Behavior);
+        Assert.Equal("Updated", room.Name);
+    }
+
+    [Theory]
+    [InlineData(true, 29, true, 900, "idleSleepTimeoutSeconds")]
+    [InlineData(true, 3601, true, 9000, "idleSleepTimeoutSeconds")]
+    [InlineData(true, 10, true, 5, "idleSleepTimeoutSeconds")]
+    [InlineData(true, 300, true, 59, "idleAutokickTimeoutSeconds")]
+    [InlineData(false, 0, true, 36001, "idleAutokickTimeoutSeconds")]
+    [InlineData(true, 300, true, 329, "idleAutokickTimeoutSeconds")]
+    [InlineData(true, 300, true, 320, "idleAutokickTimeoutSeconds")]
+    [InlineData(true, 60, true, 60, "idleAutokickTimeoutSeconds")]
+    public void WithClubAnInvalidTimeoutAnswersTheFieldAndSavesNothing(bool sleep, int sleepSeconds, bool kick, int kickSeconds, string field)
+    {
+        var room = Room();
+        var (service, store, client, sent) = Owner(room, club: true);
+
+        service.Save(client, Request(new(false, sleep, sleepSeconds, kick, kickSeconds, true)));
+
+        Assert.Null(store.Saved);
+        Assert.Equal("Original", room.Name);
+        Assert.Equal(RoomBehaviorSettings.Default, room.Behavior);
+        var (header, payload) = Assert.Single(sent);
+        Assert.Equal(ServerPacketHeader.RoomSettingsSaveErrorComposer, header);
+        var error = new FlashIncomingPacket { Buffer = payload };
+        Assert.Equal((42, 16, field), (error.ReadInt(), error.ReadInt(), error.ReadString()));
+    }
+
+    // A disabled timer ignores the sent timeout and keeps the stored one.
+    [Theory]
+    [InlineData(0, 10)]
+    [InlineData(10, 0)]
+    [InlineData(5000, 50000)]
+    public void WithClubADisabledTimerKeepsItsStoredTimeout(int sleepSeconds, int kickSeconds)
+    {
+        var room = Room();
+        room.Behavior = RoomBehaviorSettings.Default with { IdleSleepTimeoutSeconds = 120, IdleAutokickTimeoutSeconds = 600 };
+        var (service, store, client, sent) = Owner(room, club: true);
+
+        service.Save(client, Request(new(true, false, sleepSeconds, false, kickSeconds, false)));
+
+        var expected = new RoomBehaviorSettings(true, false, 120, false, 600, false);
+        Assert.Equal(expected, store.Saved!.Behavior);
+        Assert.Equal(expected, room.Behavior);
+    }
+
+    private static (RoomSettingsService Service, Store Store, GameClient Client, List<(uint Header, byte[] Payload)> Sent) Owner(Room room, bool club)
+    {
+        var access = EditorTestSupport.Access(club ? [PermissionKeys.ClubAccess] : []);
+        var (client, sent) = HabbiconTestSupport.Client(new Habbo { Id = 7, Username = "owner", Access = access });
+        var store = new Store();
+        var service = new RoomSettingsService(Rooms(room), Proxy<IWordFilterManager>((_, a) => a[0]),
+            Proxy<INavigatorManager>((_, a) => { a[1] = null; return false; }),
+            Proxy<IAchievementManager>((_, _) => true), store, Proxy<ISettingsManager>((_, _) => null));
+
+        return (service, store, client, sent);
+    }
+
+    private static RoomSettingsRequest Request(RoomBehaviorSettings? behavior = null) => new(42, "Updated", "Description", 2, "", 25, 36, ["ONE"],
+        1, true, false, true, true, 1, 1, 0, 2, 0, 1, behavior ?? RoomBehaviorSettings.Default);
     private static Room Room()
     {
         var room = (Room)RuntimeHelpers.GetUninitializedObject(typeof(Room));

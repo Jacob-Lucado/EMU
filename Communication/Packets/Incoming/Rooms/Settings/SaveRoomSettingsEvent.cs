@@ -33,18 +33,12 @@ internal sealed class SaveRoomSettingsEvent(IRoomSettingsService settings) : IPa
         var whoKick = packet.ReadInt();
         var whoBan = packet.ReadInt();
         var extraFlood = packet.ReadInt();
-
-        // Door-tile leave, idle sleep/autokick and mute-all-pets follow; Plus does not store them yet.
-        _ = packet.ReadBool();
-        _ = packet.ReadBool();
-        _ = packet.ReadInt();
-        _ = packet.ReadBool();
-        _ = packet.ReadInt();
-        _ = packet.ReadBool();
+        var behavior = new RoomBehaviorSettings(packet.ReadBool(), packet.ReadBool(), packet.ReadInt(), packet.ReadBool(), packet.ReadInt(),
+            packet.ReadBool());
 
         settings.Save(session, new(roomId, name, description, access, password, maxUsers, category, tags.ToImmutable(),
             tradeSettings, allowPets, allowPetsEat, allowWalkthrough, hidewall, wallThickness, floorThickness,
-            whoMute, whoKick, whoBan, extraFlood));
+            whoMute, whoKick, whoBan, extraFlood, behavior));
 
         return Task.CompletedTask;
     }

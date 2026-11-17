@@ -17,7 +17,7 @@ namespace Plus.HabboHotel.Rooms;
 public sealed record RoomSettingsRequest(uint RoomId, string Name, string Description, int Access, string Password, int MaxUsers, int CategoryId,
     ImmutableArray<string> Tags, int TradeSettings, bool AllowPets, bool AllowPetsEat,
     bool RoomBlockingEnabled, bool Hidewall, int WallThickness, int FloorThickness, int WhoMute, int WhoKick, int WhoBan,
-    int ExtraFlood);
+    int ExtraFlood, RoomBehaviorSettings Behavior);
 
 public interface IRoomSettingsStore
 {
@@ -35,7 +35,10 @@ public sealed class RoomSettingsStore(IDatabase database) : IRoomSettingsStore
                 state=@state, tags=@tags, users_max=@MaxUsers, allow_pets=@AllowPets, allow_pets_eat=@AllowPetsEat,
                 room_blocking_disabled=@RoomBlockingEnabled, allow_hidewall=@Hidewall, floorthick=@FloorThickness,
                 wallthick=@WallThickness, mute_settings=@WhoMute, kick_settings=@WhoKick, ban_settings=@WhoBan,
-                chat_extra_flood=@ExtraFlood, trade_settings=@TradeSettings
+                chat_extra_flood=@ExtraFlood, trade_settings=@TradeSettings, leave_on_door_tile=@LeaveOnDoorTile,
+                idle_sleep_enabled=@IdleSleepEnabled, idle_sleep_timeout_seconds=@IdleSleepTimeoutSeconds,
+                idle_autokick_enabled=@IdleAutokickEnabled, idle_autokick_timeout_seconds=@IdleAutokickTimeoutSeconds,
+                mute_all_pets=@MuteAllPets
             WHERE id=@RoomId AND owner=@ownerId LIMIT 1
             """, new
         {
@@ -58,6 +61,12 @@ public sealed class RoomSettingsStore(IDatabase database) : IRoomSettingsStore
             values.WhoBan,
             values.ExtraFlood,
             values.TradeSettings,
+            values.Behavior.LeaveOnDoorTile,
+            values.Behavior.IdleSleepEnabled,
+            values.Behavior.IdleSleepTimeoutSeconds,
+            values.Behavior.IdleAutokickEnabled,
+            values.Behavior.IdleAutokickTimeoutSeconds,
+            values.Behavior.MuteAllPets,
             ownerId
         });
 
@@ -177,7 +186,9 @@ public sealed class RoomSettingsService(IRoomManager _roomManager, IWordFilterMa
 
             maxUsers = Math.Min(maxUsers, Plus.HabboHotel.Subscriptions.ClubLimits.For(session.GetHabbo().Access, "visitors", _settings));
 
-            if (Plus.HabboHotel.Subscriptions.ClubAccess.LevelFor(session.GetHabbo().Access) == 0) {
+            var club = Plus.HabboHotel.Subscriptions.ClubAccess.LevelFor(session.GetHabbo().Access) > 0;
+
+            if (!club) {
                 hidewall = false;
                 wallThickness = 0;
                 floorThickness = 0;
@@ -187,6 +198,14 @@ public sealed class RoomSettingsService(IRoomManager _roomManager, IWordFilterMa
             categoryId = RoomCategoryChoice.Resolve(categoryId, searchResultList, session.GetHabbo().Access, session.GetHabbo().Id, room.OwnerId, applyOwnerRule: true);
 
             if (tags.Count > 2) {
+                return;
+            }
+
+            var behavior = RoomBehaviorSettings.Change(room.Behavior, request.Behavior, club);
+
+            if (behavior.InvalidField != null) {
+                session.Send(new RoomSettingsSaveErrorComposer(room.RoomId, RoomSettingsSaveErrorComposer.CustomSettingError, behavior.InvalidField));
+
                 return;
             }
 
@@ -205,7 +224,8 @@ public sealed class RoomSettingsService(IRoomManager _roomManager, IWordFilterMa
                 WhoMute = whoMute,
                 WhoKick = whoKick,
                 WhoBan = whoBan,
-                ExtraFlood = extraFlood
+                ExtraFlood = extraFlood,
+                Behavior = behavior.Settings
             };
             store.Save(prepared, room.OwnerId, access);
             room.AllowPets = allowPets;
@@ -227,6 +247,7 @@ public sealed class RoomSettingsService(IRoomManager _roomManager, IWordFilterMa
             room.FloorThickness = floorThickness;
             room.ExtraFlood = extraFlood;
             room.TradeSettings = tradeSettings;
+            room.Behavior = behavior.Settings;
             room.GetGameMap().GenerateMaps();
 
             if (session.GetHabbo().CurrentRoom == null) {

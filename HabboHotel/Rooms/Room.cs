@@ -572,7 +572,7 @@ public class Room
         }
 
         lock (EntrySync) {
-            if (_entrants > 0) {
+            if (_entrants > 0 || UserCount > 0) {
                 return true;
             }
 

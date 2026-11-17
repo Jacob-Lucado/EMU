@@ -38,6 +38,34 @@ public partial class PlacedFurniRoomTests
         Assert.False(habbo.InRoom);
     }
 
+    [Fact]
+    public void AnEntryCompletedWhileCheckingAnExpiredPromotionKeepsTheRoomOpen()
+    {
+        var unloads = 0;
+        Set("_rooms", TestRoomOwners.Create(_ => unloads++));
+        _room.IdleTime = 1000;
+        var habbo = Entrant(Entry());
+        var clock = new OnClockRead(() => Assert.True(habbo.EnterRoom(_room)));
+        _room.Promotion = new RoomPromotion("Event", "", 1, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch, clock);
+
+        _room.ProcessRoom();
+
+        Assert.NotNull(_room.GetRoomUserManager().GetRoomUserByHabbo(habbo.Id));
+        Assert.Equal(0, unloads);
+    }
+
+    private sealed class OnClockRead(Action enter) : TimeProvider
+    {
+        private Action? _enter = enter;
+
+        public override DateTimeOffset GetUtcNow()
+        {
+            Interlocked.Exchange(ref _enter, null)?.Invoke();
+
+            return DateTimeOffset.UnixEpoch;
+        }
+    }
+
     private Habbo Entrant(IRoomEntryService entry)
     {
         var habbo = _client.GetHabbo();

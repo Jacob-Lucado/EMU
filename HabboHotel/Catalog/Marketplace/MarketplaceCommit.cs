@@ -43,8 +43,9 @@ internal static class MarketplaceCommit
     public static void Complete(IDatabase database, IDbConnection connection, IDbTransaction transaction, int userId, string kind)
     {
         var reference = Guid.NewGuid().ToString();
-        connection.Execute("INSERT INTO marketplace_operations(operation_ref,user_id,kind,created_at) VALUES(@reference,@userId,@kind,UTC_TIMESTAMP(6))",
-            new { reference, userId, kind }, transaction);
+        // An operation row is only read right after its own commit, so a row older than a day is never needed again.
+        connection.Execute("INSERT INTO marketplace_operations(operation_ref,user_id,kind,created_at) VALUES(@reference,@userId,@kind,UTC_TIMESTAMP(6));" +
+            "DELETE FROM marketplace_operations WHERE user_id=@userId AND created_at<UTC_TIMESTAMP(6) - INTERVAL 1 DAY", new { reference, userId, kind }, transaction);
 
         try {
             transaction.Commit();

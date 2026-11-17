@@ -1708,40 +1708,6 @@ CREATE TABLE `marketplace_operations` (
   KEY `user_operations` (`user_id`,`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
-/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
-/*!50003 SET @saved_col_connection = @@collation_connection */ ;
-/*!50003 SET character_set_client  = utf8mb4 */ ;
-/*!50003 SET character_set_results = utf8mb4 */ ;
-/*!50003 SET collation_connection  = utf8mb4_unicode_ci */ ;
-/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
-/*!50003 SET sql_mode              = 'STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION' */ ;
-DELIMITER ;;
-/*!50003 CREATE*/  /*!50003 TRIGGER IF NOT EXISTS marketplace_operations_no_update BEFORE UPDATE ON marketplace_operations
-FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Marketplace operations are immutable'
-*/;;
-DELIMITER ;
-/*!50003 SET sql_mode              = @saved_sql_mode */ ;
-/*!50003 SET character_set_client  = @saved_cs_client */ ;
-/*!50003 SET character_set_results = @saved_cs_results */ ;
-/*!50003 SET collation_connection  = @saved_col_connection */ ;
-/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
-/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
-/*!50003 SET @saved_col_connection = @@collation_connection */ ;
-/*!50003 SET character_set_client  = utf8mb4 */ ;
-/*!50003 SET character_set_results = utf8mb4 */ ;
-/*!50003 SET collation_connection  = utf8mb4_unicode_ci */ ;
-/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
-/*!50003 SET sql_mode              = 'STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION' */ ;
-DELIMITER ;;
-/*!50003 CREATE*/  /*!50003 TRIGGER IF NOT EXISTS marketplace_operations_no_delete BEFORE DELETE ON marketplace_operations
-FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Marketplace operations are immutable'
-*/;;
-DELIMITER ;
-/*!50003 SET sql_mode              = @saved_sql_mode */ ;
-/*!50003 SET character_set_client  = @saved_cs_client */ ;
-/*!50003 SET character_set_results = @saved_cs_results */ ;
-/*!50003 SET collation_connection  = @saved_col_connection */ ;
 
 --
 -- Table structure for table `marketplace_sales`
@@ -1751,6 +1717,7 @@ DROP TABLE IF EXISTS `marketplace_sales`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8mb4 */;
 CREATE TABLE `marketplace_sales` (
+  `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `offer_id` int(10) unsigned NOT NULL,
   `buyer_id` int(10) unsigned NOT NULL,
   `seller_id` int(10) unsigned NOT NULL,
@@ -1763,46 +1730,13 @@ CREATE TABLE `marketplace_sales` (
   `total_price` int(10) unsigned NOT NULL,
   `seller_amount` int(10) unsigned NOT NULL,
   `sold_at` datetime(6) NOT NULL,
-  PRIMARY KEY (`offer_id`),
+  PRIMARY KEY (`id`),
+  KEY `ix_marketplace_sales_offer` (`offer_id`),
   KEY `ix_marketplace_sales_item` (`item_type`,`sprite_id`,`sold_at`),
   KEY `ix_marketplace_sales_buyer` (`buyer_id`,`sold_at`),
   KEY `ix_marketplace_sales_seller` (`seller_id`,`sold_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
-/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
-/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
-/*!50003 SET @saved_col_connection = @@collation_connection */ ;
-/*!50003 SET character_set_client  = utf8mb4 */ ;
-/*!50003 SET character_set_results = utf8mb4 */ ;
-/*!50003 SET collation_connection  = utf8mb4_unicode_ci */ ;
-/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
-/*!50003 SET sql_mode              = 'STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION' */ ;
-DELIMITER ;;
-/*!50003 CREATE*/  /*!50003 TRIGGER IF NOT EXISTS marketplace_sales_no_update BEFORE UPDATE ON marketplace_sales
-FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Marketplace sales are immutable'
-*/;;
-DELIMITER ;
-/*!50003 SET sql_mode              = @saved_sql_mode */ ;
-/*!50003 SET character_set_client  = @saved_cs_client */ ;
-/*!50003 SET character_set_results = @saved_cs_results */ ;
-/*!50003 SET collation_connection  = @saved_col_connection */ ;
-/*!50003 SET @saved_cs_client      = @@character_set_client */ ;
-/*!50003 SET @saved_cs_results     = @@character_set_results */ ;
-/*!50003 SET @saved_col_connection = @@collation_connection */ ;
-/*!50003 SET character_set_client  = utf8mb4 */ ;
-/*!50003 SET character_set_results = utf8mb4 */ ;
-/*!50003 SET collation_connection  = utf8mb4_unicode_ci */ ;
-/*!50003 SET @saved_sql_mode       = @@sql_mode */ ;
-/*!50003 SET sql_mode              = 'STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION' */ ;
-DELIMITER ;;
-/*!50003 CREATE*/  /*!50003 TRIGGER IF NOT EXISTS marketplace_sales_no_delete BEFORE DELETE ON marketplace_sales
-FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Marketplace sales are immutable'
-*/;;
-DELIMITER ;
-/*!50003 SET sql_mode              = @saved_sql_mode */ ;
-/*!50003 SET character_set_client  = @saved_cs_client */ ;
-/*!50003 SET character_set_results = @saved_cs_results */ ;
-/*!50003 SET collation_connection  = @saved_col_connection */ ;
 
 --
 -- Table structure for table `messenger_friendships`

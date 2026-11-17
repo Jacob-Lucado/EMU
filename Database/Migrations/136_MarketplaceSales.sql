@@ -1,5 +1,6 @@
 CREATE TABLE IF NOT EXISTS marketplace_sales (
-    offer_id INT UNSIGNED NOT NULL PRIMARY KEY,
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    offer_id INT UNSIGNED NOT NULL,
     buyer_id INT UNSIGNED NOT NULL,
     seller_id INT UNSIGNED NOT NULL,
     furni_id INT UNSIGNED NOT NULL,
@@ -11,6 +12,7 @@ CREATE TABLE IF NOT EXISTS marketplace_sales (
     total_price INT UNSIGNED NOT NULL,
     seller_amount INT UNSIGNED NOT NULL,
     sold_at DATETIME(6) NOT NULL,
+    INDEX ix_marketplace_sales_offer (offer_id),
     INDEX ix_marketplace_sales_item (item_type, sprite_id, sold_at),
     INDEX ix_marketplace_sales_buyer (buyer_id, sold_at),
     INDEX ix_marketplace_sales_seller (seller_id, sold_at)
@@ -26,11 +28,6 @@ CREATE TABLE IF NOT EXISTS marketplace_daily_sales (
     INDEX ix_marketplace_daily_date (sale_date,item_type,sprite_id)
 ) ENGINE=InnoDB;
 
-CREATE TRIGGER IF NOT EXISTS marketplace_sales_no_update BEFORE UPDATE ON marketplace_sales
-FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Marketplace sales are immutable';
-CREATE TRIGGER IF NOT EXISTS marketplace_sales_no_delete BEFORE DELETE ON marketplace_sales
-FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Marketplace sales are immutable';
-
 CREATE TABLE IF NOT EXISTS marketplace_operations (
     operation_ref CHAR(36) NOT NULL PRIMARY KEY,
     user_id INT NOT NULL,
@@ -38,7 +35,3 @@ CREATE TABLE IF NOT EXISTS marketplace_operations (
     created_at DATETIME(6) NOT NULL,
     KEY user_operations (user_id,created_at)
 ) ENGINE=InnoDB;
-CREATE TRIGGER IF NOT EXISTS marketplace_operations_no_update BEFORE UPDATE ON marketplace_operations
-FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Marketplace operations are immutable';
-CREATE TRIGGER IF NOT EXISTS marketplace_operations_no_delete BEFORE DELETE ON marketplace_operations
-FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Marketplace operations are immutable';

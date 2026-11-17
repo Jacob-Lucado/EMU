@@ -16,7 +16,7 @@ public class PetBot : BotAi
     private readonly IPetLocale _locale;
     private readonly IPetCommandManager _commands;
 
-    public PetBot(int virtualId, IPetLocale locale, IPetCommandManager commands)
+    public PetBot(int virtualId, IPetLocale locale, IPetCommandManager commands, Random? random = null)
     {
         _locale = locale;
         _commands = commands;

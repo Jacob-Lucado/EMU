@@ -15,6 +15,45 @@ public partial class PlacedFurniRoomTests
     private readonly List<(double Delay, Action Tick)> _ballTicks = [];
     private int _ballChoice;
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void PickingUpABallEndsItsPreviousMove(bool kick)
+    {
+        var (ball, actor) = KickPitch(2, 2, 1);
+        Step(actor, 2, 2, kick);
+        var handler = _room.GetRoomItemHandler();
+        Assert.True(handler.RemoveFurniture(null!, ball));
+        Assert.True(handler.SetFloorItem(null!, ball, 3, 2, 0, true, false, false));
+
+        if (kick) {
+            RunBall(ball);
+            Assert.Equal(3, ball.GetX);
+        }
+        else {
+            Step(actor, 3, 2, true);
+            Assert.Equal("55", ball.LegacyDataString);
+        }
+    }
+
+    [Fact]
+    public void BallFlightDefersPositionWritesUntilTheRoomSaves()
+    {
+        var store = new RecordingRoomItemStore();
+        Set("_roomItemHandling", new RoomItemHandling(_room, store, TestRoomItemMetadataStore.Instance, TestGameClientManager.Empty, TestLanguageManager.RoomItems, TestItemRuntime.Interactors, TestItemRuntime.Travel, TestItemRuntime.Rewards));
+        var (ball, kicker) = KickPitch(ballX: 2, ballY: 2, kickerX: 1);
+        var placements = store.FloorPlacements;
+
+        Step(kicker, 2, 2, lastStep: true);
+        RunBall(ball);
+
+        Assert.Equal(8, ball.GetX);
+        Assert.Equal(placements, store.FloorPlacements);
+        _room.GetRoomItemHandler().Dispose();
+        var saved = Assert.Single(store.Saved);
+        Assert.Equal((ball.Id, 8, 2, 2), (saved.Id, saved.X, saved.Y, saved.Rotation));
+    }
+
     [Fact]
     public void LastStepOntoTheBallKicksItSixTilesWithFallingStatesAndDelays()
     {

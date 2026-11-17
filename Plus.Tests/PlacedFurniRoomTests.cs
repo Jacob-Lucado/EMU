@@ -425,7 +425,8 @@ public partial class PlacedFurniRoomTests : IDisposable
         public void ClearRoom(uint itemId) { }
         public void SaveWallPosition(uint itemId, string wallPosition) { }
         public void SaveMoved(IReadOnlyList<RoomItemSave> items) => Saved.AddRange(items);
-        public void PlaceFloor(uint itemId, uint roomId, int x, int y, double z, int rotation) { }
+        public int FloorPlacements { get; private set; }
+        public void PlaceFloor(uint itemId, uint roomId, int x, int y, double z, int rotation) => FloorPlacements++;
         public void PlaceWall(uint itemId, uint roomId, int x, int y, double z, int rotation, string wallPosition) { }
     }
 

@@ -112,7 +112,9 @@ public sealed class EffectsComponent
         }
     }
 
-    public void ApplyEffect(int effectId)
+    public void ApplyEffect(int effectId) => ApplyEffect(effectId, 0);
+
+    public void ApplyEffect(int effectId, int delay)
     {
         if (_habbo == null || _habbo.CurrentRoom == null) {
             return;
@@ -130,7 +132,7 @@ public sealed class EffectsComponent
             _habbo.CurrentRoom.SendPacket(new DanceComposer(user.VirtualId, 0));
         }
 
-        _habbo.CurrentRoom.SendPacket(new AvatarEffectComposer(user.VirtualId, effectId));
+        _habbo.CurrentRoom.SendPacket(new AvatarEffectComposer(user.VirtualId, effectId, delay));
     }
 
     /// <summary>

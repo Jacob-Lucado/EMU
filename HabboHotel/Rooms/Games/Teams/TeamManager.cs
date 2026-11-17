@@ -30,6 +30,7 @@ public class TeamManager
     public void AddUser(RoomUser user)
     {
         var members = Members(user.Team);
+        user.FreezeExitTicks = 0;
 
         lock (members) {
             if (!members.Contains(user)) {

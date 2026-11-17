@@ -12,6 +12,32 @@ namespace Plus.Tests;
 public partial class PlacedFurniRoomTests
 {
     [Fact]
+    public void RejoiningATeamCancelsThePendingFreezeExit()
+    {
+        var (red, freeze) = LastLifeHit();
+        ElimExit(31, 0, 3);
+
+        for (var tick = 0; tick < 11; tick++) {
+            freeze.CycleUser(red);
+        }
+
+        FreezePlayer(red, Team.Red);
+        freeze.StartGame();
+        _client.Packets.Clear();
+
+        for (var tick = 0; tick < 7; tick++) {
+            freeze.CycleUser(red);
+
+            using (RoomOwnerScope.Enter(_room)) {
+                _room.GetGameMap().Navigation!.DrainCommands();
+            }
+        }
+
+        Assert.Equal((2, 1), (red.X, red.Y));
+        Assert.DoesNotContain(0, Effects());
+    }
+
+    [Fact]
     public void TheHitThatTakesTheLastFreezeLifeOnlyFreezesThePlayer()
     {
         var (red, freeze) = LastLifeHit();

@@ -65,6 +65,9 @@ public static class RewardTrackRules
         return RewardTrackResults.Ok;
     }
 
+    /// <summary>What the prize gives, read from Habbo's prize fields; null when the server cannot grant it.</summary>
+    public static RewardTrackGrant? Grant(RewardTrackPrize prize) => throw new NotImplementedException();
+
     public static bool IsKnownReward(RewardTrackPrize prize)
     {
         var type = prize.RewardType.Trim().ToLowerInvariant();

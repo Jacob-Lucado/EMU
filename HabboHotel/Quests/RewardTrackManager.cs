@@ -11,6 +11,7 @@ using Plus.Core;
 using Plus.Database;
 using Plus.HabboHotel.Badges;
 using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Items;
 using Plus.HabboHotel.Quests.DailyTasks;
 using Plus.HabboHotel.Users;
 using Plus.HabboHotel.Users.Badges;
@@ -34,7 +35,7 @@ public sealed class RewardTrackManager : IRewardTrackManager, IStartable
     private List<RewardTrack> _tracks = new();
 
     public RewardTrackManager(ILogger<RewardTrackManager> logger, IDatabase database, IBadgeManager badgeManager, TimeProvider clock,
-        IDailyTaskManager? dailyTasks = null)
+        IDailyTaskManager? dailyTasks = null, IItemDataManager? items = null, IItemFactory? itemFactory = null)
     {
         _logger = logger;
         _database = database;

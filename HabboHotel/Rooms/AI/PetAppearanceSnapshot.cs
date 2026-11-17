@@ -11,7 +11,12 @@ public static class PetAppearanceSnapshots
 {
     public static PetInventorySnapshot Inventory(IEnumerable<Pet> pets) => new(pets.Select(pet => new PetInventoryEntry(
         pet.PetId, pet.Name, pet.Type, int.Parse(pet.Race, CultureInfo.InvariantCulture), pet.Color,
-        pet.CustomParts.Split(' ').Select(part => int.Parse(part, CultureInfo.InvariantCulture)).ToImmutableArray(), pet.Level)).ToImmutableArray());
+        CustomParts(pet), pet.Level)).ToImmutableArray());
+
+    // The parts start with their count, so a pet without parts sends a count of 0.
+    private static ImmutableArray<int> CustomParts(Pet pet) => pet.CustomParts.Length == 0
+        ? [0]
+        : pet.CustomParts.Split(' ').Select(part => int.Parse(part, CultureInfo.InvariantCulture)).ToImmutableArray();
 
     public static HorseAppearanceSnapshot Horse(RoomUser user)
     {

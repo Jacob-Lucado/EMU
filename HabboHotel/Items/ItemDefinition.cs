@@ -40,6 +40,9 @@ public class ItemDefinition
         || WiredBoxRegistry.TryGet(ItemName, out descriptor) ? descriptor : null;
     public int BehaviourData { get; set; }
 
+    /// <summary>Credit furni the owner can exchange for its credit value.</summary>
+    public bool RedeemableForCredits => throw new NotImplementedException();
+
     /// <summary>The figure set ids a purchasable clothing item unlocks: its Habbo furnidata customparams.</summary>
     public IReadOnlyList<int> FigureSetIds { get; set; } = [];
 

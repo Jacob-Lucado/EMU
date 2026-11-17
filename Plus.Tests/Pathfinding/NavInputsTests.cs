@@ -12,7 +12,7 @@ public class NavInputsTests
         var inputs = new NavInputs(4, 1);
         using var captured = new ManualResetEventSlim();
         using var newer = new ManualResetEventSlim();
-        var old = Task.Run(() => { var record = NavTest.Record(1, 1, [0]); captured.Set(); Assert.True(newer.Wait(5000)); return inputs.Publish(record); });
+        var old = OwnThread(() => { var record = NavTest.Record(1, 1, [0]); captured.Set(); Assert.True(newer.Wait(5000)); return inputs.Publish(record); });
         Assert.True(captured.Wait(5000));
         Assert.True(inputs.Publish(NavTest.Record(1, 2, [3])));
         newer.Set();
@@ -28,7 +28,7 @@ public class NavInputsTests
         inputs.MarkDirty(1);
         using var drained = new ManualResetEventSlim();
         using var published = new ManualResetEventSlim();
-        var writer = Task.Run(() => { Assert.True(drained.Wait(5000)); inputs.MarkDirty(2); published.Set(); });
+        var writer = OwnThread(() => { Assert.True(drained.Wait(5000)); inputs.MarkDirty(2); published.Set(); });
         var first = inputs.Drain(word =>
         {
             if (word == 0) {
@@ -50,7 +50,7 @@ public class NavInputsTests
         inputs.MarkDirty(0);
         using var drained = new ManualResetEventSlim();
         using var moved = new ManualResetEventSlim();
-        var writer = Task.Run(() => { Assert.True(drained.Wait(5000)); inputs.Publish(NavTest.Record(1, 2, [4, 5], h: 2)); moved.Set(); });
+        var writer = OwnThread(() => { Assert.True(drained.Wait(5000)); inputs.Publish(NavTest.Record(1, 2, [4, 5], h: 2)); moved.Set(); });
         compiler.Apply(afterDrain: () => { drained.Set(); Assert.True(moved.Wait(5000)); });
         await writer;
         Assert.Equal(new double[] { 0, 0, 0, 0, 2, 2 }, grid.WalkZ);
@@ -65,7 +65,7 @@ public class NavInputsTests
         inputs.Publish(NavTest.Record(2, 2, [1, 2], h: 0));
         using var selected = new ManualResetEventSlim();
         using var moved = new ManualResetEventSlim();
-        var writer = Task.Run(() => { Assert.True(selected.Wait(5000)); inputs.Publish(NavTest.Record(1, 3, [4, 5], h: 2)); moved.Set(); });
+        var writer = OwnThread(() => { Assert.True(selected.Wait(5000)); inputs.Publish(NavTest.Record(1, 3, [4, 5], h: 2)); moved.Set(); });
         compiler.Apply(beforeRead: id =>
         {
             if (id == 2) {
@@ -89,7 +89,7 @@ public class NavInputsTests
         inputs.Attach(item);
         using var halfWritten = new ManualResetEventSlim();
         using var finish = new ManualResetEventSlim();
-        var writer = Task.Run(() => inputs.Mutate(item, () =>
+        var writer = OwnThread(() => inputs.Mutate(item, () =>
         {
             item.GetX = 4;
             halfWritten.Set();
@@ -253,7 +253,7 @@ public class NavInputsTests
 
         // Force Wired -> NavSync to overlap pickup -> Wired's real DetachRoomItem.
         lock (wiredLock) {
-            pickup = Task.Run(() => remove.Invoke(handler, [item]));
+            pickup = OwnThread(() => remove.Invoke(handler, [item]));
             Assert.True(SpinWait.SpinUntil(() => navigation.Inputs.Read(item.Id)?.Removed == true, 5000));
             lockAvailable = Monitor.TryEnter(item.NavSync, 1000);
 
@@ -402,8 +402,8 @@ public class NavInputsTests
         Task pickup;
 
         lock (item.NavSync) {
-            admission = Task.Run(() => Assert.True(handler.AdmitFloorItem(item)));
-            pickup = Task.Run(() =>
+            admission = OwnThread(() => Assert.True(handler.AdmitFloorItem(item)));
+            pickup = OwnThread(() =>
             {
                 Assert.True(SpinWait.SpinUntil(() => handler.GetItem(item.Id) != null, 5000));
                 remove.Invoke(handler, [item]);
@@ -481,4 +481,10 @@ public class NavInputsTests
         Assert.Equal(1.5004, navigation.Grid.WalkZ[14]);
     }
 
+    // Each side runs on its own thread, so a busy thread pool cannot delay it past the handshake waits.
+    private static Task OwnThread(Action work) =>
+        Task.Factory.StartNew(work, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+
+    private static Task<T> OwnThread<T>(Func<T> work) =>
+        Task.Factory.StartNew(work, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
 }

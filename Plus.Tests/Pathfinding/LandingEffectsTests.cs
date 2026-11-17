@@ -158,7 +158,7 @@ public partial class PlacedFurniRoomTests
         _room.GetSoccer().AddBall(ball);
         effects.Apply(actor, false);
         Assert.Equal((3, 2, 0.75), (actor.X, actor.Y, actor.Z));
-        Assert.Equal((3, 1), (ball.GetX, ball.GetY));
+        Assert.Equal((1, 1), (ball.GetX, ball.GetY));
     }
 
     [Fact]
@@ -191,24 +191,27 @@ public partial class PlacedFurniRoomTests
         Assert.Equal((1, 1), (ball.GetX, ball.GetY));
     }
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public void LandingRunsExistingSoccerAndBanzaiWalkHooks(bool banzai)
+    [Fact]
+    public void LandingRunsExistingBanzaiWalkHook()
     {
-        var ball = Add(10, 1, 1);
-
-        if (banzai) {
-            _room.GetBanzai().AddPuck(ball);
-        }
-        else {
-            _room.GetSoccer().AddBall(ball);
-        }
-
+        var puck = Add(10, 1, 1);
+        _room.GetBanzai().AddPuck(puck);
         var actor = LandingActor();
         actor.RotBody = 2;
         new LandingEffects(_room, _database).Apply(actor, false);
-        Assert.Equal((3, 1), (ball.GetX, ball.GetY));
+        Assert.Equal((3, 1), (puck.GetX, puck.GetY));
+    }
+
+    // A football moves when the step into its tile is announced, so the landing leaves it.
+    [Fact]
+    public void LandingOnTheFootballLeavesIt()
+    {
+        var ball = Add(10, 1, 1);
+        _room.GetSoccer().AddBall(ball);
+        var actor = LandingActor();
+        actor.RotBody = 2;
+        new LandingEffects(_room, _database).Apply(actor, false);
+        Assert.Equal((1, 1), (ball.GetX, ball.GetY));
     }
 
     [Fact]

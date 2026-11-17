@@ -138,9 +138,10 @@ public sealed class GnomePackageService(
 
         var pet = opened.Pet;
         var speeches = new List<RandomSpeech>();
-        room.GetRoomUserManager().DeployBot(new(pet.PetId, pet.RoomId, "pet", "freeroam", pet.Name, "", pet.Look,
+        var actor = room.GetRoomUserManager().DeployBot(new(pet.PetId, pet.RoomId, "pet", "freeroam", pet.Name, "", pet.Look,
             pet.X, pet.Y, pet.Z, 0, 0, 0, 0, 0, ref speeches, "", 0, pet.OwnerId, false, 0, false, 0), pet);
         session.Send(new CheckGnomeNameComposer(item.Id, petName, PetPackageNameError.None));
+        (actor.BotAi as Plus.HabboHotel.Rooms.AI.Types.PetBot)?.Greet();
     }
 
     private const int PetPackageFurniRotation = 4;

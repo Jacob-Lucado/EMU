@@ -26,7 +26,7 @@ public sealed class RoomModerationService(IAchievementManager achievements, IGam
         var room = habbo.CurrentRoom;
 
         if (room == null || !room.CheckRights(session) && room.WhoCanKick != 2 && room.Group == null
-            || room.Group != null && !room.CheckRights(session, false, true)) {
+            || room.Group != null && !room.CheckRights(session) && !room.IsGroupAdmin(session)) {
             return;
         }
 
@@ -45,7 +45,7 @@ public sealed class RoomModerationService(IAchievementManager achievements, IGam
 
         if (room == null || room.WhoCanBan == 0 && !room.CheckRights(session, true) && room.Group == null
             || room.WhoCanBan == 1 && !room.CheckRights(session) && room.Group == null
-            || room.Group != null && !room.CheckRights(session, false, true)) {
+            || room.Group != null && !room.CheckRights(session) && !room.IsGroupAdmin(session)) {
             return;
         }
 

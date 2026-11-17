@@ -62,12 +62,14 @@ public sealed class RoomMuteServiceTests
 
         world.Room.MutedUsers.Clear();
         world.Room.OwnerName = "somebody-else";
+        world.Room.OwnerId = 99;
         clock.Calls = 0;
         service.Mute(world.OwnerClient, world.Target.Id, 2);
         Assert.Empty(world.Room.MutedUsers);
         Assert.Equal(0, clock.Calls);
 
         world.Room.OwnerName = world.Owner.Username;
+        world.Room.OwnerId = 7;
         service.Mute(world.OwnerClient, 404, 2);
         Assert.Empty(world.Room.MutedUsers);
         Assert.Equal(0, clock.Calls);
@@ -83,6 +85,28 @@ public sealed class RoomMuteServiceTests
         Assert.Equal(1, clock.Calls);
     }
 
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    public void PlainGroupMemberCannotMuteInTheGroupRoom(int adminsOnly)
+    {
+        var clock = new CountingClock(Now, TimeZoneInfo.Utc);
+        var world = new World(clock);
+        var (achievements, achievementRecorder) = AchievementRecorder.Create();
+        world.Room.OwnerId = 99;
+        world.Room.OwnerName = "somebody-else";
+        var group = new Plus.HabboHotel.Groups.Group(20, "group", "", "", 1, 99, null, 0, 1, 1, adminsOnly, false,
+            new Plus.HabboHotel.Groups.GroupMembershipSnapshot([], [], []));
+        group.PublishJoin(world.Owner.Id);
+        world.Room.Group = group;
+
+        new RoomMuteService(achievements, clock).Mute(world.OwnerClient, world.Target.Id, 2);
+
+        Assert.Empty(world.Room.MutedUsers);
+        Assert.Equal(0, achievementRecorder.Calls);
+        Assert.Empty(world.TargetPackets);
+    }
 
     private sealed class World
     {
@@ -101,6 +125,7 @@ public sealed class RoomMuteServiceTests
             Room.UsersWithRights = [];
             Room.Type = "private";
             Room.OwnerName = "owner";
+            Room.OwnerId = 7;
             Owner = new() { Id = 7, Username = "owner", CurrentRoom = Room, Access = EditorTestSupport.Access([], 10) };
             Target = new() { Id = 8, Username = "target", CurrentRoom = Room, Access = EditorTestSupport.Access([]) };
             (OwnerClient, _) = HabbiconTestSupport.Client(Owner);

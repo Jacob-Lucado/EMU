@@ -476,7 +476,7 @@ public class Habbo
             Client.Send(new OpenConnectionComposer(room.Id));
         }
 
-        if (!room.CheckRights(Client, true, true) && !Client.GetHabbo().IsTeleporting && !Client.GetHabbo().IsHopping) {
+        if (!room.CheckRights(Client, true) && !Client.GetHabbo().IsTeleporting && !Client.GetHabbo().IsHopping) {
             // A room hidden by Builders Club furni overrides its door mode (notification.builders_club.room_locked); staff still enter.
             if (!Access.Can(PermissionKeys.RoomEnterLocked) && _buildersClub?.HidesRoom(room) == true) {
                 Client.Send(new FlatAccessDeniedComposer(room.Id, ""));

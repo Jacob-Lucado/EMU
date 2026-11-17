@@ -55,7 +55,7 @@ public partial class PlacedFurniRoomTests
         Assert.IsType<Pet>(petUser.PetData).ExperienceLevels = Enumerable.Range(1, 20).Select(i => i * 100).ToArray();
         petUser.PetData.Experience = 1600;
         var locale = new RecordingLocale();
-        var valid = new PetBot(petUser.VirtualId, locale, new RecordingCommands(3));
+        var valid = new PetBot(petUser.VirtualId, locale, new RecordingCommands(1));
         valid.Init(50, petUser.VirtualId, RoomId, petUser, _room);
         _gameField.SetValue(null, Proxy<IGame>((method, _) => throw new InvalidOperationException(method)));
 

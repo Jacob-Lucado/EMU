@@ -48,7 +48,7 @@ public sealed class RecyclerDatabaseTests
         Assert.Equal(0, fixture.Connection.ExecuteScalar<int>("SELECT COUNT(*) FROM user_presents"));
         Assert.Null(fixture.Store.NextAllowed(7));
         var box = Assert.IsType<RecycledBox>(fixture.Store.Recycle(7, 100, config, prize, [new(21, 101), new(20, 101)], Now));
-        Assert.Equal("3-2-2040", box.ExtraData);
+        Assert.Equal("2040-02-03", box.ExtraData);
         Assert.Equal((7, 0u, 100u), fixture.Connection.QuerySingle<(int, uint, uint)>("SELECT user_id,room_id,base_item FROM items WHERE id=@id", new { id = box.Id }));
         Assert.Equal((102u, ""), fixture.Connection.QuerySingle<(uint, string)>("SELECT base_id,extra_data FROM user_presents WHERE item_id=@id", new { id = box.Id }));
         Assert.Equal(Now.AddSeconds(30), fixture.Store.NextAllowed(7));
@@ -226,6 +226,20 @@ public sealed class RecyclerDatabaseTests
     }
 
     [RecyclerDatabaseFact]
+    public void NewBoxesAreOnlyMysteryBoxesWhileAnOldEcotronBoxStillOpens()
+    {
+        using var fixture = new Fixture();
+        var config = fixture.Store.Load();
+        Assert.Null(fixture.Store.Recycle(7, 104, config, config.Levels[0].Prizes[0], [new(20, 101), new(21, 101)], Now));
+        Assert.Equal(2, fixture.Connection.ExecuteScalar<int>("SELECT COUNT(*) FROM items WHERE id IN (20,21)"));
+        fixture.Connection.Execute("INSERT INTO items(id,user_id,room_id,base_item,extra_data) VALUES(40,7,42,104,'3-2-2040'); INSERT INTO user_presents(item_id,base_id,extra_data) VALUES(40,102,'')");
+        var content = Assert.IsType<GiftContent>(fixture.Store.FindBox(40, 7, 42, 104));
+        var id = Assert.IsType<uint>(fixture.Store.OpenBox(40, 7, 42, 104, content));
+        Assert.Equal((7, 0u, 102u), fixture.Connection.QuerySingle<(int, uint, uint)>("SELECT user_id,room_id,base_item FROM items WHERE id=@id", new { id }));
+        Assert.Equal(0, fixture.Connection.ExecuteScalar<int>("SELECT COUNT(*) FROM items WHERE id=40"));
+    }
+
+    [RecyclerDatabaseFact]
     public void FailedRewardCreationRestoresThePlacedBoxAndItsExactPayload()
     {
         using var fixture = new Fixture();
@@ -249,7 +263,7 @@ public sealed class RecyclerDatabaseTests
         definitions.Init();
         var inventory = await new Plus.HabboHotel.Users.Inventory.Furniture.FurnitureInventoryLoader(fixture.Source, definitions).Load(7);
         var loaded = Assert.Single(inventory.Where(item => item.Id == box.Id));
-        Assert.Equal("3-2-2040", loaded.ExtraData.Serialize());
+        Assert.Equal("2040-02-03", loaded.ExtraData.Serialize());
         Assert.Equal(Plus.HabboHotel.Users.Inventory.Furniture.FurniCategory.EcotronBox,
             Plus.HabboHotel.Users.Inventory.Furniture.InventoryItemSnapshot.Capture(loaded).Category);
         Assert.Equal("", Assert.Single(inventory.Where(item => item.Id == 24)).ExtraData.Serialize());
@@ -805,7 +819,7 @@ public sealed class RecyclerDatabaseTests
                     UPDATE recycler_settings SET enabled=TRUE,slots=2,cooldown_seconds=30;
                     INSERT INTO recycler_levels(level,chance) VALUES(1,1);
                     INSERT INTO recycler_prizes(id,level,item_id) VALUES(1,1,102);
-                    INSERT INTO furniture(id,item_name,sprite_id,allow_recycle) VALUES(100,'ecotron_box',3095,FALSE),(101,'input',41,TRUE),(102,'reward',42,TRUE),(103,'not_recyclable',43,FALSE);
+                    INSERT INTO furniture(id,item_name,sprite_id,allow_recycle) VALUES(100,'matic_box',4692,FALSE),(101,'input',41,TRUE),(102,'reward',42,TRUE),(103,'not_recyclable',43,FALSE),(104,'ecotron_box',3095,FALSE);
                     INSERT INTO items(id,user_id,room_id,base_item,extra_data) VALUES(20,7,0,101,''),(21,7,0,101,''),(22,8,0,101,''),(23,7,42,101,''),(24,7,0,103,'');
                     """);
             }

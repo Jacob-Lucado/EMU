@@ -1,7 +1,6 @@
 using System.Collections.Immutable;
 using System.Data;
 using System.Data.Common;
-using System.Globalization;
 using Microsoft.Extensions.Logging;
 using Plus.Communication.Packets.Outgoing.Catalog;
 using Plus.Communication.Packets.Outgoing.Handshake;
@@ -88,7 +87,7 @@ public sealed class RecyclerService(IRecyclerStore store, IItemDataManager defin
                 var room = habbo.CurrentRoom;
                 var configuration = Configuration();
                 var items = definitions.Items;
-                var box = RecyclerBox.Find(items.Values);
+                var box = RecyclerBox.Find(items.Values, RecyclerBox.Mystery);
 
                 if (!Active(session, habbo) || room is null || !Valid(configuration, items) || !SupportsPrizes(session, configuration) || box is null
                     || habbo.Duckets < configuration.CostDuckets
@@ -240,14 +239,15 @@ public sealed class RecyclerService(IRecyclerStore store, IItemDataManager defin
 
             lock (habbo.WalletSync) {
                 var items = definitions.Items;
-                var box = RecyclerBox.Find(items.Values);
+                var kind = RecyclerBox.KindOf(item.Definition);
+                var box = kind is null ? null : RecyclerBox.Find(items.Values, kind);
 
                 if (!Active(session, habbo) || !ReferenceEquals(habbo.CurrentRoom, room)
                     || !Admitted(session, habbo, room)
                     || !room.CheckRights(session, false, true) || box is null || item.Definition.Id != box.Id || item.IsTemporary
                     || item.OwnerId != (uint)habbo.Id || item.RoomId != room.Id || item.Placement != placement
                     || !ReferenceEquals(item.GetRoom(), room) || !ReferenceEquals(handler.GetItem(item.Id), item)
-                    || !DateOnly.TryParseExact(item.LegacyDataString, "d-M-yyyy", CultureInfo.InvariantCulture, DateTimeStyles.None, out _)
+                    || !RecyclerBox.HasDate(kind!, item.LegacyDataString)
                     || habbo.Inventory is not { } userInventory) {
                     return;
                 }
@@ -384,7 +384,7 @@ public sealed class RecyclerService(IRecyclerStore store, IItemDataManager defin
         }
     }
     private static bool Valid(RecyclerConfiguration configuration, IReadOnlyDictionary<uint, ItemDefinition> items) => configuration.Enabled && configuration.Slots is >= 1 and <= 12
-        && configuration.CooldownSeconds is >= 0 and <= 86400 && configuration.CostDuckets is >= 0 and <= 1000000 && RecyclerBox.Find(items.Values) is not null
+        && configuration.CooldownSeconds is >= 0 and <= 86400 && configuration.CostDuckets is >= 0 and <= 1000000 && RecyclerBox.Find(items.Values, RecyclerBox.Mystery) is not null
         && configuration.Levels.Length is >= 1 and <= 6 && configuration.Levels.Any(level => level.Id == 1 && level.Chance == 1)
         && configuration.Levels.Select(level => level.Id).Distinct().Count() == configuration.Levels.Length
         && configuration.Levels.All(level => level.Id is >= 1 and <= 6 && level.Chance > 0 && level.Prizes.Length is >= 1 and <= 500

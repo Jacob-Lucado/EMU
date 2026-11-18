@@ -18,6 +18,10 @@ A paid exchange is checked against the session's Duckets. Before a paid exchange
 
 Chat-style prizes must be enabled, require ownership, and have no HC or permission requirement. They need a client that handles the purchased chat-style messages 470 and 916 and lists owned styles in its chat-style selector. Do not add chat-style prizes while players use a client without this support. Acquired styles belong to the user who opens the box, and the allowed chat-style list (9340) then includes them. Opening another box with the same style keeps one permanent right, records another opening and awards no substitute currency or furniture.
 
+## Boxes
+
+An exchange gives a Mystery Box (`matic_box`, sprite 4692), just like Habbo. The box stores its creation date as `yyyy-MM-dd` and shows it when placed; the inventory lists it without data. Migration 158 makes the box impossible to recycle, trade or sell on the Marketplace. The Furni-Matic stays closed if the hotel has no single valid `matic_box` furniture row. Ecotron boxes (`ecotron_box`, sprite 3095, date `d-M-yyyy`) from older exchanges can still be opened.
+
 ## Transactions and recovery
 
 An exchange consumes eligible owned inventory items, charges Duckets, chooses the box contents, updates the cooldown and records progress in one transaction. Limited items, borrowed Builders Club items, active music objects and unopened containers cannot be recycled. The reward is fixed when the box is created.

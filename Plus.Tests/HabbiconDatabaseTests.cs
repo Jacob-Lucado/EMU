@@ -2,6 +2,7 @@ using System.Data;
 using Dapper;
 using MySqlConnector;
 using Plus.Database;
+using Plus.Database.Migrator;
 using Plus.HabboHotel.Habbicons;
 using Plus.HabboHotel.Users;
 using Xunit;
@@ -49,7 +50,11 @@ public class HabbiconDatabaseTests
 
             using var connection = new MySqlConnection(connectionString);
             connection.Open();
-            connection.Execute(File.ReadAllText(HabbiconPacketTests.Repo("Database/FreshInstall.sql")), commandTimeout: 900);
+
+            foreach (var statement in SqlScript.Split(File.ReadAllText(HabbiconPacketTests.Repo("Database/FreshInstall.sql")))) {
+                connection.Execute(statement, commandTimeout: 900);
+            }
+
             _importedConnectionString = connectionString;
         }
     }
@@ -100,6 +105,50 @@ public class HabbiconDatabaseTests
         Assert.Throws<HabbiconRejected>(() => _service.Change(UserId, HabbiconAction.Claim, 71));
         Assert.Equal(HabbiconState.Owned, _service.Load(UserId).RequireItem(71).State);
         Assert.Equal(100, Scalar("SELECT credits FROM users WHERE id = 910001"));
+    }
+
+    [HabbiconDatabaseFact]
+    public void GrantOwnsTheIconOnlyWhenTheCallerCommits()
+    {
+        Execute("UPDATE habbicons SET available = FALSE WHERE id = 62");
+
+        using (var connection = _database.Connection()) {
+            connection.Open();
+
+            using (var transaction = connection.BeginTransaction()) {
+                var change = _service.Grant(connection, transaction, UserId, 62);
+                Assert.Equal(new[] { 62 }, change.Changed.Select(item => item.Id));
+                Assert.Equal(HabbiconState.Owned, change.Snapshot.RequireItem(62).State);
+            }
+
+            Assert.Equal(HabbiconState.Unavailable, _service.Load(UserId).RequireItem(62).State);
+
+            using (var transaction = connection.BeginTransaction()) {
+                _service.Grant(connection, transaction, UserId, 62);
+                transaction.Commit();
+            }
+        }
+
+        var snapshot = _service.Load(UserId);
+        Assert.Equal(HabbiconState.Owned, snapshot.RequireItem(62).State);
+        Assert.Contains(62, snapshot.Unseen);
+        Assert.Equal(100, Scalar("SELECT credits FROM users WHERE id = 910001"));
+    }
+
+    [HabbiconDatabaseFact]
+    public void GrantKeepsAFavoriteAndRejectsAnUnknownIcon()
+    {
+        _service.Change(UserId, HabbiconAction.Buy, 61);
+        _service.Change(UserId, HabbiconAction.Favorite, 61);
+
+        using (var connection = _database.Connection()) {
+            connection.Open();
+            using var transaction = connection.BeginTransaction();
+            Assert.Empty(_service.Grant(connection, transaction, UserId, 61).Changed);
+            Assert.Throws<HabbiconRejected>(() => _service.Grant(connection, transaction, UserId, int.MaxValue));
+        }
+
+        Assert.Equal(HabbiconState.Favorite, _service.Load(UserId).RequireItem(61).State);
     }
 
     [HabbiconDatabaseFact]

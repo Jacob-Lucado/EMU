@@ -1,3 +1,4 @@
+using Plus.HabboHotel.Rooms;
 using Plus.HabboHotel.Rooms.Instance;
 using Xunit;
 
@@ -10,36 +11,38 @@ public class WiredWakeTimingCollection;
 public class WiredWakeClockTests
 {
     [Fact]
-    public async Task DelayedWakeUpsLandOnTheirOwnDueTimeNotOnTheNextRoomStep()
+    public void DelayedWakeUpsLandOnTheirOwnDueTimeNotOnTheNextRoomStep()
     {
-        using var clock = new WiredWakeClock();
-        var start = WiredWakeClock.Now;
-        double[] due = [1500, 500, 1000];
-        var woke = new double[due.Length];
+        var time = new ManualTime();
+        using var clock = new WiredWakeClock(time);
+        var step = (long)RoomCycle.WiredInterval.TotalMilliseconds;
+        // The due times fall between room steps, and two are 1 ms apart, so a clock that waits for a step or fires early lands on the wrong ms.
+        long[] due = [10 * step + 13, step + 29, 5 * step + 41, 5 * step + 42];
+        var woke = new long[due.Length];
         var order = new List<int>();
-        var done = new CountdownEvent(due.Length);
+        var fired = due.Select(_ => new ManualResetEventSlim()).ToArray();
 
         for (var i = 0; i < due.Length; i++) {
             var slot = i;
-            clock.At(start + due[slot], () =>
+            clock.At(due[slot], () =>
             {
-                woke[slot] = WiredWakeClock.Now - start;
+                woke[slot] = time.GetTimestamp();
 
                 lock (order) {
                     order.Add(slot);
                 }
 
-                done.Signal();
+                fired[slot].Set();
             });
         }
 
-        Assert.True(await Task.Run(() => done.Wait(TimeSpan.FromSeconds(5))));
-        Assert.Equal([1, 2, 0], order);
-
-        // Within 2 ms on an idle host; the bound leaves room for a loaded test runner while staying under half a 50 ms room step.
-        for (var i = 0; i < due.Length; i++) {
-            Assert.InRange(woke[i], due[i], due[i] + 20);
+        foreach (var slot in Enumerable.Range(0, due.Length).OrderBy(slot => due[slot])) {
+            time.Set(due[slot]);
+            Assert.True(fired[slot].Wait(TimeSpan.FromSeconds(10)));
         }
+
+        Assert.Equal([1, 2, 3, 0], order);
+        Assert.Equal(due, woke);
     }
 
     [Fact]
@@ -52,5 +55,16 @@ public class WiredWakeClockTests
         clock.After(10, woke.Set);
 
         Assert.True(woke.Wait(TimeSpan.FromSeconds(2)));
+    }
+
+    private sealed class ManualTime : TimeProvider
+    {
+        private long _ms;
+
+        public override long TimestampFrequency => 1000;
+
+        public override long GetTimestamp() => Interlocked.Read(ref _ms);
+
+        public void Set(long ms) => Interlocked.Exchange(ref _ms, ms);
     }
 }

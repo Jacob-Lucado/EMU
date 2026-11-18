@@ -18,6 +18,18 @@ namespace Plus.Tests;
 public sealed class ItemRedemptionServiceTests
 {
     [Fact]
+    public void AReservedRoomCoinStaysWithItsTransfer()
+    {
+        var (room, client, sent, item) = Context(InteractionType.Exchange, 10);
+        Assert.True(room.GetRoomItemHandler().TryReserveTransfers([item], out var transfer));
+        var store = new Store();
+        Service(store).RedeemCredits(room, client, item.Id);
+        Assert.Equal(0, store.ExchangeDeletes);
+        Assert.Empty(sent);
+        Assert.True(room.GetRoomItemHandler().TransferIsCurrent(transfer!, item));
+    }
+
+    [Fact]
     public void CreditDenialsDoNotDeleteOrPublish()
     {
         var (room, client, sent, item) = Context(InteractionType.Exchange, 10);
@@ -85,6 +97,15 @@ public sealed class ItemRedemptionServiceTests
         Assert.Equal(10, client.GetHabbo().Credits);
         Assert.Equal(1, store.ExchangeDeletes);
         Assert.NotEmpty(sent);
+    }
+
+    [Fact]
+    public void CreditRedeemPaysTheCoinValueInTheStoreStep()
+    {
+        var (room, client, _, item) = Context(InteractionType.Exchange, 10);
+        var store = new Store();
+        Service(store).RedeemCredits(room, client, item.Id);
+        Assert.Equal(10, store.RedeemedCredits);
     }
 
     [Fact]
@@ -184,16 +205,18 @@ public sealed class ItemRedemptionServiceTests
     }
     private sealed class Store(Action? before = null) : IItemRedemptionStore
     {
-        public bool Fail; public int ExchangeDeletes;
-        public void DeleteExchange(uint itemId, int ownerId, uint roomId)
+        public bool Fail; public int ExchangeDeletes; public int RedeemedCredits;
+        public void RedeemExchange(uint itemId, int ownerId, uint roomId, int balance)
         {
             before?.Invoke();
             ExchangeDeletes++;
+            RedeemedCredits = balance;
 
             if (Fail) {
                 throw new InvalidOperationException("forced");
             }
         }
+        public IReadOnlyList<uint> RedeemInventoryExchanges(int ownerId, int startingBalance, IReadOnlyList<ExchangeRedemption> items) => throw new NotSupportedException();
         public IReadOnlyList<ClothingParts> ConsumeClothing(uint itemId, int ownerId, uint roomId, string name, IReadOnlyCollection<int> ids)
         {
             before?.Invoke();

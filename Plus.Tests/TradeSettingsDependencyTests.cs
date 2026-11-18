@@ -72,6 +72,25 @@ public sealed class TradeSettingsDependencyTests
     }
 
     [Fact]
+    public void OverflowLeavesTheVoucherWithTheSender()
+    {
+        using var fixture = new TradeConfirmationServiceTests.TradeFixture(new TestRoomSettings(new() { ["trading.auto_exchange_redeemables"] = "1" }));
+        var alice = fixture.Join(1, 7);
+        var bob = fixture.Join(2, 8);
+        bob.Habbo.Credits = int.MaxValue;
+        var voucher = new InventoryItem { Id = 100, OwnerId = 1, Definition = new ItemDefinition { InteractionType = InteractionType.Exchange, BehaviourData = 1 } };
+        Assert.True(alice.Habbo.Inventory.Furniture.AddItem(voucher));
+        var trade = fixture.Start(alice, bob);
+        trade.Users[0].OfferedItems.Add(voucher.Id, voucher);
+
+        trade.Finish();
+
+        Assert.Same(voucher, alice.Habbo.Inventory.Furniture.GetItem(voucher.Id));
+        Assert.Equal(int.MaxValue, bob.Habbo.Credits);
+        Assert.Empty(fixture.Store.Logged);
+    }
+
+    [Fact]
     public void AutoRedeemHandsOverNonRedeemableCreditFurniAsFurni()
     {
         var settings = new TestRoomSettings(new() { ["trading.auto_exchange_redeemables"] = "1" });

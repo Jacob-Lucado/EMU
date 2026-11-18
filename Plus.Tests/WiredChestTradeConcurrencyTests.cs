@@ -172,6 +172,7 @@ public sealed class WiredChestTradeConcurrencyTests
         public Pair(bool walletChanges)
         {
             World = new(Db.Database);
+            Db.Connection.Execute("CREATE TABLE marketplace_operations(operation_ref CHAR(36) PRIMARY KEY, user_id INT, kind VARCHAR(12), created_at DATETIME(6)) ENGINE=InnoDB");
             Db.Connection.Execute("CREATE TABLE logs_client_trade(id INT AUTO_INCREMENT PRIMARY KEY,`1id` INT,`2id` INT,`1items` TEXT,`2items` TEXT,`timestamp` DATETIME(6) NULL) ENGINE=InnoDB");
             var normal = new ItemDefinition { Id = 1, SpriteId = 44, Type = ItemType.Floor, AllowTrade = true };
             var voucher = new ItemDefinition { Id = 2, SpriteId = 55, Type = ItemType.Floor, AllowTrade = true, InteractionType = InteractionType.Exchange, BehaviourData = 5 };

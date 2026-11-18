@@ -76,10 +76,10 @@ public sealed class MonsterPlantTests
         var now = PlantedAt.AddDays(10);
         var plant = new MonsterPlant(1, 4, PlantedAt, now.AddSeconds(249350), false, true);
 
-        Assert.True(plant.Treat(now));
+        var treated = Assert.IsType<MonsterPlant>(plant.AfterTreat(now));
 
-        Assert.Equal(TimeSpan.FromSeconds(259200), plant.RemainingWellbeing(now));
-        Assert.Equal(120, plant.Energy(now));
+        Assert.Equal(TimeSpan.FromSeconds(259200), treated.RemainingWellbeing(now));
+        Assert.Equal(120, treated.Energy(now));
     }
 
     [Fact]
@@ -87,7 +87,7 @@ public sealed class MonsterPlantTests
     {
         var plant = MonsterPlant.Seeded(1, 0, PlantedAt);
 
-        Assert.False(plant.Treat(PlantedAt));
+        Assert.Null(plant.AfterTreat(PlantedAt));
     }
 
     [Fact]
@@ -96,7 +96,7 @@ public sealed class MonsterPlantTests
         var plant = MonsterPlant.Seeded(1, 0, PlantedAt);
         var later = PlantedAt.AddDays(5);
 
-        Assert.False(plant.Treat(later));
+        Assert.Null(plant.AfterTreat(later));
         Assert.True(plant.IsDead(later));
     }
 

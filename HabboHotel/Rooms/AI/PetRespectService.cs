@@ -90,19 +90,20 @@ public sealed class PetRespectService(IAchievementManager achievements, IQuestMa
     {
         var now = (clock ?? TimeProvider.System).GetUtcNow();
 
-        if (!plant.Treat(now)) {
+        if (plants == null || plant.AfterTreat(now) is not { } treated) {
             return;
         }
 
+        plants.Save(treated);
+        pet.Plant = treated;
         pet.Respect++;
 
         if (pet.DbState != PetDatabaseUpdateState.NeedsInsert) {
             pet.DbState = PetDatabaseUpdateState.NeedsUpdate;
         }
 
-        plants?.Save(plant);
         room.SendPacket(new PetTreatedComposer(pet.Respect, pet.OwnerId, pet.PetId, pet.Name, pet.Type,
-            int.TryParse(pet.Race, out var race) ? race : 0, pet.Color, pet.CustomParts, plant.Level(now), plant.Rarity));
+            int.TryParse(pet.Race, out var race) ? race : 0, pet.Color, pet.CustomParts, treated.Level(now), treated.Rarity));
         achievements.ProgressAchievement(session, "ACH_MonsterPlantTreater", 1);
     }
 }

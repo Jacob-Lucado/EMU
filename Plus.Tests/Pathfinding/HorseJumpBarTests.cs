@@ -92,14 +92,14 @@ public partial class PlacedFurniRoomTests
         Assert.Equal((1, 3), (rider.X, rider.Y));
     }
 
-    private Item HorseJump(uint id, string name, int rotation)
+    private Item HorseJump(uint id, string name, int rotation, double height = 0.1)
     {
         var jump = Furni(id, InteractionType.None, WiredBoxType.None);
         jump.UserId = 7;
         jump.Definition.ItemName = name;
         jump.Definition.Width = 2;
         jump.Definition.Length = 3;
-        jump.Definition.Height = 0.1;
+        jump.Definition.Height = height;
         jump.Definition.Stackable = false;
         jump.Definition.Walkable = true;
         Assert.True(_room.GetRoomItemHandler().SetFloorItem(null!, jump, 1, 1, rotation, true, false, false));

@@ -6,16 +6,21 @@ namespace Plus.Tests;
 public partial class PlacedFurniRoomTests
 {
     [Theory]
-    [InlineData("obstacle_bush")]
-    [InlineData("obstacle_fring")]
-    [InlineData("obstacle_water")]
-    [InlineData("obstacle_water2")]
-    [InlineData("obstacle_water3")]
-    public void AUserWalksAroundTheBarOfEveryHorseObstacle(string name)
+    [InlineData("obstacle_bush", false)]
+    [InlineData("obstacle_bush", true)]
+    [InlineData("obstacle_fring", false)]
+    [InlineData("obstacle_fring", true)]
+    [InlineData("obstacle_water", false)]
+    [InlineData("obstacle_water", true)]
+    [InlineData("obstacle_water2", false)]
+    [InlineData("obstacle_water2", true)]
+    [InlineData("obstacle_water3", false)]
+    [InlineData("obstacle_water3", true)]
+    public void AUserWalksAroundTheBarOfEveryHorseObstacle(string name, bool layered)
     {
         FallbackModel(HorseJumpRoom);
-        HorseJump(20, name, 4);
-        var actor = FallbackActor(1, 0);
+        HorseJump(20, name, 4, height: 0);
+        var actor = FallbackActor(1, 0, new() { LayeringEnabled = layered });
 
         actor.MoveTo(1, 4);
         var trail = FallbackRun(actor, 12);
@@ -25,16 +30,21 @@ public partial class PlacedFurniRoomTests
     }
 
     [Theory]
-    [InlineData("obstacle_bush")]
-    [InlineData("obstacle_fring")]
-    [InlineData("obstacle_water")]
-    [InlineData("obstacle_water2")]
-    [InlineData("obstacle_water3")]
-    public void ARiddenHorseJumpsEveryHorseObstacle(string name)
+    [InlineData("obstacle_bush", false)]
+    [InlineData("obstacle_bush", true)]
+    [InlineData("obstacle_fring", false)]
+    [InlineData("obstacle_fring", true)]
+    [InlineData("obstacle_water", false)]
+    [InlineData("obstacle_water", true)]
+    [InlineData("obstacle_water2", false)]
+    [InlineData("obstacle_water2", true)]
+    [InlineData("obstacle_water3", false)]
+    [InlineData("obstacle_water3", true)]
+    public void ARiddenHorseJumpsEveryHorseObstacle(string name, bool layered)
     {
         FallbackModel(HorseJumpRoom);
-        HorseJump(20, name, 4);
-        var (rider, horse) = JumpingRider((1, 0), false);
+        HorseJump(20, name, 4, height: 0);
+        var (rider, horse) = JumpingRider((1, 0), layered);
 
         rider.MoveTo(1, 4);
         var jumped = false;

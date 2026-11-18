@@ -16,7 +16,11 @@ public sealed record PetFood(int Energy, int Experience, int Happiness, IReadOnl
 
     public int BiteExperience => Experience / Bites;
 
-    public static PetFood? Of(ItemDefinition definition)
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<ItemDefinition, PetFood> Foods = new();
+
+    public static PetFood? Of(ItemDefinition definition) => Foods.GetValue(definition, static item => Parse(item)!);
+
+    private static PetFood? Parse(ItemDefinition definition)
     {
         if (!definition.ItemName.StartsWith("petfood", StringComparison.Ordinal) && definition.FurniLine != "pet_food") {
             return null;

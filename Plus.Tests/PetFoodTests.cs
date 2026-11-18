@@ -121,8 +121,27 @@ public partial class PlacedFurniRoomTests
 
         Assert.Null(_room.GetRoomItemHandler().GetItem(70));
         Assert.Contains(_client.Packets, packet => packet.Header == ServerPacketHeader.ObjectRemoveComposer);
+        Assert.Empty(store.Deleted);
+        _room.GetRoomItemHandler().Dispose();
         Assert.Equal([(70u, RoomId)], store.Deleted);
         Assert.Equal(20 + 5 * 38, pet.Energy);
+    }
+
+    [Fact]
+    public void PetCannotEatAtTheOldFoodPosition()
+    {
+        var owner = LegacyRider();
+        var pet = CommandPet(15, 17_600, 420);
+        var user = PetUser(pet);
+        var food = PlaceFood(70, "petfood1", "375,10,0", 3, 3);
+        var ai = CommandBot(user, PetCommandSet.Eat);
+        ai.OnUserSay(owner, "horse eat");
+        Assert.True(_room.GetRoomItemHandler().SetFloorItem(null, food, 2, 2, 0, false, false, false));
+
+        ArriveAt(ai, user, 3, 3);
+
+        Assert.Equal("0", food.LegacyDataString);
+        Assert.Equal(17_600, pet.Experience);
     }
 
     [Fact]
@@ -239,6 +258,6 @@ public partial class PlacedFurniRoomTests
         public void SaveMoved(IReadOnlyList<RoomItemSave> items) { }
         public void PlaceFloor(uint itemId, uint roomId, int x, int y, double z, int rotation) { }
         public void PlaceWall(uint itemId, uint roomId, int x, int y, double z, int rotation, string wallPosition) { }
-        public void Delete(uint itemId, uint roomId) => Deleted.Add((itemId, roomId));
+        public void DeleteConsumed(uint roomId, IReadOnlyCollection<uint> itemIds) => Deleted.AddRange(itemIds.Select(id => (id, roomId)));
     }
 }

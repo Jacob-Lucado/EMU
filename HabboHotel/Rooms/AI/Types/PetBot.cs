@@ -255,9 +255,8 @@ public class PetBot : BotAi
         }
     }
 
-    private static Item? FindFood(Room room, RoomUser pet, Pet petData) => room.GetRoomItemHandler().GetFloor
-        .Where(item => PetFood.Of(item.Definition)?.Feeds(petData.Type) == true)
-        .MinBy(item => Math.Abs(item.GetX - pet.X) + Math.Abs(item.GetY - pet.Y));
+    private static Item? FindFood(Room room, RoomUser pet, Pet petData) => room.GetRoomItemHandler()
+        .FindNearestFloor(pet.Coordinate, item => !item.IsTemporary && PetFood.Of(item.Definition)?.Feeds(petData.Type) == true);
 
     private void GoEat(RoomUser pet, Item food)
     {
@@ -284,7 +283,7 @@ public class PetBot : BotAi
 
         _mealId = 0;
 
-        if (pet.Coordinate != _mealSpot) {
+        if (pet.Coordinate != _mealSpot || pet.Coordinate != (food.Definition.Walkable ? food.Coordinate : food.SquareInFront)) {
             return false;
         }
 
@@ -292,21 +291,22 @@ public class PetBot : BotAi
         var eaten = 0;
 
         do {
-            petData.Feed(values.BiteEnergy);
             bites++;
             eaten++;
-        } while (bites < PetFood.Bites && petData.Energy < petData.MaxEnergy);
+        } while (bites < PetFood.Bites && petData.Energy + eaten * values.BiteEnergy < petData.MaxEnergy);
 
+        if (bites == PetFood.Bites && !room.GetRoomItemHandler().DeleteFurniture(food)) {
+            return false;
+        }
+
+        petData.Feed(eaten * values.BiteEnergy);
         RemovePetStatus();
         pet.Statusses["eat"] = TextHandling.GetString(pet.Z);
         pet.UpdateNeeded = true;
         _actionTimer = 10;
         PetVocals.Say(pet, PetVocal.Eating);
 
-        if (bites >= PetFood.Bites) {
-            room.GetRoomItemHandler().DeleteFurniture(food);
-        }
-        else {
+        if (bites < PetFood.Bites) {
             if (food.ExtraData is not LegacyDataFormat) {
                 food.ExtraData = new LegacyDataFormat();
             }

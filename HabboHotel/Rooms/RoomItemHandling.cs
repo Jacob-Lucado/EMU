@@ -160,6 +160,7 @@ public partial class RoomItemHandling
         return true;
     }
 
+    private readonly HashSet<uint> _consumedItems = [];
     private readonly ConcurrentDictionary<uint, Item> _movedItems;
     private readonly ConcurrentDictionary<uint, Item> _rollers;
     private readonly Room _room;
@@ -219,6 +220,23 @@ public partial class RoomItemHandling
         }
 
         return null;
+    }
+
+    internal Item? FindNearestFloor(Point position, Func<Item, bool> matches)
+    {
+        Item? nearest = null;
+        var distance = int.MaxValue;
+
+        foreach (var (_, item) in _floorItems) {
+            var nextDistance = Math.Abs(item.GetX - position.X) + Math.Abs(item.GetY - position.Y);
+
+            if (nextDistance < distance && matches(item)) {
+                nearest = item;
+                distance = nextDistance;
+            }
+        }
+
+        return nearest;
     }
 
     public ICollection<Item> GetWall => _wallItems.Values;
@@ -561,9 +579,11 @@ public partial class RoomItemHandling
             return false;
         }
 
-        _store.Delete(item.Id, _room.RoomId);
-
-        return RemoveRoomItemCore(item, true);
+        return RemoveRoomItemCore(item, true, () => {
+            lock (_payloadGate) {
+                _consumedItems.Add(item.Id);
+            }
+        });
     }
 
     private bool RemoveRoomItem(Item item) => RemoveRoomItemCore(item, true);
@@ -1480,6 +1500,13 @@ public partial class RoomItemHandling
 
     public void Dispose()
     {
+        lock (_payloadGate) {
+            if (_consumedItems.Count > 0) {
+                _store.DeleteConsumed(_room.RoomId, _consumedItems);
+                _consumedItems.Clear();
+            }
+        }
+
         SaveFurniture();
 
         if (_restoreOnDispose) {

@@ -54,11 +54,11 @@ public partial class PlacedFurniRoomTests
         Assert.Equal("state\t0\noffsetX\t1\noffsetY\t2", item.ExtraData.Serialize());
         var update = Assert.Single(ObjectUpdates());
         Assert.True(update.Body.AsSpan().IndexOf(Encode("state", "0", "offsetX", "1", "offsetY", "2")) >= 0);
-        Assert.True(MovedItems().ContainsKey(20));
+        Assert.False(MovedItems().ContainsKey(20));
     }
 
     [Fact]
-    public void BlockedPlacementNeverWritesOrChangesTheModel()
+    public void BackgroundSaveDoesNotDependOnItsTile()
     {
         var item = PlacedBranding(21, InteractionType.Background);
         Recipient();
@@ -68,11 +68,42 @@ public partial class PlacedFurniRoomTests
 
         new RoomItemMetadataService(store, null!).SetBranding(_client, new(21, Pairs("offsetX", "1")));
 
-        Assert.Equal(0, store.Writes);
-        Assert.Equal("old\tvalue", item.ExtraData.Serialize());
-        Assert.Empty(ObjectUpdates());
-        Assert.Empty(_client.Sent);
-        Assert.False(MovedItems().ContainsKey(21));
+        Assert.Equal(1, store.Writes);
+        Assert.Equal("state\t0\noffsetX\t1", item.ExtraData.Serialize());
+        Assert.Equal((99, 99), (item.GetX, item.GetY));
+        Assert.Single(ObjectUpdates());
+    }
+
+    [Fact]
+    public void BackgroundSavesUnderAFurniThatCannotStack()
+    {
+        var item = PlacedBranding(30, InteractionType.Background);
+        Recipient();
+        var chair = Furni(31, InteractionType.None, WiredBoxType.None);
+        Assert.True(_room.GetRoomItemHandler().SetFloorItem(null, chair, 1, 1, 0, true, false, false));
+        chair.Definition.Stackable = false;
+        _client.Packets.Clear();
+        var store = new BrandingStore();
+
+        new RoomItemMetadataService(store, null!).SetBranding(_client, new(30, Pairs("offsetZ", "1500")));
+
+        Assert.Equal(1, store.Writes);
+        Assert.Equal("1500", Assert.IsType<MapDataFormat>(item.ExtraData).Data["offsetZ"]);
+        Assert.True(Assert.Single(ObjectUpdates()).Body.AsSpan().IndexOf(Encode("offsetZ", "1500")) >= 0);
+    }
+
+    [Fact]
+    public void BackgroundSaveNeverMovesTheBackground()
+    {
+        var item = PlacedBranding(32, InteractionType.Background);
+        Recipient();
+        item.SetState(1, 1, 2.5);
+        var before = (item.GetX, item.GetY, item.GetZ, item.Rotation);
+
+        new RoomItemMetadataService(new BrandingStore(), null!).SetBranding(_client, new(32, Pairs("offsetZ", "-20")));
+
+        Assert.Equal("-20", Assert.IsType<MapDataFormat>(item.ExtraData).Data["offsetZ"]);
+        Assert.Equal(before, (item.GetX, item.GetY, item.GetZ, item.Rotation));
     }
 
     [Fact]

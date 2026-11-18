@@ -715,7 +715,11 @@ public partial class RoomItemHandling
         return placed;
     }
 
-    public bool PersistFurnitureData(Item item, Plus.HabboHotel.Items.DataFormat.IFurniObjectData data, bool dataUpdateOnly = false)
+    public bool PersistFurnitureData(Item item, Plus.HabboHotel.Items.DataFormat.IFurniObjectData data, bool dataUpdateOnly = false) =>
+        PersistFurnitureData(item, data, () => _metadata.SetBrandingData(item.Id, _room.Id, data.Serialize()), dataUpdateOnly);
+
+    // A data save never moves the furni, so it does not depend on the placement rules of its tile.
+    public bool PersistFurnitureData(Item item, Plus.HabboHotel.Items.DataFormat.IFurniObjectData data, Action persist, bool dataUpdateOnly = false)
     {
         RoomItemSnapshot snapshot;
 
@@ -725,7 +729,7 @@ public partial class RoomItemHandling
                     return false;
                 }
 
-                _metadata.SetBrandingData(item.Id, _room.Id, data.Serialize());
+                persist();
                 item.ExtraData = data;
                 snapshot = RoomItemSnapshot.Capture(item);
             }

@@ -242,6 +242,8 @@ public class CatalogManager : ICatalogManager, IStartable
     public bool TryGetBuildersClubOffer(int offerId, Habbo habbo, [NotNullWhen(true)] out CatalogPage? page, [NotNullWhen(true)] out CatalogOffer? offer) =>
         _offers.TryGetBuildersClub(offerId, habbo, out page, out offer);
 
+    public int? FindPetType(string productCode) => _offers.FindPetType(productCode);
+
     public ICollection<CatalogPage> Pages => _pages.Values;
 
     public int Revision { get; private set; }

@@ -13,16 +13,25 @@ public class CatalogOfferIndex
     private readonly Dictionary<int, List<CatalogPage>> _pagesByOffer = new();
     private readonly Dictionary<int, List<CatalogPage>> _buildersClubPagesByOffer = new();
 
+    private readonly Dictionary<string, int> _petTypes = new(StringComparer.Ordinal);
+
+    public int? FindPetType(string productCode) => _petTypes.TryGetValue(productCode, out var petType) ? petType : null;
+
     // pages must be in catalog order.
     public void Build(IEnumerable<CatalogPage> pages)
     {
+        _petTypes.Clear();
         _pagesByOffer.Clear();
         _buildersClubPagesByOffer.Clear();
 
         foreach (var page in pages) {
             var index = page.IsBuildersClub ? _buildersClubPagesByOffer : _pagesByOffer;
 
-            foreach (var offerId in page.Offers.Keys) {
+            foreach (var (offerId, offer) in page.Offers) {
+                if (!string.IsNullOrEmpty(offer.LocalizationKey) && offer.Products.FirstOrDefault(product => product.Type == CatalogProductType.Pet) is { } pet) {
+                    _petTypes.TryAdd(offer.LocalizationKey, pet.PetType);
+                }
+
                 if (!index.TryGetValue(offerId, out var offerPages)) {
                     index[offerId] = offerPages = new();
                 }

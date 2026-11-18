@@ -39,7 +39,10 @@ public sealed class CatalogBrowsingSnapshotTests
         var pigeon = new CatalogOffer { Id = 11197, LocalizationKey = "a0 pet22", Products = [new CatalogProduct { Type = CatalogProductType.Pet, PetType = 22 }] };
         var dog = new CatalogOffer { Id = 448, LocalizationKey = "a0 pet0", Products = [new CatalogProduct { Type = CatalogProductType.Pet, PetType = 0 }] };
         var pages = new List<CatalogPage> { new() { Id = 1, Offers = { [448] = dog } }, new() { Id = 2, Offers = { [11197] = pigeon } } };
-        var catalog = CatalogSnapshotTestSupport.Proxy<ICatalogManager>((method, _) => method == "get_Pages" ? pages : throw new InvalidOperationException(method));
+        var index = new CatalogOfferIndex();
+        index.Build(pages);
+        var catalog = CatalogSnapshotTestSupport.Proxy<ICatalogManager>((method, args) =>
+            method == nameof(ICatalogManager.FindPetType) ? index.FindPetType((string)args[0]!) : throw new InvalidOperationException(method));
         var pigeonRace = new PetRace(22, 0, 0, true, false);
         var races = new Races([new PetRace(0, 3, 3, true, false), pigeonRace]);
         var service = new CatalogBrowsingService(races, null!, TimeProvider.System, catalog, null!);

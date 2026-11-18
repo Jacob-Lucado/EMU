@@ -290,6 +290,7 @@ public sealed class TradeConfirmationServiceTests
         public Exception? LogFailure { get; set; }
         public int CommitCalls { get; private set; }
         public void DeleteItem(uint itemId) { }
+        public void RedeemItem(uint itemId, int recipientId, int credits) { }
         public void TransferItem(uint itemId, int userId) { }
         public void Log(int firstUserId, int secondUserId, string firstItems, string secondItems)
         {

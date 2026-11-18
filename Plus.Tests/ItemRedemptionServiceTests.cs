@@ -184,16 +184,18 @@ public sealed class ItemRedemptionServiceTests
     }
     private sealed class Store(Action? before = null) : IItemRedemptionStore
     {
-        public bool Fail; public int ExchangeDeletes;
-        public void DeleteExchange(uint itemId, int ownerId, uint roomId)
+        public bool Fail; public int ExchangeDeletes; public int RedeemedCredits;
+        public void RedeemExchange(uint itemId, int ownerId, uint roomId, int credits)
         {
             before?.Invoke();
             ExchangeDeletes++;
+            RedeemedCredits += credits;
 
             if (Fail) {
                 throw new InvalidOperationException("forced");
             }
         }
+        public IReadOnlyList<uint> RedeemInventoryExchanges(int ownerId, IReadOnlyList<ExchangeRedemption> items) => throw new NotSupportedException();
         public IReadOnlyList<ClothingParts> ConsumeClothing(uint itemId, int ownerId, uint roomId, string name, IReadOnlyCollection<int> ids)
         {
             before?.Invoke();

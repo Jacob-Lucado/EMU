@@ -1,24 +1,23 @@
-using Dapper;
 using Plus.Communication.Packets.Outgoing.Inventory.Furni;
 using Plus.Communication.Packets.Outgoing.Inventory.Purse;
-using Plus.Database;
 using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Items;
 using Plus.HabboHotel.Users.Inventory.Furniture;
 
 namespace Plus.HabboHotel.Rooms.Chat.Commands.User;
 
 internal class ConvertCreditsCommand : IChatCommand
 {
-    private readonly IDatabase _database;
+    private readonly IItemRedemptionStore _store;
     public string Key => "convertcredits";
 
     public string Parameters => "";
 
     public string Description => "Convert your exchangeable furniture into actual credits.";
 
-    public ConvertCreditsCommand(IDatabase database)
+    public ConvertCreditsCommand(IItemRedemptionStore store)
     {
-        _database = database;
+        _store = store;
     }
 
     public void Execute(GameClient session, Room room, string[] parameters)
@@ -35,37 +34,18 @@ internal class ConvertCreditsCommand : IChatCommand
             }
 
             lock (habbo.WalletSync) {
-                using var connection = _database.Connection();
-                var itemIds = connection.Query<uint>("SELECT id FROM items WHERE user_id=@userId AND room_id=0",
-                    new { userId = habbo.Id }).ToArray();
+                var items = inventory.Furniture.AllItems.ToArray();
 
-                if (itemIds.Length == 0) {
+                if (items.Length == 0) {
                     session.SendWhisper("You currently have no items in your inventory!");
 
                     return;
                 }
 
-                var exchangeItems = itemIds.Select(inventory.Furniture.GetItem)
-                    .Where(item => item?.Definition.RedeemableForCredits == true)
-                    .ToArray();
-                var deleted = new List<InventoryItem>(exchangeItems.Length);
-                connection.Open();
-
-                using (var transaction = connection.BeginTransaction()) {
-                    foreach (var item in exchangeItems) {
-                        var affected = connection.Execute(
-                            "DELETE FROM items WHERE id=@id AND user_id=@userId AND room_id=0 LIMIT 1",
-                            new { item.Id, userId = habbo.Id }, transaction);
-
-                        if (affected == 1) {
-                            deleted.Add(item);
-                        }
-                    }
-
-                    transaction.Commit();
-                }
-
-                deletedItems = deleted.ToArray();
+                var exchangeItems = items.Where(item => item.Definition.RedeemableForCredits).ToDictionary(item => item.Id);
+                var redeemed = _store.RedeemInventoryExchanges(habbo.Id,
+                    exchangeItems.Values.Select(item => new ExchangeRedemption(item.Id, Math.Max(item.Definition.BehaviourData, 0))).ToArray());
+                deletedItems = redeemed.Select(id => exchangeItems[id]).ToArray();
 
                 foreach (var item in deletedItems) {
                     var value = item.Definition.BehaviourData;

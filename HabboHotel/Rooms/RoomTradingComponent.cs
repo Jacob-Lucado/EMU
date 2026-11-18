@@ -8,6 +8,7 @@ namespace Plus.HabboHotel.Rooms;
 internal interface ITradeStore
 {
     void DeleteItem(uint itemId);
+    void RedeemItem(uint itemId, int recipientId, int credits);
     void TransferItem(uint itemId, int userId);
     void Log(int firstUserId, int secondUserId, string firstItems, string secondItems);
     bool Commit(IReadOnlyList<TradeTransfer> transfers, int firstUserId, int secondUserId, int firstCredits, int secondCredits,
@@ -26,6 +27,12 @@ public sealed class RoomTradingComponent(IDatabase database, TimeProvider clock,
     public void Initiated() { }
 
     void ITradeStore.DeleteItem(uint itemId)
+    {
+        using var connection = database.Connection();
+        connection.Execute("DELETE FROM items WHERE id = @itemId LIMIT 1", new { itemId });
+    }
+
+    void ITradeStore.RedeemItem(uint itemId, int recipientId, int credits)
     {
         using var connection = database.Connection();
         connection.Execute("DELETE FROM items WHERE id = @itemId LIMIT 1", new { itemId });

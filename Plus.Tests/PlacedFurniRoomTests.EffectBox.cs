@@ -144,7 +144,8 @@ public partial class PlacedFurniRoomTests
             return new(500, ownerId, spriteId, 0, true, now, 1);
         }
 
-        public void DeleteExchange(uint itemId, int ownerId, uint roomId) => throw new NotSupportedException();
+        public void RedeemExchange(uint itemId, int ownerId, uint roomId, int credits) => throw new NotSupportedException();
+        public IReadOnlyList<uint> RedeemInventoryExchanges(int ownerId, IReadOnlyList<ExchangeRedemption> items) => throw new NotSupportedException();
 
         public IReadOnlyList<ClothingParts> ConsumeClothing(uint itemId, int ownerId, uint roomId, string name, IReadOnlyCollection<int> partIds) =>
             throw new NotSupportedException();

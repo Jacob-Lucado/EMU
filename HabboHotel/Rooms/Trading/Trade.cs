@@ -318,7 +318,7 @@ public sealed class Trade
                 if (!habbo.WalletClosed) {
                     habbo.Credits += item.Definition.BehaviourData;
                     recipient.Send(new CreditBalanceComposer(habbo.Credits));
-                    store.DeleteItem(item.Id);
+                    store.RedeemItem(item.Id, habbo.Id, item.Definition.BehaviourData);
 
                     return;
                 }

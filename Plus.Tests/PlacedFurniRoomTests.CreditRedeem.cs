@@ -58,7 +58,9 @@ public partial class PlacedFurniRoomTests
     {
         public List<uint> Deleted { get; } = [];
 
-        public void DeleteExchange(uint itemId, int ownerId, uint roomId) => Deleted.Add(itemId);
+        public void RedeemExchange(uint itemId, int ownerId, uint roomId, int credits) => Deleted.Add(itemId);
+
+        public IReadOnlyList<uint> RedeemInventoryExchanges(int ownerId, IReadOnlyList<ExchangeRedemption> items) => throw new NotSupportedException();
 
         public IReadOnlyList<ClothingParts> ConsumeClothing(uint itemId, int ownerId, uint roomId, string name, IReadOnlyCollection<int> partIds) =>
             throw new NotSupportedException();

@@ -15,14 +15,17 @@ namespace Plus.HabboHotel.Items;
 
 public interface IItemRedemptionStore
 {
-    void DeleteExchange(uint itemId, int ownerId, uint roomId);
+    void RedeemExchange(uint itemId, int ownerId, uint roomId, int credits);
+    IReadOnlyList<uint> RedeemInventoryExchanges(int ownerId, IReadOnlyList<ExchangeRedemption> items);
     IReadOnlyList<ClothingParts> ConsumeClothing(uint itemId, int ownerId, uint roomId, string name, IReadOnlyCollection<int> partIds);
     AvatarEffect ConsumeEffectBox(uint itemId, int ownerId, uint roomId, int spriteId, DateTimeOffset now);
 }
 
+public readonly record struct ExchangeRedemption(uint ItemId, int Credits);
+
 public sealed class ItemRedemptionStore(IDatabase database) : IItemRedemptionStore
 {
-    public void DeleteExchange(uint itemId, int ownerId, uint roomId)
+    public void RedeemExchange(uint itemId, int ownerId, uint roomId, int credits)
     {
         using var connection = database.Connection();
         var deleted = connection.Execute(
@@ -32,6 +35,25 @@ public sealed class ItemRedemptionStore(IDatabase database) : IItemRedemptionSto
         if (deleted != 1) {
             throw new InvalidOperationException("Exchange furniture was not deleted.");
         }
+    }
+
+    public IReadOnlyList<uint> RedeemInventoryExchanges(int ownerId, IReadOnlyList<ExchangeRedemption> items)
+    {
+        using var connection = database.Connection();
+        connection.Open();
+        using var transaction = connection.BeginTransaction();
+        var redeemed = new List<uint>(items.Count);
+
+        foreach (var item in items) {
+            if (connection.Execute("DELETE FROM items WHERE id=@ItemId AND user_id=@ownerId AND room_id=0 LIMIT 1",
+                    new { item.ItemId, ownerId }, transaction) == 1) {
+                redeemed.Add(item.ItemId);
+            }
+        }
+
+        transaction.Commit();
+
+        return redeemed;
     }
 
     public IReadOnlyList<ClothingParts> ConsumeClothing(uint itemId, int ownerId, uint roomId, string name, IReadOnlyCollection<int> partIds)
@@ -175,7 +197,7 @@ public sealed class ItemRedemptionService(IItemRedemptionStore store, ISettingsM
                 return;
             }
 
-            store.DeleteExchange(item.Id, habbo.Id, room.RoomId);
+            store.RedeemExchange(item.Id, habbo.Id, room.RoomId, value);
             habbo.Credits = balance;
             // Habbo names no picker, so the coin vanishes instead of flying to the inventory.
             room.GetRoomItemHandler().RemoveFurniture(null, item, pickerId: -1);

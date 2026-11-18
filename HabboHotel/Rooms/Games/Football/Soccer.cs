@@ -10,7 +10,6 @@ namespace Plus.HabboHotel.Rooms.Games.Football;
 
 public class Soccer
 {
-    private const int KickPower = 6;
     private const double GoalFlashMilliseconds = 2000;
     private ConcurrentDictionary<uint, Item> _balls;
     private readonly Dictionary<uint, Flight> _flights = [];
@@ -95,7 +94,7 @@ public class Soccer
         _dribbles.Remove(ball.Id);
 
         if (lastStep && count == 0) {
-            Launch(ball, new(direction, KickPower, actor));
+            Launch(ball, new(direction, KickPower(ball), actor));
 
             return;
         }
@@ -113,6 +112,9 @@ public class Soccer
             _dribbles[ball.Id] = new(actor, count + 1, ball.GetX, ball.GetY, fromX, fromY);
         }
     }
+
+    // A hockey puck slides nine tiles, a ball rolls six.
+    private static int KickPower(Item ball) => ball.Definition.ItemName.StartsWith("es_puck", StringComparison.Ordinal) ? 9 : 6;
 
     private void Launch(Item ball, Flight flight)
     {

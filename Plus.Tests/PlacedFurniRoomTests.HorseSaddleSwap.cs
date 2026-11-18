@@ -47,7 +47,7 @@ public partial class PlacedFurniRoomTests
         var items = Proxy<IItemDataManager>((method, _) => method == "get_Items"
             ? new Dictionary<uint, ItemDefinition> { [7100] = SwapSaddle, [4450] = SwapSaddleStand }
             : throw new InvalidOperationException(method));
-        var factory = Proxy<IItemFactory>((method, args) => failReturn ? throw new InvalidOperationException("Could not return saddle") : method == "CreateSingleItemNullable" && args[0] is ItemDefinition definition
+        var factory = Proxy<IItemFactory>((method, args) => failReturn ? throw new InvalidOperationException("Could not return saddle") : method == "CreateSingleItemNullable" && args[2] is ItemDefinition definition
             ? new Item { Id = 77, OwnerId = 7, UserId = 7, Definition = definition }
             : throw new InvalidOperationException(method));
         var service = new HorseCustomizationService(null!, items, factory, new SwapStore(), new PetInformationService(TimeProvider.System));
@@ -69,6 +69,7 @@ public partial class PlacedFurniRoomTests
     private sealed class SwapStore : IHorseCustomizationStore
     {
         public void UpdatePet(int petId, string column, object value) { }
-        public void ConsumeItem(int petId, HorseStyle style, uint itemId, uint roomId, int ownerId) { }
+        public Item? ConsumeItem(int petId, HorseStyle style, uint itemId, uint roomId, int ownerId, int previousSaddle, SaddleRefund? refund) => refund?.Create(null!, null!);
+        public Item RemoveSaddle(int petId, int saddle, SaddleRefund refund) => refund.Create(null!, null!);
     }
 }

@@ -133,6 +133,7 @@ public partial class PlacedFurniRoomTests
     [InlineData("https://images.example/room.png", "")]
     [InlineData("http://images.example/room.png?v=2", "https://example.com/")]
     [InlineData("", "")]
+    [InlineData("https://images.example/room.png", "room:123")]
     public void BackgroundSavesWebImageAndClickAddresses(string imageUrl, string clickUrl)
     {
         var item = PlacedBranding(25, InteractionType.Background);
@@ -159,6 +160,11 @@ public partial class PlacedFurniRoomTests
     }
 
     [Theory]
+    [InlineData("clickUrl", "room:")]
+    [InlineData("clickUrl", "room:12a")]
+    [InlineData("clickUrl", "room:-5")]
+    [InlineData("clickUrl", "room:1234567890123")]
+    [InlineData("imageUrl", "room:123")]
     [InlineData("imageUrl", "javascript:alert(1)")]
     [InlineData("imageUrl", "data:image/png;base64,AAAA")]
     [InlineData("imageUrl", "file:///etc/passwd")]

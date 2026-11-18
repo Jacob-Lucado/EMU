@@ -274,9 +274,9 @@ public sealed class GnomePackageServiceTests
                     experience INT NOT NULL, energy INT NOT NULL, nutrition INT NOT NULL, respect INT NOT NULL,
                     createstamp DATETIME(6) NULL, have_saddle INT NOT NULL, anyone_ride INT NOT NULL,
                     hairdye INT NOT NULL, pethair INT NOT NULL, gnome_clothing VARCHAR(100) NOT NULL) ENGINE=InnoDB;
-                CREATE TABLE items (id INT UNSIGNED PRIMARY KEY, user_id INT NOT NULL, room_id INT UNSIGNED NOT NULL,
-                    base_item INT UNSIGNED NOT NULL) ENGINE=InnoDB;
-                INSERT INTO items VALUES (7, 1, 42, 100);
+                CREATE TABLE items (id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, user_id INT NOT NULL, room_id INT UNSIGNED NOT NULL,
+                    base_item INT UNSIGNED NOT NULL, x INT, y INT, z DOUBLE, wall_pos VARCHAR(128), rot INT, extra_data TEXT) ENGINE=InnoDB;
+                INSERT INTO items (id,user_id,room_id,base_item) VALUES (7, 1, 42, 100);
                 """);
             var store = new GnomePackageStore(new ProbeDatabase(cs), NullLogger<GnomePackageStore>.Instance);
             var instant = DateTimeOffset.Parse("2040-01-01T00:00:00.123456Z");
@@ -301,6 +301,24 @@ public sealed class GnomePackageServiceTests
             Assert.Empty(connection.Query<int>("SELECT id FROM items"));
             Assert.Null(store.Open(request));
             Assert.Equal(1, connection.ExecuteScalar<int>("SELECT COUNT(*) FROM bots"));
+
+            connection.Execute("INSERT INTO items (id,user_id,room_id,base_item) VALUES (8,1,42,100)");
+            var package = new PetPackageRequest(8, 100, 1, "owner", 42, 1, 2, 1.5, "Smokey",
+                new PetPackageFigure(1, 0, "ABABAB"), 1.6, 101, 4, instant);
+            connection.Execute("CREATE TRIGGER fail_nest BEFORE INSERT ON items FOR EACH ROW SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='nest insert failed'");
+            Assert.Null(store.OpenPetPackage(package));
+            Assert.Equal(8u, connection.QuerySingle<uint>("SELECT id FROM items"));
+            Assert.Equal(1, connection.ExecuteScalar<int>("SELECT COUNT(*) FROM bots"));
+            connection.Execute("DROP TRIGGER fail_nest");
+
+            var openings = new PetPackageOpening?[2];
+            Parallel.For(0, openings.Length, index => openings[index] = store.OpenPetPackage(package));
+
+            var opened = Assert.Single(openings.OfType<PetPackageOpening>());
+            Assert.Equal(opened.FurniId, connection.QuerySingle<uint>("SELECT id FROM items"));
+            Assert.Equal(1, connection.ExecuteScalar<int>("SELECT COUNT(*) FROM items WHERE base_item=101 AND user_id=1 AND room_id=42 AND x=1 AND y=2 AND z=1.5 AND rot=4"));
+            Assert.Equal(2, connection.ExecuteScalar<int>("SELECT COUNT(*) FROM bots"));
+            Assert.Equal(2, connection.ExecuteScalar<int>("SELECT COUNT(*) FROM bots_petdata"));
         }
         finally {
             root.Execute($"DROP DATABASE `{schema}`");

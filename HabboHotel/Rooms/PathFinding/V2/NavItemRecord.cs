@@ -10,7 +10,9 @@ public sealed record NavItemRecord(uint ItemId, long Version, double Z, double H
     int Rotation, bool Removed, IReadOnlyList<int> Footprint,
     int X = 0, int Y = 0, int Length = 1, int Width = 1, WiredBoxType WiredType = WiredBoxType.None)
 {
-    private static readonly FrozenSet<string> HorseJumps = new[] { "obstacle_oxer", "obstacle_oxer2", "obstacle_oxer3" }.ToFrozenSet();
+    private static readonly FrozenSet<string> HorseJumps = new[] {
+        "obstacle_oxer", "obstacle_oxer2", "obstacle_oxer3", "obstacle_bush", "obstacle_fring", "obstacle_water", "obstacle_water2", "obstacle_water3"
+    }.ToFrozenSet();
 
     public double Top => Z + Height;
     public IReadOnlyList<int> BlockedTiles { get; init; } = [];

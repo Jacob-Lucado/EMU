@@ -14,16 +14,16 @@ public sealed record GnomePackageRequest(uint ItemId, uint BaseItem, int OwnerId
 
 /// <summary>Opening a pet package: the pet, and the furni that takes the package's place at the same spot.</summary>
 public sealed record PetPackageRequest(uint ItemId, uint BaseItem, int OwnerId, string OwnerName, uint RoomId,
-    int X, int Y, double Z, string Name, PetPackageFigure Figure, double PetZ, uint FurniBaseItem, int FurniRotation, DateTimeOffset CreatedAt);
+    int X, int Y, double Z, string Name, PetPackageFigure Figure, double PetZ, uint? FurniBaseItem, int FurniRotation, DateTimeOffset CreatedAt);
 
-public sealed record PetPackageOpening(Pet Pet, uint FurniId);
+public sealed record PetPackageOpening(Pet Pet, uint? FurniId);
 
 [Singleton]
 public interface IGnomePackageStore
 {
     Pet? Open(GnomePackageRequest request);
 
-    /// <summary>Creates the pet, deletes the package and adds its furni in one transaction; null when nothing was written.</summary>
+    /// <summary>Creates the pet, deletes the package and adds its furni, if any, in one transaction; null when nothing was written.</summary>
     PetPackageOpening? OpenPetPackage(PetPackageRequest request);
 }
 
@@ -69,11 +69,16 @@ public sealed class GnomePackageStore(IDatabase database, ILogger<GnomePackageSt
                 return null;
             }
 
-            connection.Execute(
-                "INSERT INTO `items` (base_item,user_id,room_id,x,y,z,wall_pos,rot,extra_data) VALUES (@baseItem,@ownerId,@roomId,@x,@y,@z,'',@rotation,'')",
-                new { baseItem = request.FurniBaseItem, ownerId = request.OwnerId, roomId = request.RoomId, x = request.X, y = request.Y, z = request.Z, rotation = request.FurniRotation },
-                transaction);
-            var furniId = connection.QuerySingle<uint>("SELECT LAST_INSERT_ID()", transaction: transaction);
+            uint? furniId = null;
+
+            if (request.FurniBaseItem is { } furniBaseItem) {
+                connection.Execute(
+                    "INSERT INTO `items` (base_item,user_id,room_id,x,y,z,wall_pos,rot,extra_data) VALUES (@baseItem,@ownerId,@roomId,@x,@y,@z,'',@rotation,'')",
+                    new { baseItem = furniBaseItem, ownerId = request.OwnerId, roomId = request.RoomId, x = request.X, y = request.Y, z = request.Z, rotation = request.FurniRotation },
+                    transaction);
+                furniId = connection.QuerySingle<uint>("SELECT LAST_INSERT_ID()", transaction: transaction);
+            }
+
             transaction.Commit();
 
             return new(pet, furniId);

@@ -226,7 +226,7 @@ public sealed class FurnitureUseService(IFurnitureUseStore store, IQuestManager 
             session.Send(new GnomeBoxComposer(item.Id));
         }
         else if (item.Definition is { InteractionType: InteractionType.None, PetPackage: { } package } && item.OwnerId == habbo.Id) {
-            session.Send(new GnomeBoxComposer(item.Id, PetPackageFigure.Of(package, item.LegacyDataString)));
+            session.Send(new GnomeBoxComposer(item.Id, package.FigureToShow(item.LegacyDataString)));
         }
 
         // Using a Wired chest only asks the client to open it (WiredChestOpen); it is no state change.

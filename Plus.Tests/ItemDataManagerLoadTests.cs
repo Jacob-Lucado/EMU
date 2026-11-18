@@ -94,6 +94,21 @@ public class ItemDataManagerLoadTests
         Assert.Equal(0, manager.Items[4].Revision);
     }
 
+    [Fact]
+    public void AnEggWithoutCustomParamsHoldsItsHatchling()
+    {
+        var manager = new ItemDataManager(new RecordingLogger(), null!);
+        var table = CreateFurnitureTable(typeof(object));
+        table.Columns.Add("custom_params", typeof(object));
+        table.Rows.Add("3", "8156", "velociraptor_egg", "Velociraptor Egg", "s", "1", "1", "1", true, false, DBNull.Value, true, true, false, true, true,
+            "default", "0", "0", "1", "", "0", "0", false, false, DBNull.Value);
+
+        manager.Load(table);
+
+        Assert.Equal(PetPackage.Hatchling("velociraptor_egg"), manager.Items[3].PetPackage);
+        Assert.NotNull(manager.Items[3].PetPackage);
+    }
+
     [Theory]
     [InlineData("1 newbie_nest", 1, "newbie_nest")]
     [InlineData("2 waterbowl*2", 2, "waterbowl*2")]

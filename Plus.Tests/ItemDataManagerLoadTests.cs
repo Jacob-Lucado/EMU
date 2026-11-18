@@ -74,6 +74,25 @@ public class ItemDataManagerLoadTests
         Assert.Equal(0, manager.Items[5].DefaultDirection);
     }
 
+    [Theory]
+    [InlineData("pet_breeding_dog", "0,10,29", 0)]
+    [InlineData("pet_breeding_terrier", "3,10,25", 3)]
+    [InlineData("pet_breeding_pig", "5,10,30", 5)]
+    [InlineData("nest_plow_red", "", null)]
+    [InlineData("clothing_nftsoda", "3442, 3443", null)]
+    public void ABreedingBoxIsForThePetTypeInItsCustomParams(string itemName, string customParams, int? petType)
+    {
+        var manager = new ItemDataManager(new RecordingLogger(), null!);
+        var table = CreateFurnitureTable(typeof(object));
+        table.Columns.Add("custom_params", typeof(object));
+        table.Rows.Add("3", "15", itemName, "Box", "s", "1", "1", "1", true, true, DBNull.Value, true, true, false, true, true,
+            "default", "0", "0", "1", "", "0", "0", false, false, customParams);
+
+        manager.Load(table);
+
+        Assert.Equal(petType, Assert.Single(manager.Items).Value.BreedingPetType);
+    }
+
     [Fact]
     public void APetPackageTakesItsPetAndFurniFromCustomParamsAndKeepsItsRevision()
     {

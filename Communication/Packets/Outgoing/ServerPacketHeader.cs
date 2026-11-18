@@ -297,6 +297,7 @@ public static class ServerPacketHeader
     public const uint JoinQueueComposer = 65499;
     public const uint MarketPlaceOwnOffersComposer = 374;
     public const uint PetBreedingComposer = 2572;
+    public const uint GoToBreedingNestFailureComposer = 1064;
     public const uint SubmitBullyReportComposer = 49;
     public const uint UserNameChangeComposer = 1162;
     public const uint FriendFurniStartConfirmationComposer = 2425;

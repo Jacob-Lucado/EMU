@@ -19,6 +19,7 @@ internal sealed class MovementContext(Room room, RoomNavigation navigation, Land
     internal ApproachGoalResolver ApproachGoals => _approachGoals ??= new(this);
     private ApproachGoalResolver? _approachGoals;
     private PlanningOccupancy _executionOccupancy = new(navigation.Grid.SlotCapacity);
+    private readonly Route _probe = new();
     internal void RefreshMembership(RoomUser actor)
     {
         var grid = Navigation.Grid;
@@ -80,6 +81,20 @@ internal sealed class MovementContext(Room room, RoomNavigation navigation, Land
         if (state.HasIntent) {
             Scheduler.Enqueue(actor, state.LifetimeId, state.GoalRevision);
         }
+    }
+    // Uses the goal and occupancy a click uses. A search its budget cuts short counts as a route.
+    internal bool HasRoute(RoomUser actor, int x, int y)
+    {
+        var grid = Grid;
+        var profile = Profiles.Refresh(actor);
+        var start = new NavPosition(actor.X, actor.Y, actor.Movement.SupportZ);
+        var goal = GoalResolver.ResolveClick(grid, profile, start, x, y, Occupancy(actor));
+        using var lease = PathWorkspacePool.Rent(grid.SlotCapacity,
+            profile.LegacyOverride ? grid.SlotCapacity : grid.ActiveNodeCount);
+
+        return new PathSearch(grid, Navigation.Settings).Find(new(profile, start, x, y, Goals: goal,
+                View: OccupancyView.InitialPlanning), lease.Workspace, _probe)
+            is not (PathOutcome.InvalidGoal or PathOutcome.Unreachable);
     }
     internal PlanningOccupancy Occupancy(RoomUser actor)
     {

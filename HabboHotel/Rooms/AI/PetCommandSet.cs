@@ -9,6 +9,7 @@ public sealed class PetCommandSet(int[] commands, int startCount)
     public const int Free = 0;
     public const int Drink = 14;
     public const int Eat = 43;
+    public const int Breed = 46;
 
     private static readonly PetCommandSet Dog = new([46, 0, 1, 14, 43, 2, 3, 4, 17, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 24, 25, 26], 5);
     private static readonly PetCommandSet Bunny = new([0, 2, 13, 3, 6, 11, 7, 17, 15, 16], 2);

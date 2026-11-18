@@ -2145,7 +2145,7 @@ DROP TABLE IF EXISTS `recycler_settings`;
 CREATE TABLE `recycler_settings` (
   `id` int(11) NOT NULL,
   `enabled` tinyint(1) NOT NULL DEFAULT 0,
-  `slots` int(11) NOT NULL DEFAULT 5,
+  `slots` int(11) NOT NULL DEFAULT 8,
   `cooldown_seconds` int(11) NOT NULL DEFAULT 0,
   `cost_duckets` int(11) NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`)
@@ -104636,7 +104636,7 @@ SET @OLD_AUTOCOMMIT=@@AUTOCOMMIT, @@AUTOCOMMIT=0;
 LOCK TABLES `recycler_settings` WRITE;
 /*!40000 ALTER TABLE `recycler_settings` DISABLE KEYS */;
 INSERT INTO `recycler_settings` VALUES
-(1,0,5,0,0);
+(1,0,8,0,0);
 /*!40000 ALTER TABLE `recycler_settings` ENABLE KEYS */;
 UNLOCK TABLES;
 COMMIT;

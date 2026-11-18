@@ -582,6 +582,182 @@ public sealed class RecyclerDatabaseTests
         Assert.Equal(new RecyclerAchievementProgress(0, 1, 0, 0, 0), new RecyclerAchievementStore(fixture.Source).Read(8, new(0, 0, 0, 0, 0)));
     }
 
+    private static string HabboDefaultsMigration => File.ReadAllText(HabbiconPacketTests.Repo("Database/Migrations/150_FurniMaticHabboDefaults.sql"));
+
+    private static void ResetToUntouchedRecycler(Fixture fixture) => fixture.Connection.Execute("""
+        DELETE FROM recycler_prizes; DELETE FROM recycler_levels;
+        UPDATE recycler_settings SET enabled=FALSE,slots=5,cooldown_seconds=0,cost_duckets=0;
+        """);
+
+    private static void AddHabboPrizeFurniture(Fixture fixture)
+    {
+        var names = System.Text.RegularExpressions.Regex.Matches(HabboDefaultsMigration, "'(rec26_[a-z_]+)'").Select(match => match.Groups[1].Value).Distinct().ToArray();
+        Assert.NotEmpty(names);
+
+        foreach (var (name, index) in names.Select((name, index) => (name, index))) {
+            fixture.Connection.Execute("INSERT INTO furniture(id,item_name,sprite_id,type,allow_recycle) VALUES(@id,@name,@sprite,@type,TRUE)",
+                new { id = 500 + index, name, sprite = 19000 + index, type = name == "rec26_paintwallart" ? "i" : "s" });
+        }
+    }
+
+    [RecyclerDatabaseFact]
+    public void AnUntouchedFurniMaticOpensWithHabbosMachineSettingsAndAValidPrizeDraw()
+    {
+        using var fixture = new Fixture();
+        ResetToUntouchedRecycler(fixture);
+        AddHabboPrizeFurniture(fixture);
+
+        fixture.Connection.Execute(HabboDefaultsMigration);
+
+        var config = fixture.Store.Load();
+        Assert.True(config.Enabled);
+        Assert.Equal((8, 10, 10), (config.Slots, config.CooldownSeconds, config.CostDuckets));
+        Assert.NotNull(RecyclerPrizeDistribution.Build(config));
+        Assert.All(config.Levels, level => Assert.NotEmpty(level.Prizes));
+        Assert.Contains(config.Levels.SelectMany(level => level.Prizes), prize => prize.ChatStyleId > 0);
+        Assert.Equal(1, fixture.Connection.ExecuteScalar<int>(
+            "SELECT COUNT(*) FROM room_chat_styles s JOIN recycler_prizes p ON p.chat_style_id=s.id WHERE s.enabled=1 AND s.requires_ownership=1 AND s.requires_hc=0"));
+    }
+
+    [RecyclerDatabaseFact]
+    public void AHotelThatSetUpItsOwnFurniMaticKeepsItsSetup()
+    {
+        using var fixture = new Fixture();
+        AddHabboPrizeFurniture(fixture);
+        var before = fixture.Store.Load();
+
+        fixture.Connection.Execute(HabboDefaultsMigration);
+
+        Assert.True(before.Matches(fixture.Store.Load()));
+    }
+
+    [RecyclerDatabaseFact]
+    public void AHotelWithoutTheHabboPrizeFurnitureStaysClosedWithoutPartialPrizes()
+    {
+        using var fixture = new Fixture();
+        ResetToUntouchedRecycler(fixture);
+
+        fixture.Connection.Execute(HabboDefaultsMigration);
+
+        var config = fixture.Store.Load();
+        Assert.False(config.Enabled);
+        Assert.Empty(config.Levels);
+        Assert.Equal(0, fixture.Connection.ExecuteScalar<int>("SELECT COUNT(*) FROM recycler_prizes"));
+    }
+
+    [RecyclerDatabaseFact]
+    public void AnEmptyClosedFurniMaticWithoutThePrizeFurnitureStillGetsHabbosEightSlots()
+    {
+        using var fixture = new Fixture();
+        ResetToUntouchedRecycler(fixture);
+
+        fixture.Connection.Execute(HabboDefaultsMigration);
+
+        var config = fixture.Store.Load();
+        Assert.False(config.Enabled);
+        Assert.Equal(8, config.Slots);
+    }
+
+    [RecyclerDatabaseFact]
+    public void AHotelsOwnSlotCountIsKeptWhetherItsFurniMaticIsOpenOrClosed()
+    {
+        using var fixture = new Fixture();
+        AddHabboPrizeFurniture(fixture);
+        fixture.Connection.Execute("UPDATE recycler_settings SET slots=5");
+
+        fixture.Connection.Execute(HabboDefaultsMigration);
+        Assert.Equal(5, fixture.Store.Load().Slots);
+
+        fixture.Connection.Execute("UPDATE recycler_settings SET enabled=FALSE");
+        fixture.Connection.Execute(HabboDefaultsMigration);
+        Assert.Equal(5, fixture.Store.Load().Slots);
+    }
+
+    [RecyclerDatabaseFact]
+    public void AClosedMachineWithCustomSettingsKeepsThemBeforePrizesAreAdded()
+    {
+        using var fixture = new Fixture();
+        ResetToUntouchedRecycler(fixture);
+        AddHabboPrizeFurniture(fixture);
+        fixture.Connection.Execute("UPDATE recycler_settings SET slots=7,cost_duckets=20,cooldown_seconds=60");
+
+        fixture.Connection.Execute(HabboDefaultsMigration);
+
+        var configuration = fixture.Store.Load();
+        Assert.False(configuration.Enabled);
+        Assert.Equal((7, 20, 60), (configuration.Slots, configuration.CostDuckets, configuration.CooldownSeconds));
+        Assert.Empty(configuration.Levels);
+    }
+
+    [RecyclerDatabaseFact]
+    public void ASettingsRowCreatedWithoutASlotCountGetsEightSlots()
+    {
+        using var fixture = new Fixture();
+        fixture.Connection.Execute(HabboDefaultsMigration);
+        fixture.Connection.Execute("DELETE FROM recycler_settings; INSERT INTO recycler_settings(id) VALUES(1)");
+
+        Assert.Equal(8, fixture.Store.Load().Slots);
+    }
+
+    [RecyclerDatabaseFact]
+    public void AMissingSettingsRowLoadsAsAClosedFurniMaticWithEightSlots()
+    {
+        using var fixture = new Fixture();
+        fixture.Connection.Execute("DELETE FROM recycler_settings");
+
+        var config = fixture.Store.Load();
+
+        Assert.False(config.Enabled);
+        Assert.Equal(8, config.Slots);
+    }
+
+    [RecyclerDatabaseFact]
+    public void AnInterruptedPrizeImportCanResumeOnTheNextStartup()
+    {
+        using var fixture = new Fixture();
+        ResetToUntouchedRecycler(fixture);
+        AddHabboPrizeFurniture(fixture);
+        fixture.Connection.Execute("""
+            CREATE TRIGGER reject_chat_prize BEFORE INSERT ON recycler_prizes FOR EACH ROW
+            BEGIN
+                IF NEW.chat_style_id IS NOT NULL THEN
+                    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='prize import interrupted';
+                END IF;
+            END;
+            """);
+
+        using (var startup = new MySqlConnection(fixture.ConnectionString)) {
+            startup.Open();
+            Assert.Throws<MySqlException>(() => startup.Execute(HabboDefaultsMigration));
+        }
+
+        fixture.Connection.Execute("DROP TRIGGER reject_chat_prize");
+        fixture.Connection.Execute(HabboDefaultsMigration);
+
+        var config = fixture.Store.Load();
+        Assert.True(config.Enabled);
+        Assert.NotNull(RecyclerPrizeDistribution.Build(config));
+        Assert.Contains(config.Levels.SelectMany(level => level.Prizes), prize => prize.ChatStyleId > 0);
+        Assert.All(config.Levels, level => Assert.Equal(level.Prizes.Length,
+            level.Prizes.Select(prize => (prize.ItemId, prize.ChatStyleId)).Distinct().Count()));
+    }
+
+    [RecyclerDatabaseFact]
+    public void RunningTheHabboDefaultsTwiceChangesNothingTheSecondTime()
+    {
+        using var fixture = new Fixture();
+        ResetToUntouchedRecycler(fixture);
+        AddHabboPrizeFurniture(fixture);
+        fixture.Connection.Execute(HabboDefaultsMigration);
+        var first = fixture.Store.Load();
+        var prizes = fixture.Connection.ExecuteScalar<int>("SELECT COUNT(*) FROM recycler_prizes");
+
+        fixture.Connection.Execute(HabboDefaultsMigration);
+
+        Assert.True(first.Matches(fixture.Store.Load()));
+        Assert.Equal(prizes, fixture.Connection.ExecuteScalar<int>("SELECT COUNT(*) FROM recycler_prizes"));
+    }
+
     private sealed class Fixture : IDisposable
     {
         private readonly MySqlConnection _admin;

@@ -8,7 +8,7 @@ public sealed record RecyclerPrize(int Id, uint ItemId, int ChatStyleId = 0);
 public sealed record RecyclerLevel(int Id, int Chance, ImmutableArray<RecyclerPrize> Prizes);
 public sealed record RecyclerConfiguration(bool Enabled, int Slots, int CooldownSeconds, ImmutableArray<RecyclerLevel> Levels, int CostDuckets = 0)
 {
-    public static readonly RecyclerConfiguration Closed = new(false, 5, 0, []);
+    public static readonly RecyclerConfiguration Closed = new(false, 8, 0, []);
 
     public bool Matches(RecyclerConfiguration other) => Enabled == other.Enabled && Slots == other.Slots
         && CooldownSeconds == other.CooldownSeconds && CostDuckets == other.CostDuckets && Levels.Length == other.Levels.Length

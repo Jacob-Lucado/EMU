@@ -182,7 +182,8 @@ public sealed class SnowStormStore(IDatabase database) : ISnowStormStore
 
             using var connection = database.Connection();
             connection.Open();
-            using var transaction = connection.BeginTransaction();
+            // The locked writes must see rows committed after the offer read; REPEATABLE READ refuses that on MariaDB 11.6 and newer.
+            using var transaction = connection.BeginTransaction(IsolationLevel.ReadCommitted);
             var offer = connection.QuerySingleOrDefault<SnowStormTokenOffer>(OfferSelect + " WHERE id = @offerId AND enabled = 1", new { offerId }, transaction);
 
             if (offer == null || offer.Games <= 0 || offer.PriceCredits < 0 || offer.PricePoints < 0 || offer.PricePoints > 0 && !ActivityPointType.IsValid(offer.PointsType)) {

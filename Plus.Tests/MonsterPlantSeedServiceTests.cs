@@ -186,6 +186,27 @@ public sealed class MonsterPlantSeedServiceTests
     }
 
     [Fact]
+    public void AFaultWhileSavingATreatKeepsThePreviousPlantState()
+    {
+        var clock = new MovingClock();
+        var world = World(time: clock);
+        world.Service.TryPlant(world.Room, world.Client, 7);
+        Assert.True(world.Room.GetRoomUserManager().TryGetPet(12, out var user));
+        var pet = user.PetData!;
+        var expiry = clock.Now.AddHours(1);
+        pet.Plant = new MonsterPlant(12, 4, clock.Now.AddDays(-10), expiry, false, true);
+        var previousRespect = pet.Respect;
+        var store = CatalogSnapshotTestSupport.Proxy<IMonsterPlantStore>((_, _) => throw new InvalidOperationException("save failed"));
+        var service = new PetRespectService(null!, null!, null!, store, clock);
+        world.Sent.Clear();
+
+        Assert.Throws<InvalidOperationException>(() => service.Respect(world.Room, world.Client, pet.PetId));
+        Assert.Equal(expiry, pet.Plant.WellbeingUntil);
+        Assert.Equal(previousRespect, pet.Respect);
+        Assert.Empty(world.Sent);
+    }
+
+    [Fact]
     public void ADeadPlantCannotBeTreated()
     {
         var clock = new MovingClock();

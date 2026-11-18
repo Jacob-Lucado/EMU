@@ -52,17 +52,16 @@ public sealed class MonsterPlantStore(IDatabase database, ILogger<MonsterPlantSt
 
     public void Save(MonsterPlant plant)
     {
-        try {
-            using var connection = database.Connection();
-            connection.Execute("""
-                UPDATE bots_monsterplants
-                SET growth_started_at = @GrowthStartedAt, wellbeing_until = @WellbeingUntil,
-                    can_breed = @CanBreed, breeding_permission = @BreedingPermission
-                WHERE pet_id = @PetId LIMIT 1
-                """, Row(plant));
-        }
-        catch (Exception exception) {
-            logger.LogError(exception, "Could not save monster plant {PetId}", plant.PetId);
+        using var connection = database.Connection();
+        var updated = connection.Execute("""
+            UPDATE bots_monsterplants
+            SET growth_started_at = @GrowthStartedAt, wellbeing_until = @WellbeingUntil,
+                can_breed = @CanBreed, breeding_permission = @BreedingPermission
+            WHERE pet_id = @PetId LIMIT 1
+            """, Row(plant));
+
+        if (updated != 1) {
+            throw new InvalidOperationException("The monster plant was not saved.");
         }
     }
 

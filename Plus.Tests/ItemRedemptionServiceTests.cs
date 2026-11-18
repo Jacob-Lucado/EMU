@@ -18,6 +18,18 @@ namespace Plus.Tests;
 public sealed class ItemRedemptionServiceTests
 {
     [Fact]
+    public void AReservedRoomCoinStaysWithItsTransfer()
+    {
+        var (room, client, sent, item) = Context(InteractionType.Exchange, 10);
+        Assert.True(room.GetRoomItemHandler().TryReserveTransfers([item], out var transfer));
+        var store = new Store();
+        Service(store).RedeemCredits(room, client, item.Id);
+        Assert.Equal(0, store.ExchangeDeletes);
+        Assert.Empty(sent);
+        Assert.True(room.GetRoomItemHandler().TransferIsCurrent(transfer!, item));
+    }
+
+    [Fact]
     public void CreditDenialsDoNotDeleteOrPublish()
     {
         var (room, client, sent, item) = Context(InteractionType.Exchange, 10);

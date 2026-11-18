@@ -50,6 +50,37 @@ public sealed class CreditFurniRedeemWalletTests
         Assert.DoesNotContain(sent, packet => packet.Header == ServerPacketHeader.CreditBalanceComposer);
     }
 
+    [Theory]
+    [InlineData(true, false, 100)]
+    [InlineData(false, false, int.MaxValue)]
+    [InlineData(false, true, 100)]
+    public void ConvertKeepsCoinsWhenTheWalletOrItemIsUnavailable(bool closed, bool reserved, int credits)
+    {
+        var coin = Voucher(60, 10);
+        var (habbo, client, sent) = Owner(coin);
+        habbo.Credits = credits;
+        habbo.CurrencyPersistenceUncertain = closed;
+        if (reserved) {
+            Assert.True(coin.TryReserve());
+        }
+
+        var store = new ConvertStore { Redeem = items => items.Select(item => item.ItemId).ToArray() };
+        new ConvertCreditsCommand(store).Execute(client, null!, []);
+
+        Assert.Empty(store.Requested);
+        Assert.Same(coin, habbo.Inventory!.Furniture.GetItem(60));
+        Assert.Equal(credits, habbo.Credits);
+        Assert.DoesNotContain(sent, packet => packet.Header == ServerPacketHeader.CreditBalanceComposer);
+    }
+
+    [Fact]
+    public void TradeHelperRejectsOverflowBeforeRedeeming()
+    {
+        var (habbo, client, _) = Owner();
+        habbo.Credits = int.MaxValue;
+        Assert.Throws<OverflowException>(() => Trade.ReceiveTradedItem(client, Voucher(80, 10), true, new FailingTradeStore()));
+    }
+
     private static InventoryItem Voucher(uint id, int credits) => new()
     {
         Id = id,

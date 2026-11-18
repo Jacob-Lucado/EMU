@@ -57,6 +57,41 @@ public class RewardTrackTests
     }
 
     [Fact]
+    public void WiredScoreAddsInAddModeAndRaisesToTheScoreInSetMode()
+    {
+        var track = ChatTrack();
+        var task = track.Tasks[0];
+        var state = new UserRewardTrackState(track.Id, 0, false);
+
+        var added = RewardTrackRules.PlanScore(track, state, task, 5, addToExisting: true);
+        Assert.Equal((true, 5, 10), (added.Changed, added.Count, added.PointsGranted));
+        state.Apply(added);
+
+        var set = RewardTrackRules.PlanScore(track, state, task, 25, addToExisting: false);
+        Assert.Equal((true, 25, 20), (set.Changed, set.Count, set.PointsGranted));
+        state.Apply(set);
+
+        var again = RewardTrackRules.PlanScore(track, state, task, 25, addToExisting: true);
+        Assert.Equal((true, 50, 0), (again.Changed, again.Count, again.PointsGranted));
+    }
+
+    [Fact]
+    public void WiredSetModeNeverLowersProgress()
+    {
+        var track = ChatTrack();
+        var task = track.Tasks[0];
+        var state = new UserRewardTrackState(track.Id, 0, false);
+        state.Apply(RewardTrackRules.PlanScore(track, state, task, 25, addToExisting: false));
+
+        var lower = RewardTrackRules.PlanScore(track, state, task, 5, addToExisting: false);
+        var same = RewardTrackRules.PlanScore(track, state, task, 25, addToExisting: false);
+
+        Assert.False(lower.Changed);
+        Assert.False(same.Changed);
+        Assert.Equal(25, state.ProgressOf(task.Id));
+    }
+
+    [Fact]
     public void ProgressStopsAtTheLastLevel()
     {
         var track = ChatTrack();

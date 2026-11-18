@@ -41,7 +41,7 @@ public static class PetUtility
             return (PetPackageNameError.TooLong, MaxNameLength.ToString(CultureInfo.InvariantCulture));
         }
 
-        var forbidden = string.Concat(name.Where(character => !StringCharFilter.IsValidAlphaNumeric(character)).Distinct());
+        var forbidden = string.Concat(name.Where(character => character is not ('@' or '!') && !StringCharFilter.IsValidAlphaNumeric(character)).Distinct());
 
         return forbidden.Length > 0 ? (PetPackageNameError.InvalidCharacters, forbidden) : (PetPackageNameError.None, "");
     }

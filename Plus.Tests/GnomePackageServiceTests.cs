@@ -71,7 +71,8 @@ public sealed class GnomePackageServiceTests
 
     [Theory]
     [InlineData("", 2, "")]
-    [InlineData("bad name!", 3, " !")]
+    [InlineData("bad name!", 3, " ")]
+    [InlineData("Rx@!#", 3, "#")]
     [InlineData("a#b#", 3, "#")]
     [InlineData("abcdefghijklmnopq", 1, "16")]
     public void InvalidNameRepliesWithHabbosReasonWithoutConsumingPackage(string name, int status, string info)
@@ -220,7 +221,7 @@ public sealed class GnomePackageServiceTests
         world.Service.Open(world.Room, world.Client, 7, "bad name!");
 
         Assert.Empty(world.Store.PetRequests);
-        Assert.Equal(Bytes(7, 3, " !"), Assert.Single(world.Packets).Payload);
+        Assert.Equal(Bytes(7, 3, " "), Assert.Single(world.Packets).Payload);
         Assert.Same(world.Item, world.Room.GetRoomItemHandler().GetItem(7));
     }
 

@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Drawing;
+using Plus.HabboHotel.Items.DataFormat;
 using Plus.Communication.Packets;
 using Plus.Communication.Packets.Outgoing.Inventory.Furni;
 using Plus.Communication.Packets.Outgoing.Rooms.Engine;
@@ -1233,6 +1234,10 @@ public partial class RoomItemHandling
             _movedItems.TryRemove(new KeyValuePair<uint, Item>(item.Id, item));
         }
 
+        lock (_playingBalls) {
+            _playingBalls.Remove(item);
+        }
+
         _rollers.TryRemove(new KeyValuePair<uint, Item>(item.Id, item));
     }
 
@@ -1263,8 +1268,47 @@ public partial class RoomItemHandling
 
     internal void WaitForRoller(Item item) => _movedByUser[item.Id] = 0;
 
+    private readonly Dictionary<Item, long> _playingBalls = [];
+    private long _itemTick;
+
+    internal void PlayPetBall(Item ball)
+    {
+        lock (_playingBalls) {
+            if (!ReferenceEquals(GetItem(ball.Id), ball)) {
+                return;
+            }
+
+            _playingBalls[ball] = _itemTick + (int)(TimeSpan.FromSeconds(3.5) / RoomCycle.Interval);
+            SetPetBallState(ball, "1");
+        }
+    }
+
+    private static void SetPetBallState(Item ball, string state)
+    {
+        if (ball.ExtraData is not LegacyDataFormat) {
+            ball.ExtraData = new LegacyDataFormat();
+        }
+
+        ball.LegacyDataString = state;
+        ball.UpdateUsedState();
+    }
+
     public void OnCycle()
     {
+        lock (_playingBalls) {
+            _itemTick++;
+
+            foreach (var (ball, stopAt) in _playingBalls) {
+                if (_itemTick >= stopAt) {
+                    _playingBalls.Remove(ball);
+
+                    if (ReferenceEquals(GetItem(ball.Id), ball)) {
+                        SetPetBallState(ball, "0");
+                    }
+                }
+            }
+        }
+
         if (_roomItemUpdateQueue.Count > 0) {
             var addItems = new List<Item>();
 

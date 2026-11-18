@@ -170,6 +170,9 @@ public class PetBot : BotAi
                     else if (Random.Shared.Next(DrinkChance) == 0 && FindWater(botRoom, botUser) is { } water) {
                         GoTo(botRoom, botUser, water);
                     }
+                    else if (Random.Shared.Next(ToyChance) == 0 && FindNearest(botRoom, botUser, item => PetToy.Is(item.Definition) && item.Definition.Walkable) is { } toy) {
+                        GoTo(botRoom, botUser, toy);
+                    }
                     else if (Random.Shared.Next(NestChance) == 0 && FindNearest(botRoom, botUser, item => PetNest.Is(item.Definition) && item.Definition.Walkable) is { } nest) {
                         GoTo(botRoom, botUser, nest);
                     }
@@ -333,6 +336,12 @@ public class PetBot : BotAi
             return true;
         }
 
+        if (PetToy.Is(item.Definition)) {
+            Play(item, pet, petData);
+
+            return true;
+        }
+
         return PetFood.Of(item.Definition) is { } values && values.Feeds(petData.Type) && Eat(room, item, values, pet, petData);
     }
 
@@ -345,6 +354,18 @@ public class PetBot : BotAi
         PetVocals.Say(pet, PetVocal.Drinking);
         PetWater.Drink(water, DateTimeOffset.UtcNow);
         water.UpdateState(true, true);
+    }
+
+    // A horse kicks the ball; other pets play with it. The ball moves for three and a half seconds.
+    private void Play(Item toy, RoomUser pet, Pet petData)
+    {
+        RemovePetStatus();
+        pet.Statusses[petData.Type == 15 ? "kck" : "pla"] = TextHandling.GetString(pet.Z);
+        pet.Statusses["gst"] = "sml";
+        pet.UpdateNeeded = true;
+        _actionTimer = 10;
+        PetVocals.Say(pet, PetVocal.Playing);
+        toy.GetRoom()!.GetRoomItemHandler().PlayPetBall(toy);
     }
 
     // A pet sleeps in a nest for about a minute.
@@ -420,6 +441,9 @@ public class PetBot : BotAi
 
     // About one action in six a pet goes to drink when there is water in the room.
     private const int DrinkChance = 6;
+
+    // About one action in six a pet goes to play with a toy.
+    private const int ToyChance = 6;
 
     // About one action in twenty a pet goes to sleep in a nest.
     private const int NestChance = 20;

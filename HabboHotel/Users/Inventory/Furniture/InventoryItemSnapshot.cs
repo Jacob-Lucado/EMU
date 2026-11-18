@@ -17,6 +17,10 @@ public sealed record InventoryItemSnapshot(uint Id, string Type, int SpriteId, F
             InteractionType.Wallpaper => FurniCategory.WallPaper,
             InteractionType.Floor => FurniCategory.Floor,
             InteractionType.Landscape => FurniCategory.Landscape,
+            InteractionType.HorseBodyDye => FurniCategory.PetShampoo,
+            InteractionType.HorseHairstyle => FurniCategory.PetCustomPart,
+            InteractionType.HorseHairDye => FurniCategory.PetCustomPartShampoo,
+            InteractionType.HorseSaddle1 or InteractionType.HorseSaddle2 => FurniCategory.PetSaddle,
             _ => RecyclerBox.IsDefinition(definition)
                 ? FurniCategory.EcotronBox
                 : Plus.HabboHotel.Rooms.Music.RoomMusicDefinition.IsDisc(definition) ? FurniCategory.TraxSong : definition.Category

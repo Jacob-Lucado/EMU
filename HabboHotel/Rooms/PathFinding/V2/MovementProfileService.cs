@@ -16,6 +16,7 @@ public sealed class MovementProfileService(Room room, NavGrid grid, PathfindingS
         profile.LegacyOverride = actor.AllowOverride && !temporary;
         profile.IgnoreUsers = temporary;
         profile.IgnoreStepHeight = actor.RidingHorse && settings.RidersIgnoreHeight;
+        profile.Rider = actor.RidingHorse && !actor.IsBot;
         profile.Walkthrough = room.RoomBlockingEnabled;
         profile.DiagonalEnabled = room.GetGameMap().DiagonalEnabled;
         profile.DiagonalSqueeze = room.DiagonalSqueeze;

@@ -49,6 +49,7 @@ public sealed class AvatarEffectService(TimeProvider time) : IAvatarEffectServic
 
         if (habbo.CurrentRoom?.GetRoomUserManager().GetRoomUserByHabbo(habbo.Id) is { } user) {
             user.ApplyEffect(selected);
+            user.RoomEffect = selected;
         }
         else {
             // The room entry puts the kept effect on.

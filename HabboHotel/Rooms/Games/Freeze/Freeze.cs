@@ -90,17 +90,7 @@ public class Freeze
         }
 
         _room.GetGameManager().StopGame();
-        ResetGame();
-
-        if (ExitTeleports.Count > 0) {
-            foreach (var exitTile in ExitTeleports.Values.ToList()) {
-                if (exitTile.LegacyDataString == "1" || string.IsNullOrEmpty(exitTile.LegacyDataString)) {
-                    exitTile.LegacyDataString = "0";
-                }
-
-                exitTile.UpdateState();
-            }
-        }
+        CloseField();
 
         var winners = _room.GetGameManager().GetWinningTeam();
 
@@ -134,6 +124,42 @@ public class Freeze
         if (!userTriggered) {
             _room.GetWired().TriggerEvent(WiredBoxType.TriggerGameEnds, null);
         }
+    }
+
+    // The tiles keep their state. A broken block shows no power-up any more and the exits switch off, in one update.
+    private void CloseField()
+    {
+        var changed = new List<Item>();
+
+        foreach (var tile in _freezeTiles.Values) {
+            if (tile.InteractingUser > 0) {
+                tile.InteractingUser = 0;
+                tile.InteractionCountHelper = 0;
+                tile.UpdateNeeded = false;
+                tile.UpdateCounter = 0;
+                tile.LegacyDataString = "0";
+                changed.Add(tile);
+            }
+        }
+
+        foreach (var block in _freezeBlocks.Values) {
+            if (int.TryParse(block.LegacyDataString, out var data) && data / 1000 is >= 1 and <= 7) {
+                block.LegacyDataString = ((data / 1000 + 10) * 1000).ToString();
+                block.FreezePowerUp = FreezePowerUp.None;
+                changed.Add(block);
+            }
+        }
+
+        foreach (var exit in ExitTeleports.Values) {
+            exit.LegacyDataString = "0";
+            changed.Add(exit);
+        }
+
+        foreach (var item in changed) {
+            item.UpdateState(true, false);
+        }
+
+        _room.SendObjectsData(changed);
     }
 
     public void CycleUser(RoomUser user)

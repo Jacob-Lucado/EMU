@@ -1,10 +1,10 @@
+using System.Data;
+using System.Globalization;
 using Dapper;
-using Plus.Communication.Packets.Outgoing.Catalog;
 using Plus.Communication.Packets.Outgoing.Inventory.Furni;
 using Plus.Communication.Packets.Outgoing.Rooms.AI.Pets;
 using Plus.Communication.Packets.Outgoing.Rooms.Engine;
 using Plus.Database;
-using Plus.HabboHotel.Catalog.Utilities;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Items;
 
@@ -19,15 +19,22 @@ public interface IHorseCustomizationService
     void ApplyEffect(Room room, GameClient session, uint itemId, int petId);
 }
 
+public sealed record SaddleRefund(IItemFactory Factory, ItemDefinition Definition, Plus.HabboHotel.Users.Habbo Owner)
+{
+    public Item Create(IDbConnection connection, IDbTransaction transaction) =>
+        Factory.CreateSingleItemNullable(connection, transaction, Definition, Owner, "");
+}
+
 public interface IHorseCustomizationStore
 {
     void UpdatePet(int petId, string column, object value);
-    void ConsumeItem(int petId, string column, object value, uint itemId, uint roomId, int ownerId);
+    Item? ConsumeItem(int petId, HorseStyle style, uint itemId, uint roomId, int ownerId, int previousSaddle, SaddleRefund? refund);
+    Item RemoveSaddle(int petId, int saddle, SaddleRefund refund);
 }
 
 public sealed class HorseCustomizationStore(IDatabase database) : IHorseCustomizationStore
 {
-    private static readonly HashSet<string> Columns = ["have_saddle", "anyone_ride", "pethair", "hairdye", "race"];
+    private static readonly HashSet<string> Columns = ["have_saddle", "anyone_ride"];
 
     public void UpdatePet(int petId, string column, object value)
     {
@@ -42,23 +49,39 @@ public sealed class HorseCustomizationStore(IDatabase database) : IHorseCustomiz
         }
     }
 
-    public void ConsumeItem(int petId, string column, object value, uint itemId, uint roomId, int ownerId)
+    public Item RemoveSaddle(int petId, int saddle, SaddleRefund refund)
     {
-        if (!Columns.Contains(column)) {
-            throw new ArgumentOutOfRangeException(nameof(column));
-        }
-
         using var connection = database.Connection();
         connection.Open();
         using var transaction = connection.BeginTransaction();
 
-        if (connection.Execute($"UPDATE bots_petdata SET `{column}`=@value WHERE id=@petId LIMIT 1", new { value, petId }, transaction) != 1 ||
+        if (connection.Execute("UPDATE bots_petdata SET have_saddle=0 WHERE id=@petId AND have_saddle=@saddle LIMIT 1", new { petId, saddle }, transaction) != 1) {
+            throw new InvalidOperationException("The saddle has already changed.");
+        }
+
+        var item = refund.Create(connection, transaction);
+        transaction.Commit();
+
+        return item;
+    }
+
+    public Item? ConsumeItem(int petId, HorseStyle style, uint itemId, uint roomId, int ownerId, int previousSaddle, SaddleRefund? refund)
+    {
+        using var connection = database.Connection();
+        connection.Open();
+        using var transaction = connection.BeginTransaction();
+        var look = new { race = style.Palette.ToString(CultureInfo.InvariantCulture), pethair = style.Hair, hairdye = style.HairPalette, saddle = style.Saddle, previousSaddle, petId };
+
+        if (connection.Execute("UPDATE bots_petdata SET race=@race, pethair=@pethair, hairdye=@hairdye, have_saddle=@saddle WHERE id=@petId AND have_saddle=@previousSaddle LIMIT 1", look, transaction) != 1 ||
             connection.Execute("DELETE FROM items WHERE id=@itemId AND room_id=@roomId AND user_id=@ownerId LIMIT 1",
                 new { itemId, roomId, ownerId }, transaction) != 1) {
             throw new InvalidOperationException("The horse customization was not persisted.");
         }
 
+        var item = refund?.Create(connection, transaction);
         transaction.Commit();
+
+        return item;
     }
 }
 
@@ -82,22 +105,14 @@ public sealed class HorseCustomizationService(
             return;
         }
 
-        var saddleId = ItemUtility.GetSaddleId(petUser.PetData.Saddle);
-        store.UpdatePet(petUser.PetData.PetId, "have_saddle", 0);
-        petUser.PetData.Saddle = 0;
-
-        if (itemDataManager.Items.TryGetValue(saddleId, out var itemData)) {
-            var item = itemFactory.CreateSingleItemNullable(itemData, habbo, "", "")?.ToInventoryItem();
-
-            if (item != null) {
-                inventory.Furniture.AddItem(item);
-                session.Send(new FurniListNotificationComposer(item.Id, 1));
-                session.Send(new PurchaseOKComposer());
-                session.Send(new FurniListAddComposer(InventoryItemSnapshot.Capture(item)));
-                session.Send(new FurniListUpdateComposer());
-            }
+        if (HorseProducts.SaddleProduct(itemDataManager.Items.Values, petUser.PetData.Saddle) is not { } itemData) {
+            return;
         }
 
+        var returned = store.RemoveSaddle(petUser.PetData.PetId, petUser.PetData.Saddle, new(itemFactory, itemData, habbo));
+        petUser.PetData.Saddle = 0;
+
+        GiveBack(session, inventory.Furniture, returned);
         room.SendUser(petUser);
         room.SendPacket(new PetHorseFigureInformationComposer(PetAppearanceSnapshots.Horse(petUser)));
     }
@@ -116,52 +131,85 @@ public sealed class HorseCustomizationService(
 
     public void ApplyEffect(Room room, GameClient session, uint itemId, int petId)
     {
-        var item = room.GetRoomItemHandler().GetItem(itemId);
+        var habbo = session.GetHabbo();
+        var placed = room.GetRoomItemHandler().GetItem(itemId);
+        var inventory = placed == null ? habbo.Inventory?.Furniture : null;
+        var stored = inventory?.GetItem(itemId);
+        var definition = placed?.Definition ?? stored?.Definition;
 
-        if (item == null || item.IsTemporary || item.UserId != session.GetHabbo().Id) {
+        if (definition == null || placed is { } item && (item.IsTemporary || item.UserId != habbo.Id)) {
             return;
         }
 
-        if (!room.GetRoomUserManager().TryGetPet(petId, out var petUser) || petUser.PetData?.OwnerId != session.GetHabbo().Id) {
+        if (!room.GetRoomUserManager().TryGetPet(petId, out var petUser) || petUser.PetData?.OwnerId != habbo.Id) {
             return;
         }
 
-        var change = GetChange(item);
+        if (stored != null && !stored.TryReserve()) {
+            return;
+        }
 
-        if (change != null) {
-            store.ConsumeItem(petUser.PetData.PetId, change.Value.Column, change.Value.Value, item.Id, room.Id, session.GetHabbo().Id);
-            change.Value.Publish(petUser.PetData);
-            room.GetRoomItemHandler().RemoveFurniture(session, item.Id);
+        try {
+            Customize(room, session, petUser, definition, itemId, placed != null, inventory);
+        }
+        finally {
+            stored?.ReleaseReservation();
+        }
+    }
+
+    private void Customize(Room room, GameClient session, RoomUser petUser, ItemDefinition definition, uint itemId, bool placed, FurnitureInventoryComponent? inventory)
+    {
+        var pet = petUser.PetData;
+
+        if (pet.Type != HorseProducts.HorseType || !int.TryParse(pet.Race, NumberStyles.Integer, CultureInfo.InvariantCulture, out var palette)) {
+            return;
+        }
+
+        var current = new HorseStyle(palette, pet.PetHair, pet.HairDye, pet.Saddle);
+
+        if (HorseProducts.Apply(current, definition.InteractionType, definition.CustomParams) is not { } style) {
+            return;
+        }
+
+        SaddleRefund? refund = null;
+
+        if (current.Saddle > 0 && definition.InteractionType is InteractionType.HorseSaddle1 or InteractionType.HorseSaddle2) {
+            if (session.GetHabbo().Inventory == null || HorseProducts.SaddleProduct(itemDataManager.Items.Values, current.Saddle) is not { } saddle) {
+                return;
+            }
+
+            refund = new(itemFactory, saddle, session.GetHabbo());
+        }
+
+        var returned = store.ConsumeItem(pet.PetId, style, itemId, placed ? room.Id : 0, session.GetHabbo().Id, current.Saddle, refund);
+        pet.Race = style.Palette.ToString(CultureInfo.InvariantCulture);
+        pet.PetHair = style.Hair;
+        pet.HairDye = style.HairPalette;
+        pet.Saddle = style.Saddle;
+
+        if (placed) {
+            room.GetRoomItemHandler().RemoveFurniture(session, itemId);
+        }
+        else if (inventory != null) {
+            inventory.RemoveItem(itemId);
+            session.Send(new FurniListRemoveComposer(itemId));
+        }
+
+        if (returned != null && session.GetHabbo().Inventory is { } owned) {
+            GiveBack(session, owned.Furniture, returned);
         }
 
         room.SendUser(petUser);
         room.SendPacket(new PetHorseFigureInformationComposer(PetAppearanceSnapshots.Horse(petUser)));
     }
 
-    private static HorseChange? GetChange(Item item) => item.Definition.InteractionType switch
+    private static void GiveBack(GameClient session, FurnitureInventoryComponent inventory, Item saddle)
     {
-        InteractionType.HorseSaddle1 => new("have_saddle", 9, pet => pet.Saddle = 9),
-        InteractionType.HorseSaddle2 => new("have_saddle", 10, pet => pet.Saddle = 10),
-        InteractionType.HorseHairstyle => Parse(item, 100, "pethair", (pet, value) => pet.PetHair = value),
-        InteractionType.HorseHairDye => Parse(item, 48, "hairdye", (pet, value) => pet.HairDye = value),
-        InteractionType.HorseBodyDye => BodyDye(item),
-        _ => null
-    };
+        var item = saddle.ToInventoryItem();
 
-    private static HorseChange Parse(Item item, int offset, string column, Action<Pet, int> publish)
-    {
-        var value = offset + int.Parse(item.Definition.ItemName.Split('_')[2]);
-
-        return new(column, value, pet => publish(pet, value));
+        if (item != null) {
+            inventory.AddItem(item);
+            session.Send(new FurniListAddComposer(InventoryItemSnapshot.Capture(item)));
+        }
     }
-
-    private static HorseChange BodyDye(Item item)
-    {
-        var race = int.Parse(item.Definition.ItemName.Split('_')[2]);
-        var value = race switch { 13 => 61, 14 => 65, 15 => 69, 16 => 73, _ => 2 + race * 4 - 4 };
-
-        return new("race", value.ToString(), pet => pet.Race = value.ToString());
-    }
-
-    private readonly record struct HorseChange(string Column, object Value, Action<Pet> Publish);
 }

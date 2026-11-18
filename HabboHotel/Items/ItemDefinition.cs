@@ -21,6 +21,9 @@ public class ItemDefinition
     /// <summary>The furniture row's type letter: s, i, p, e, r or b. Purchase reads this; <see cref="Type"/> only distinguishes floor and wall.</summary>
     public string ProductType { get; set; } = "s";
     public FurniCategory Category { get; set; } = FurniCategory.Default;
+
+    /// <summary>Habbo's furnidata special type, such as 19 for a monster plant seed.</summary>
+    public int SpecialType { get; set; } = 1;
     public int Width { get; set; }
     public int Length { get; set; }
     public double Height { get; set; }
@@ -40,8 +43,19 @@ public class ItemDefinition
         || WiredBoxRegistry.TryGet(ItemName, out descriptor) ? descriptor : null;
     public int BehaviourData { get; set; }
 
+    /// <summary>Credit furni the owner can exchange for its credit value. Habbo names every CFC_ credit furni "Non-redeemable item".</summary>
+    public bool RedeemableForCredits => InteractionType == InteractionType.Exchange && !ItemName.StartsWith("CFC_", StringComparison.OrdinalIgnoreCase);
+
     /// <summary>The figure set ids a purchasable clothing item unlocks: its Habbo furnidata customparams.</summary>
     public IReadOnlyList<int> FigureSetIds { get; set; } = [];
+
+    /// <summary>The pet a pet package holds and the furni it leaves behind, from its Habbo customparams; null for other furni.</summary>
+    public PetPackage? PetPackage { get; set; }
+
+    /// <summary>The furnidata revision of the furni's asset. Newer furni have higher revisions.</summary>
+    public int Revision { get; set; }
+    /// <summary>The Habbo furnidata customparams, as in "15 2,3 50,50" for a horse hair dye.</summary>
+    public string CustomParams { get; set; } = string.Empty;
 
     public int Modes { get; set; }
     public List<int> VendingIds { get; set; } = new();

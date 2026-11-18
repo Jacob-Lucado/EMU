@@ -322,7 +322,6 @@ public static class ServerPacketHeader
     public const uint GnomeBoxComposer = 3291;
     public const uint IgnoreStatusComposer = 3110;
     public const uint PetInformationComposer = 1257;
-    public const uint PetStatusUpdateComposer = 1835;
     public const uint NavigatorSearchResultSetComposer = 896;
     public const uint ConcurrentUsersGoalProgressComposer = 2988;
     public const uint VideoOffersRewardsComposer = 2965;

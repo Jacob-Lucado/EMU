@@ -156,7 +156,7 @@ public sealed class ItemRedemptionService(IItemRedemptionStore store, ISettingsM
 
             var item = room.GetRoomItemHandler().GetItem(itemId);
 
-            if (item == null || item.IsTemporary || item.RoomId != room.RoomId || item.OwnerId != habbo.Id || item.Definition?.InteractionType != InteractionType.Exchange) {
+            if (item == null || item.IsTemporary || item.RoomId != room.RoomId || item.OwnerId != habbo.Id || item.Definition?.RedeemableForCredits != true) {
                 return;
             }
 

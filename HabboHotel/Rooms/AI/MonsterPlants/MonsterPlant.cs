@@ -74,7 +74,7 @@ public sealed class MonsterPlant(int petId, int rarity, DateTimeOffset growthSta
     /// <summary>Treating a living plant fills its wellbeing. A dead plant needs a revival potion instead.</summary>
     public bool Treat(DateTimeOffset now)
     {
-        if (IsDead(now)) {
+        if (IsDead(now) || Energy(now) >= BarMaximum * 0.98) {
             return false;
         }
 

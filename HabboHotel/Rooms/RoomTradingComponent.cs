@@ -1,3 +1,4 @@
+using Plus.HabboHotel.Catalog.Marketplace;
 using Dapper;
 using Plus.Database;
 using Plus.Core.Settings;
@@ -9,8 +10,8 @@ namespace Plus.HabboHotel.Rooms;
 internal interface ITradeStore
 {
     void DeleteItem(uint itemId);
-    void RedeemItem(uint itemId, int recipientId, int credits);
-    void TransferItem(uint itemId, int userId);
+    void RedeemItem(uint itemId, uint senderId, int recipientId, int balance);
+    void TransferItem(uint itemId, uint senderId, int userId);
     void Log(int firstUserId, int secondUserId, string firstItems, string secondItems);
     bool Commit(IReadOnlyList<TradeTransfer> transfers, int firstUserId, int secondUserId, int firstCredits, int secondCredits,
         string firstItems, string secondItems, Func<bool> apply);
@@ -33,24 +34,28 @@ public sealed class RoomTradingComponent(IDatabase database, TimeProvider clock,
         connection.Execute("DELETE FROM items WHERE id = @itemId LIMIT 1", new { itemId });
     }
 
-    void ITradeStore.RedeemItem(uint itemId, int recipientId, int credits)
+    void ITradeStore.RedeemItem(uint itemId, uint senderId, int recipientId, int balance)
     {
         using var connection = database.Connection();
         connection.Open();
         using var transaction = connection.BeginTransaction();
 
-        if (connection.Execute("DELETE FROM items WHERE id = @itemId LIMIT 1", new { itemId }, transaction) != 1) {
+        if (connection.Execute("DELETE FROM items WHERE id = @itemId AND user_id = @senderId AND room_id = 0 LIMIT 1", new { itemId, senderId }, transaction) != 1) {
             throw new InvalidOperationException("Traded credit furniture was not deleted.");
         }
 
-        ItemRedemptionStore.PayCredits(connection, transaction, recipientId, credits);
-        transaction.Commit();
+        ItemRedemptionStore.SaveBalance(connection, transaction, recipientId, balance);
+        MarketplaceCommit.Complete(database, connection, transaction, recipientId, "exchange");
     }
 
-    void ITradeStore.TransferItem(uint itemId, int userId)
+    void ITradeStore.TransferItem(uint itemId, uint senderId, int userId)
     {
         using var connection = database.Connection();
-        connection.Execute("UPDATE items SET user_id = @userId WHERE id = @itemId LIMIT 1", new { userId, itemId });
+
+        if (connection.Execute("UPDATE items SET user_id = @userId WHERE id = @itemId AND user_id = @senderId AND room_id = 0 LIMIT 1",
+                new { userId, itemId, senderId }) != 1) {
+            throw new InvalidOperationException("Traded furniture is no longer available.");
+        }
     }
 
     void ITradeStore.Log(int firstUserId, int secondUserId, string firstItems, string secondItems)
@@ -73,8 +78,8 @@ public sealed class RoomTradingComponent(IDatabase database, TimeProvider clock,
         try {
             foreach (var transfer in transfers) {
                 var changed = transfer.Redeem
-                    ? connection.Execute("DELETE FROM items WHERE id = @ItemId AND user_id = @SenderId LIMIT 1", transfer, transaction)
-                    : connection.Execute("UPDATE items SET user_id = @RecipientId WHERE id = @ItemId AND user_id = @SenderId LIMIT 1", transfer, transaction);
+                    ? connection.Execute("DELETE FROM items WHERE id = @ItemId AND user_id = @SenderId AND room_id = 0 LIMIT 1", transfer, transaction)
+                    : connection.Execute("UPDATE items SET user_id = @RecipientId WHERE id = @ItemId AND user_id = @SenderId AND room_id = 0 LIMIT 1", transfer, transaction);
 
                 if (changed != 1) {
                     transaction.Rollback();
@@ -101,12 +106,17 @@ public sealed class RoomTradingComponent(IDatabase database, TimeProvider clock,
                 return false;
             }
 
-            transaction.Commit();
+            if (transfers.Any(transfer => transfer.Redeem)) {
+                MarketplaceCommit.Complete(database, connection, transaction, firstUserId, "trade");
+            }
+            else {
+                transaction.Commit();
+            }
 
             return true;
         }
         catch {
-            transaction.Rollback();
+            MarketplaceCommit.Rollback(transaction);
             throw;
         }
     }

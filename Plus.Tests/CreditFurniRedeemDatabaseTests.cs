@@ -19,7 +19,7 @@ public sealed class CreditFurniRedeemDatabaseTests
     {
         WithSchema((connection, database) =>
         {
-            new ItemRedemptionStore(database).RedeemExchange(50, Owner, Room, 10);
+            new ItemRedemptionStore(database).RedeemExchange(50, Owner, Room, 110);
 
             Assert.False(Exists(connection, 50));
             Assert.Equal(110, Credits(connection));
@@ -33,7 +33,7 @@ public sealed class CreditFurniRedeemDatabaseTests
         {
             FailWalletWrites(connection);
 
-            Assert.ThrowsAny<Exception>(() => new ItemRedemptionStore(database).RedeemExchange(50, Owner, Room, 10));
+            Assert.ThrowsAny<Exception>(() => new ItemRedemptionStore(database).RedeemExchange(50, Owner, Room, 110));
 
             Assert.True(Exists(connection, 50));
             Assert.Equal(100, Credits(connection));
@@ -47,8 +47,8 @@ public sealed class CreditFurniRedeemDatabaseTests
         {
             var store = new ItemRedemptionStore(database);
 
-            Assert.Throws<InvalidOperationException>(() => store.RedeemExchange(50, 8, Room, 10));
-            Assert.Throws<InvalidOperationException>(() => store.RedeemExchange(50, Owner, 43, 10));
+            Assert.Throws<InvalidOperationException>(() => store.RedeemExchange(50, 8, Room, 110));
+            Assert.Throws<InvalidOperationException>(() => store.RedeemExchange(50, Owner, 43, 110));
 
             Assert.True(Exists(connection, 50));
             Assert.Equal(100, Credits(connection));
@@ -61,7 +61,7 @@ public sealed class CreditFurniRedeemDatabaseTests
         WithSchema((connection, database) =>
         {
             var store = new ItemRedemptionStore(database);
-            var outcomes = Race(database, [50], () => store.RedeemExchange(50, Owner, Room, 10), () => store.RedeemExchange(50, Owner, Room, 10));
+            var outcomes = Race(database, [50], () => store.RedeemExchange(50, Owner, Room, 110), () => store.RedeemExchange(50, Owner, Room, 110));
 
             Assert.Equal(1, outcomes.Count(outcome => outcome == null));
             Assert.IsType<InvalidOperationException>(Assert.Single(outcomes, outcome => outcome != null));
@@ -75,7 +75,7 @@ public sealed class CreditFurniRedeemDatabaseTests
     {
         WithSchema((connection, database) =>
         {
-            var redeemed = new ItemRedemptionStore(database).RedeemInventoryExchanges(Owner, Inventory);
+            var redeemed = new ItemRedemptionStore(database).RedeemInventoryExchanges(Owner, 100, Inventory);
 
             Assert.Equal([60u, 61u], redeemed.Order());
             Assert.False(Exists(connection, 60));
@@ -93,7 +93,7 @@ public sealed class CreditFurniRedeemDatabaseTests
         {
             FailWalletWrites(connection);
 
-            Assert.ThrowsAny<Exception>(() => new ItemRedemptionStore(database).RedeemInventoryExchanges(Owner, Inventory));
+            Assert.ThrowsAny<Exception>(() => new ItemRedemptionStore(database).RedeemInventoryExchanges(Owner, 100, Inventory));
 
             Assert.True(Exists(connection, 60));
             Assert.True(Exists(connection, 61));
@@ -109,8 +109,8 @@ public sealed class CreditFurniRedeemDatabaseTests
             var store = new ItemRedemptionStore(database);
             IReadOnlyList<uint>? first = null, second = null;
             var outcomes = Race(database, [60, 61],
-                () => first = store.RedeemInventoryExchanges(Owner, Inventory),
-                () => second = store.RedeemInventoryExchanges(Owner, Inventory));
+                () => first = store.RedeemInventoryExchanges(Owner, 100, Inventory),
+                () => second = store.RedeemInventoryExchanges(Owner, 100, Inventory));
 
             Assert.All(outcomes, Assert.Null);
             Assert.Equal([60u, 61u], first!.Concat(second!).Order());
@@ -123,7 +123,7 @@ public sealed class CreditFurniRedeemDatabaseTests
     {
         WithSchema((connection, database) =>
         {
-            Trades(database).RedeemItem(70, Owner, 10);
+            Trades(database).RedeemItem(70, 9, Owner, 110);
 
             Assert.False(Exists(connection, 70));
             Assert.Equal(110, Credits(connection));
@@ -137,7 +137,7 @@ public sealed class CreditFurniRedeemDatabaseTests
         {
             FailWalletWrites(connection);
 
-            Assert.ThrowsAny<Exception>(() => Trades(database).RedeemItem(70, Owner, 10));
+            Assert.ThrowsAny<Exception>(() => Trades(database).RedeemItem(70, 9, Owner, 110));
 
             Assert.True(Exists(connection, 70));
             Assert.Equal(100, Credits(connection));
@@ -149,8 +149,68 @@ public sealed class CreditFurniRedeemDatabaseTests
     {
         WithSchema((connection, database) =>
         {
-            Assert.Throws<InvalidOperationException>(() => Trades(database).RedeemItem(99, Owner, 10));
+            Assert.Throws<InvalidOperationException>(() => Trades(database).RedeemItem(99, 9, Owner, 110));
 
+            Assert.Equal(100, Credits(connection));
+        });
+    }
+
+    [RoomComponentDatabaseFact]
+    public void ACommittedConvertSurvivesALostReplyAndRetry()
+    {
+        WithSchema((connection, database) =>
+        {
+            var coin = new Plus.HabboHotel.Users.Inventory.Furniture.InventoryItem
+            {
+                Id = 60,
+                OwnerId = Owner,
+                Definition = new ItemDefinition { InteractionType = InteractionType.Exchange, BehaviourData = 10 }
+            };
+            var habbo = new Plus.HabboHotel.Users.Habbo
+            {
+                Id = Owner,
+                Credits = 85,
+                Inventory = new() { Furniture = new([coin], []) }
+            };
+            var (client, _) = HabbiconTestSupport.Client(habbo);
+            var store = new ItemRedemptionStore(new MarketplaceCommitFaultDatabase(database, true));
+            var command = new Plus.HabboHotel.Rooms.Chat.Commands.User.ConvertCreditsCommand(store);
+            command.Execute(client, null!, []);
+
+            Assert.Equal(95, habbo.Credits);
+            Assert.Equal(95, Credits(connection));
+            Assert.False(Exists(connection, 60));
+            command.Execute(client, null!, []);
+            Assert.Equal(95, Credits(connection));
+        });
+    }
+
+    [RoomComponentDatabaseFact]
+    public void AnOverflowRollsBackOnlyWhenTheItemsActuallyRedeemedExceedTheWalletLimit()
+    {
+        WithSchema((connection, database) =>
+        {
+            var store = new ItemRedemptionStore(database);
+            Assert.Throws<OverflowException>(() => store.RedeemInventoryExchanges(Owner, int.MaxValue - 14, Inventory));
+            Assert.True(Exists(connection, 60));
+            Assert.True(Exists(connection, 61));
+            Assert.Equal(100, Credits(connection));
+
+            store.RedeemInventoryExchanges(Owner, int.MaxValue - 15, Inventory);
+            Assert.Equal(int.MaxValue, Credits(connection));
+        });
+    }
+
+    [RoomComponentDatabaseFact]
+    public void TheTradeHelperKeepsMovedAndTransferredVouchers()
+    {
+        WithSchema((connection, database) =>
+        {
+            var store = Trades(database);
+            Assert.Throws<InvalidOperationException>(() => store.RedeemItem(70, 8, Owner, 110));
+            Assert.Throws<InvalidOperationException>(() => store.RedeemItem(62, Owner, Owner, 110));
+            Assert.True(Exists(connection, 62));
+            Assert.True(Exists(connection, 70));
             Assert.Equal(100, Credits(connection));
         });
     }
@@ -208,6 +268,7 @@ public sealed class CreditFurniRedeemDatabaseTests
             var database = new SchemaDatabase(new MySqlConnectionStringBuilder(root) { Database = schema }.ConnectionString);
             using var connection = database.Connection();
             connection.Execute("""
+                CREATE TABLE marketplace_operations (operation_ref CHAR(36) PRIMARY KEY, user_id INT, kind VARCHAR(12), created_at DATETIME(6));
                 CREATE TABLE items (id INT UNSIGNED PRIMARY KEY, user_id INT NOT NULL, room_id INT UNSIGNED NOT NULL DEFAULT 0) ENGINE=InnoDB;
                 CREATE TABLE users (id INT PRIMARY KEY, credits INT NOT NULL) ENGINE=InnoDB;
                 INSERT INTO users VALUES (7, 100), (8, 100);

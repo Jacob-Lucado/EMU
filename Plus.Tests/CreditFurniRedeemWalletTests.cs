@@ -60,6 +60,7 @@ public sealed class CreditFurniRedeemWalletTests
         var (habbo, client, sent) = Owner(coin);
         habbo.Credits = credits;
         habbo.CurrencyPersistenceUncertain = closed;
+
         if (reserved) {
             Assert.True(coin.TryReserve());
         }
@@ -99,8 +100,8 @@ public sealed class CreditFurniRedeemWalletTests
     private sealed class FailingTradeStore : ITradeStore
     {
         public void DeleteItem(uint itemId) => throw new InvalidOperationException("forced");
-        public void RedeemItem(uint itemId, int recipientId, int credits) => throw new InvalidOperationException("forced");
-        public void TransferItem(uint itemId, int userId) => throw new InvalidOperationException("forced");
+        public void RedeemItem(uint itemId, uint senderId, int recipientId, int balance) => throw new InvalidOperationException("forced");
+        public void TransferItem(uint itemId, uint senderId, int userId) => throw new InvalidOperationException("forced");
         public void Log(int firstUserId, int secondUserId, string firstItems, string secondItems) { }
         public bool Commit(IReadOnlyList<TradeTransfer> transfers, int firstUserId, int secondUserId, int firstCredits, int secondCredits,
             string firstItems, string secondItems, Func<bool> apply) => false;
@@ -111,7 +112,7 @@ public sealed class CreditFurniRedeemWalletTests
         public List<ExchangeRedemption> Requested { get; } = [];
         public Func<IReadOnlyList<ExchangeRedemption>, IReadOnlyList<uint>> Redeem { get; set; } = _ => [];
 
-        public IReadOnlyList<uint> RedeemInventoryExchanges(int ownerId, IReadOnlyList<ExchangeRedemption> items)
+        public IReadOnlyList<uint> RedeemInventoryExchanges(int ownerId, int startingBalance, IReadOnlyList<ExchangeRedemption> items)
         {
             Requested.Clear();
             Requested.AddRange(items);
@@ -119,7 +120,7 @@ public sealed class CreditFurniRedeemWalletTests
             return Redeem(items);
         }
 
-        public void RedeemExchange(uint itemId, int ownerId, uint roomId, int credits) => throw new NotSupportedException();
+        public void RedeemExchange(uint itemId, int ownerId, uint roomId, int balance) => throw new NotSupportedException();
         public IReadOnlyList<ClothingParts> ConsumeClothing(uint itemId, int ownerId, uint roomId, string name, IReadOnlyCollection<int> partIds) => throw new NotSupportedException();
         public AvatarEffect ConsumeEffectBox(uint itemId, int ownerId, uint roomId, int spriteId, DateTimeOffset now) => throw new NotSupportedException();
     }

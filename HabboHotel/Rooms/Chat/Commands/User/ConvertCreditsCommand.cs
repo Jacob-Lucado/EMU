@@ -1,3 +1,4 @@
+using Plus.HabboHotel.Catalog.Marketplace;
 using Plus.Communication.Packets.Outgoing.Inventory.Furni;
 using Plus.Communication.Packets.Outgoing.Inventory.Purse;
 using Plus.HabboHotel.GameClients;
@@ -26,45 +27,59 @@ internal class ConvertCreditsCommand : IChatCommand
 
         try {
             var habbo = session.GetHabbo();
-            InventoryItem[] deletedItems;
 
             // The exchanged items are read from and removed out of the loaded inventory, so nothing is converted without one.
             if (habbo.Inventory is not { } inventory) {
                 return;
             }
 
-            lock (habbo.WalletSync) {
-                var items = inventory.Furniture.AllItems.ToArray();
+            lock (habbo.InventoryMutationSync)
+                lock (habbo.WalletSync) {
+                    if (habbo.WalletClosed || habbo.Credits == int.MaxValue) {
+                        return;
+                    }
 
-                if (items.Length == 0) {
-                    session.SendWhisper("You currently have no items in your inventory!");
+                    var items = inventory.Furniture.AllItems.ToArray();
 
-                    return;
-                }
+                    if (items.Length == 0) {
+                        session.SendWhisper("You currently have no items in your inventory!");
 
-                var exchangeItems = items.Where(item => item.Definition.RedeemableForCredits).ToDictionary(item => item.Id);
-                var redeemed = _store.RedeemInventoryExchanges(habbo.Id,
-                    exchangeItems.Values.Select(item => new ExchangeRedemption(item.Id, Math.Max(item.Definition.BehaviourData, 0))).ToArray());
-                deletedItems = redeemed.Select(id => exchangeItems[id]).ToArray();
+                        return;
+                    }
 
-                foreach (var item in deletedItems) {
-                    var value = item.Definition.BehaviourData;
-                    totalValue += value;
+                    var reserved = new List<InventoryItem>();
 
-                    if (value > 0) {
-                        habbo.Credits += value;
+                    try {
+                        foreach (var item in items) {
+                            if (item.Definition.RedeemableForCredits && item.Definition.BehaviourData > 0 && item.TryReserve()) {
+                                reserved.Add(item);
+                            }
+                        }
+
+                        var candidates = reserved.ToDictionary(item => item.Id, item => new ExchangeRedemption(item.Id, item.Definition.BehaviourData));
+                        var redeemed = candidates.Count == 0 ? [] : MarketplaceCommit.Guard(habbo, () =>
+                            _store.RedeemInventoryExchanges(habbo.Id, habbo.Credits, candidates.Values.ToArray()));
+                        totalValue = redeemed.Sum(id => candidates[id].Credits);
+                        habbo.Credits = checked(habbo.Credits + totalValue);
+
+                        foreach (var id in redeemed) {
+                            inventory.Furniture.RemoveItem(id);
+                        }
+
+                        foreach (var id in redeemed) {
+                            session.Send(new FurniListRemoveComposer(id));
+                        }
+
+                        if (totalValue > 0) {
+                            session.Send(new CreditBalanceComposer(habbo.Credits));
+                        }
+                    }
+                    finally {
+                        foreach (var item in reserved) {
+                            item.ReleaseReservation();
+                        }
                     }
                 }
-            }
-
-            foreach (var item in deletedItems) {
-                inventory.Furniture.RemoveItem(item.Id);
-                session.Send(new FurniListRemoveComposer(item.Id));
-            }
-
-            if (totalValue > 0) {
-                session.Send(new CreditBalanceComposer(habbo.Credits));
-            }
 
             if (totalValue > 0) {
                 session.SendNotification($"All credits have successfully been converted!\r\r(Total value: {totalValue} credits!");

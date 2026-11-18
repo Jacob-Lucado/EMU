@@ -237,7 +237,7 @@ public sealed class RoomComponentDatabaseTests
             Assert.Equal(["written", "inside visit"],
                 Assert.Single(userChatlog.Rooms).Entries.Select(entry => entry.Message).ToArray());
             var tradeStore = (ITradeStore)new RoomTradingComponent(new ProbeDatabase(databaseConnection), visitClock, TestRoomSettings.Empty);
-            tradeStore.TransferItem(90, 2);
+            tradeStore.TransferItem(90, 1, 2);
             tradeStore.DeleteItem(91);
             tradeStore.Log(1, 2, "90;", "91;");
             Assert.Equal(2, connection.QuerySingle<int>("SELECT user_id FROM items WHERE id = 90"));

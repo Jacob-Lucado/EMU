@@ -1,3 +1,4 @@
+using Plus.HabboHotel.Catalog.Marketplace;
 using Plus.Communication.Packets;
 using Plus.Communication.Packets.Outgoing.Inventory.Furni;
 using Plus.Communication.Packets.Outgoing.Inventory.Purse;
@@ -186,13 +187,14 @@ public sealed class Trade
                     return false;
                 }
 
-                var oneCreditDelta = RedeemedCredits(habboOne, userTwo, autoRedeem);
-                var twoCreditDelta = RedeemedCredits(habboTwo, userOne, autoRedeem);
                 var transfers = userOne.Select(item => Transfer(habboOne, habboTwo, item, autoRedeem))
                     .Concat(userTwo.Select(item => Transfer(habboTwo, habboOne, item, autoRedeem))).ToArray();
 
                 try {
-                    if (!_store.Commit(transfers, habboOne.Id, habboTwo.Id, habboOne.Credits + oneCreditDelta, habboTwo.Credits + twoCreditDelta,
+                    var firstBalance = checked(habboOne.Credits + RedeemedCredits(habboOne, userTwo, autoRedeem));
+                    var secondBalance = checked(habboTwo.Credits + RedeemedCredits(habboTwo, userOne, autoRedeem));
+
+                    if (!_store.Commit(transfers, habboOne.Id, habboTwo.Id, firstBalance, secondBalance,
                         string.Concat(userOne.Select(item => $"{item.Id};")), string.Concat(userTwo.Select(item => $"{item.Id};")),
                         () => ApplyItems(habboOne, habboTwo, userOne, autoRedeem, applied) && ApplyItems(habboTwo, habboOne, userTwo, autoRedeem, applied))) {
                         RestoreItems(applied);
@@ -200,6 +202,14 @@ public sealed class Trade
 
                         return false;
                     }
+                }
+                catch (MarketplaceOutcomeUnknownException) {
+                    habboOne.CurrencyPersistenceUncertain = true;
+                    habboTwo.CurrencyPersistenceUncertain = true;
+                    clientOne.Disconnect();
+                    clientTwo.Disconnect();
+
+                    return false;
                 }
                 catch {
                     RestoreItems(applied);
@@ -222,7 +232,7 @@ public sealed class Trade
         items.Any(item => recipient.Inventory.Furniture.HasItem(item.Id));
 
     private static bool ShouldRedeem(Plus.HabboHotel.Users.Habbo recipient, InventoryItem item, bool autoRedeem) =>
-        autoRedeem && item.Definition.RedeemableForCredits && !recipient.WalletClosed;
+        autoRedeem && item.Definition.RedeemableForCredits && item.Definition.BehaviourData > 0 && !recipient.WalletClosed;
 
     private static int RedeemedCredits(Plus.HabboHotel.Users.Habbo recipient, IEnumerable<InventoryItem> items, bool autoRedeem) =>
         items.Where(item => ShouldRedeem(recipient, item, autoRedeem)).Sum(item => item.Definition.BehaviourData);
@@ -313,11 +323,17 @@ public sealed class Trade
     {
         var habbo = recipient.GetHabbo();
 
-        if (item.Definition.RedeemableForCredits && autoRedeem) {
+        if (item.Definition.RedeemableForCredits && item.Definition.BehaviourData > 0 && autoRedeem) {
             lock (habbo.WalletSync) {
                 if (!habbo.WalletClosed) {
-                    store.RedeemItem(item.Id, habbo.Id, item.Definition.BehaviourData);
-                    habbo.Credits += item.Definition.BehaviourData;
+                    var balance = checked(habbo.Credits + item.Definition.BehaviourData);
+                    MarketplaceCommit.Guard(habbo, () =>
+                    {
+                        store.RedeemItem(item.Id, item.OwnerId, habbo.Id, balance);
+
+                        return true;
+                    });
+                    habbo.Credits = balance;
                     recipient.Send(new CreditBalanceComposer(habbo.Credits));
 
                     return;
@@ -329,10 +345,12 @@ public sealed class Trade
         var inventory = habbo.Inventory ?? throw new InvalidOperationException("The trade recipient has no loaded inventory.");
 
         // A wallet saved for shutdown cannot receive credits; transfer the voucher intact.
+        store.TransferItem(item.Id, item.OwnerId, habbo.Id);
+        item.OwnerId = (uint)habbo.Id;
+
         if (inventory.Furniture.AddItem(item)) {
             recipient.Send(new FurniListAddComposer(InventoryItemSnapshot.Capture(item)));
             recipient.Send(new FurniListNotificationComposer(item.Id, 1));
-            store.TransferItem(item.Id, habbo.Id);
         }
     }
 }

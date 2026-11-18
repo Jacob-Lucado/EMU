@@ -1,3 +1,4 @@
+using Plus.HabboHotel.Catalog.Marketplace;
 using System.Data;
 using Dapper;
 using Plus.Communication.Packets.Outgoing.Inventory.AvatarEffect;
@@ -16,8 +17,8 @@ namespace Plus.HabboHotel.Items;
 
 public interface IItemRedemptionStore
 {
-    void RedeemExchange(uint itemId, int ownerId, uint roomId, int credits);
-    IReadOnlyList<uint> RedeemInventoryExchanges(int ownerId, IReadOnlyList<ExchangeRedemption> items);
+    void RedeemExchange(uint itemId, int ownerId, uint roomId, int balance);
+    IReadOnlyList<uint> RedeemInventoryExchanges(int ownerId, int startingBalance, IReadOnlyList<ExchangeRedemption> items);
     IReadOnlyList<ClothingParts> ConsumeClothing(uint itemId, int ownerId, uint roomId, string name, IReadOnlyCollection<int> partIds);
     AvatarEffect ConsumeEffectBox(uint itemId, int ownerId, uint roomId, int spriteId, DateTimeOffset now);
 }
@@ -26,7 +27,7 @@ public readonly record struct ExchangeRedemption(uint ItemId, int Credits);
 
 public sealed class ItemRedemptionStore(IDatabase database) : IItemRedemptionStore
 {
-    public void RedeemExchange(uint itemId, int ownerId, uint roomId, int credits)
+    public void RedeemExchange(uint itemId, int ownerId, uint roomId, int balance)
     {
         using var connection = database.Connection();
         connection.Open();
@@ -39,11 +40,11 @@ public sealed class ItemRedemptionStore(IDatabase database) : IItemRedemptionSto
             throw new InvalidOperationException("Exchange furniture was not deleted.");
         }
 
-        PayCredits(connection, transaction, ownerId, credits);
-        transaction.Commit();
+        SaveBalance(connection, transaction, ownerId, balance);
+        MarketplaceCommit.Complete(database, connection, transaction, ownerId, "exchange");
     }
 
-    public IReadOnlyList<uint> RedeemInventoryExchanges(int ownerId, IReadOnlyList<ExchangeRedemption> items)
+    public IReadOnlyList<uint> RedeemInventoryExchanges(int ownerId, int startingBalance, IReadOnlyList<ExchangeRedemption> items)
     {
         using var connection = database.Connection();
         connection.Open();
@@ -52,6 +53,10 @@ public sealed class ItemRedemptionStore(IDatabase database) : IItemRedemptionSto
         var credits = 0;
 
         foreach (var item in items) {
+            if (item.Credits <= 0) {
+                continue;
+            }
+
             if (connection.Execute("DELETE FROM items WHERE id=@ItemId AND user_id=@ownerId AND room_id=0 LIMIT 1",
                     new { item.ItemId, ownerId }, transaction) == 1) {
                 redeemed.Add(item.ItemId);
@@ -60,18 +65,16 @@ public sealed class ItemRedemptionStore(IDatabase database) : IItemRedemptionSto
         }
 
         if (credits > 0) {
-            PayCredits(connection, transaction, ownerId, credits);
+            SaveBalance(connection, transaction, ownerId, checked(startingBalance + credits));
+            MarketplaceCommit.Complete(database, connection, transaction, ownerId, "exchange");
         }
-
-        transaction.Commit();
 
         return redeemed;
     }
 
-    // Credits are paid in the transaction that deletes the credit furniture, so the item and its value can never be lost or paid apart.
-    internal static void PayCredits(IDbConnection connection, IDbTransaction transaction, int userId, int credits)
+    internal static void SaveBalance(IDbConnection connection, IDbTransaction transaction, int userId, int credits)
     {
-        if (connection.Execute("UPDATE users SET credits = credits + @credits WHERE id = @userId", new { userId, credits }, transaction) != 1) {
+        if (connection.Execute("UPDATE users SET credits = @credits WHERE id = @userId", new { userId, credits }, transaction) != 1) {
             throw new InvalidOperationException("Credit furniture owner no longer exists.");
         }
     }
@@ -217,10 +220,35 @@ public sealed class ItemRedemptionService(IItemRedemptionStore store, ISettingsM
                 return;
             }
 
-            store.RedeemExchange(item.Id, habbo.Id, room.RoomId, value);
+            var handler = room.GetRoomItemHandler();
+
+            if (!handler.TryReserveTransfers([item], out var transfer)) {
+                return;
+            }
+
+            if (!handler.BeginTransferSql(transfer!, [item])) {
+                handler.CancelUnstartedTransfer(transfer!);
+
+                return;
+            }
+
+            try {
+                MarketplaceCommit.Guard(habbo, () =>
+                {
+                    store.RedeemExchange(item.Id, habbo.Id, room.RoomId, balance);
+
+                    return true;
+                });
+            }
+            catch (Exception) when (!habbo.CurrencyPersistenceUncertain) {
+                handler.CancelRolledBackTransfer(transfer!, [item]);
+                throw;
+            }
+
             habbo.Credits = balance;
-            // Habbo names no picker, so the coin vanishes instead of flying to the inventory.
-            room.GetRoomItemHandler().RemoveFurniture(null, item, pickerId: -1);
+            handler.RemoveFurniture(null, item, transfer, null, pickerId: -1);
+            handler.CompleteTransfer(transfer!, item);
+
             // The exchange item was placed in the room; this only drops a stale inventory copy, which an unloaded inventory cannot hold.
             habbo.Inventory?.Furniture.RemoveItem(item.Id);
             session.Send(new CreditBalanceComposer(balance));

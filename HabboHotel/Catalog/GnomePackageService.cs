@@ -117,6 +117,7 @@ public sealed class GnomePackageService(
     {
         var habbo = session.GetHabbo();
         var map = room.GetGameMap();
+
         if (!map.ValidTile(item.GetX, item.GetY) || (furni != null && Gamemap.GetAffectedTiles(furni.Length, furni.Width, item.GetX, item.GetY, PetPackageFurniRotation).Values.Any(tile => !map.ValidTile(tile.X, tile.Y)))) {
             return;
         }

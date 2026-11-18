@@ -3,7 +3,7 @@ using System.Globalization;
 
 namespace Plus.HabboHotel.Rooms.AI;
 
-public sealed record PetInventoryEntry(int Id, string Name, int Type, int Race, string Color, ImmutableArray<int> CustomParts, int Level);
+public sealed record PetInventoryEntry(int Id, string Name, int Type, int Race, string Color, ImmutableArray<int> CustomParts, int Level, int Rarity = -1);
 public sealed record PetInventorySnapshot(ImmutableArray<PetInventoryEntry> Pets);
 public sealed record HorseAppearanceSnapshot(int VirtualId, int PetId, int Type, int Race, string Color, int Hair, int HairDye, int Saddle, bool Riding)
 {
@@ -12,9 +12,10 @@ public sealed record HorseAppearanceSnapshot(int VirtualId, int PetId, int Type,
 
 public static class PetAppearanceSnapshots
 {
-    public static PetInventorySnapshot Inventory(IEnumerable<Pet> pets) => new(pets.Select(pet => new PetInventoryEntry(
+    public static PetInventorySnapshot Inventory(IEnumerable<Pet> pets, TimeProvider? clock = null) => new(pets.Select(pet => new PetInventoryEntry(
         pet.PetId, pet.Name, pet.Type, int.Parse(pet.Race, CultureInfo.InvariantCulture), pet.Color,
-        pet.CustomParts.Split(' ').Select(part => int.Parse(part, CultureInfo.InvariantCulture)).ToImmutableArray(), pet.Level)).ToImmutableArray());
+        pet.CustomParts.Split(' ').Select(part => int.Parse(part, CultureInfo.InvariantCulture)).ToImmutableArray(),
+        pet.Plant?.Level((clock ?? TimeProvider.System).GetUtcNow()) ?? pet.Level, pet.Plant?.Rarity ?? -1)).ToImmutableArray());
 
     public static HorseAppearanceSnapshot Horse(RoomUser user)
     {

@@ -24,9 +24,14 @@ jobs:
   database:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        mariadb: ["10.11", "11.8"]
+    name: database (MariaDB ${{ matrix.mariadb }})
     services:
       mariadb:
-        image: mariadb:10.11
+        image: mariadb:${{ matrix.mariadb }}
         env:
           MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: "1"
         ports:

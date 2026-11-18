@@ -147,6 +147,39 @@ public sealed class RewardTrackManager : IRewardTrackManager, IStartable
         }
     }
 
+    public void ProgressWiredTask(GameClient session, string trackId, string taskId, int score, bool addToExisting)
+    {
+        var habbo = session?.GetHabbo();
+
+        if (habbo == null) {
+            return;
+        }
+
+        var now = _clock.GetUtcNow();
+        var track = FindActive(Snapshot(), trackId, now);
+        var task = track?.Tasks.FirstOrDefault(task => string.Equals(task.Id, taskId, StringComparison.Ordinal));
+
+        if (track == null || task == null || !string.Equals(task.ActionType, RewardTrackActions.CustomWiredAction, StringComparison.Ordinal)) {
+            return;
+        }
+
+        lock (Gate(habbo.Id)) {
+            if (!EnsureUser(habbo.Id)) {
+                return;
+            }
+
+            var state = StateFor(habbo.Id, track.Id);
+            var step = RewardTrackRules.PlanScore(track, state, task, score, addToExisting);
+
+            if (!step.Changed || !SaveProgress(habbo.Id, track.Id, step, state.Premium)) {
+                return;
+            }
+
+            state.Apply(step);
+            SendTrackPacket(session!, new RewardTrackProgressComposer(track.Id, step.TaskId, step.Count, state.Points));
+        }
+    }
+
     public void SendTracks(GameClient session)
     {
         if (session == null) {

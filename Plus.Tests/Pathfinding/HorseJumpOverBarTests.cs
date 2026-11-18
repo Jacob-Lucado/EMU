@@ -78,6 +78,90 @@ public partial class PlacedFurniRoomTests
         Assert.Equal((toX, toY), (horse.X, horse.Y));
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void DismountOrPickupDuringAJumpEndsTheRiderExpression(bool pickup)
+    {
+        FallbackModel(HorseJumpRoom);
+        HorseJump(20, "obstacle_oxer", 4);
+        var (rider, horse) = JumpingRider((1, 1), false);
+        rider.MoveTo(1, 4);
+        ExecutorTick();
+        Assert.Equal([10], RiderExpressions(rider));
+
+        if (pickup) {
+            _room.GetGameMap().Navigation.Mounts.DetachPickedUpHorse(horse);
+            _room.GetRoomUserManager().RemoveBot(horse.VirtualId, false);
+        }
+        else {
+            RideExternalHorse(horse, mount: false);
+        }
+
+        ExecutorTick();
+
+        Assert.False(rider.RidingHorse);
+        Assert.False(horse.HasStatus("jmp"));
+        Assert.Equal([0], RiderExpressions(rider));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AFastRiderAnnouncesTheBarBeforeLandingBeyondIt(bool superFast)
+    {
+        FallbackModel(HorseJumpRoom);
+        HorseJump(20, "obstacle_oxer", 4);
+        var (rider, horse) = JumpingRider((1, 1), false);
+        rider.FastWalking = !superFast;
+        rider.SuperFastWalking = superFast;
+        rider.MoveTo(1, 4);
+        ExecutorTick();
+
+        Assert.Equal((1, 2), (horse.SetX, horse.SetY));
+        Assert.True(horse.HasStatus("jmp"));
+        Assert.Equal([10], RiderExpressions(rider));
+
+        ExecutorTick();
+        Assert.Equal([0], RiderExpressions(rider));
+    }
+
+    [Fact]
+    public void TheHorseAiPreservesJumpMovementUntilTheNextMovementTick()
+    {
+        FallbackModel(HorseJumpRoom);
+        HorseJump(20, "obstacle_oxer", 4);
+        var (rider, horse) = JumpingRider((1, 1), false);
+        rider.MoveTo(1, 4);
+        ExecutorTick();
+        var ai = CommandBot(horse, 0);
+
+        for (var tick = 0; tick < 61; tick++) {
+            ai.OnTimerTick();
+            Assert.True(horse.HasStatus("jmp"));
+            Assert.True(horse.HasStatus("mv"));
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ADepartingRiderLeavesNoJumpOnTheHorse(bool kicked)
+    {
+        FallbackModel(HorseJumpRoom);
+        HorseJump(20, "obstacle_oxer", 4);
+        var (rider, horse) = JumpingRider((1, 1), false);
+        rider.MoveTo(1, 4);
+        ExecutorTick();
+        Assert.True(horse.HasStatus("jmp"));
+
+        _room.GetRoomUserManager().RemoveUserFromRoom(_client, kicked, kicked);
+        ExecutorTick();
+
+        Assert.False(horse.RidingHorse);
+        Assert.False(horse.HasStatus("jmp"));
+    }
+
     private (RoomUser Rider, RoomUser Horse) JumpingRider((int X, int Y) at, bool layered)
     {
         var rider = FallbackActor(at.X, at.Y, new() { LayeringEnabled = layered });

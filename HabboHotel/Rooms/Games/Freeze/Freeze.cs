@@ -61,6 +61,21 @@ public class Freeze
 
         _room.GetGameManager().LockGates();
         RemoveSoloPlayer();
+        ClearField();
+    }
+
+    // A player without a team on the field when a game starts gets effect 4 and leaves through an exit.
+    private void ClearField()
+    {
+        var field = _freezeTiles.Values.Select(tile => tile.Coordinate).ToHashSet();
+
+        foreach (var user in _room.GetRoomUserManager().GetUserList().ToList()) {
+            if (!user.IsBot && user.Team == Team.None && user.FreezeExitTicks == 0
+                && field.Contains(user.Coordinate)) {
+                user.ApplyEffect(4);
+                user.FreezeExitTicks = 1;
+            }
+        }
     }
 
     // A Freeze game started by a single player in a team takes that player out of the team. The effect goes, the gate counts go to 0 and YouArePlayingGame is false.

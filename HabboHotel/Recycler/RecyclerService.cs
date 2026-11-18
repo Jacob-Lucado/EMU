@@ -280,7 +280,6 @@ public sealed class RecyclerService(IRecyclerStore store, IItemDataManager defin
                         }
 
                         var data = FurniExtraData.Load(definition, content.ExtraData, true);
-                        var serialized = data.Serialize();
                         rewardId = store.OpenBox(item.Id, habbo.Id, room.Id, box.Id, content);
 
                         if (rewardId is null) {
@@ -294,7 +293,7 @@ public sealed class RecyclerService(IRecyclerStore store, IItemDataManager defin
                         }
 
                         reward = InventoryItemSnapshot.Capture(inventory);
-                        opened = new(definition.ProductType, definition.SpriteId, definition.ItemName, inventory.Id, false, serialized);
+                        opened = new(definition.ProductType, definition.SpriteId, definition.ItemName, inventory.Id, false, "");
                     }
                 }
                 catch (RecyclerOutcomeUnknownException exception) {
@@ -328,11 +327,14 @@ public sealed class RecyclerService(IRecyclerStore store, IItemDataManager defin
 
             if (reward is not null) {
                 session.Send(new FurniListAddComposer(reward));
+                session.Send(new OpenGiftComposer(opened));
                 session.Send(new FurniListNotificationComposer(reward.Id, opened.Type == "s" ? 1 : 2));
+                session.Send(new FurniListAddComposer(reward));
             }
-
-            session.Send(new OpenGiftComposer(opened));
-            session.Send(new FurniListUpdateComposer());
+            else {
+                session.Send(new OpenGiftComposer(opened));
+                session.Send(new FurniListUpdateComposer());
+            }
         }
 
         achievements?.Sync(session);

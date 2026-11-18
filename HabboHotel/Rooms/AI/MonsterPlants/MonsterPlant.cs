@@ -70,4 +70,14 @@ public sealed class MonsterPlant(int petId, int rarity, DateTimeOffset growthSta
 
         return level < AdultLevel ? $"grw{level}" : "std";
     }
+
+    /// <summary>Treating a living plant fills its wellbeing. A dead plant needs a revival potion instead.</summary>
+    public MonsterPlant? AfterTreat(DateTimeOffset now)
+    {
+        if (IsDead(now) || Energy(now) >= BarMaximum * 0.98) {
+            return null;
+        }
+
+        return new(PetId, Rarity, GrowthStartedAt, now + MaxWellbeing(now), CanBreed, BreedingPermission);
+    }
 }

@@ -71,6 +71,36 @@ public sealed class MonsterPlantTests
     }
 
     [Fact]
+    public void TreatingALivingPlantFillsItsWellbeing()
+    {
+        var now = PlantedAt.AddDays(10);
+        var plant = new MonsterPlant(1, 4, PlantedAt, now.AddSeconds(249350), false, true);
+
+        var treated = Assert.IsType<MonsterPlant>(plant.AfterTreat(now));
+
+        Assert.Equal(TimeSpan.FromSeconds(259200), treated.RemainingWellbeing(now));
+        Assert.Equal(120, treated.Energy(now));
+    }
+
+    [Fact]
+    public void AFullPlantCannotBeTreatedAgain()
+    {
+        var plant = MonsterPlant.Seeded(1, 0, PlantedAt);
+
+        Assert.Null(plant.AfterTreat(PlantedAt));
+    }
+
+    [Fact]
+    public void ADeadPlantCannotBeTreated()
+    {
+        var plant = MonsterPlant.Seeded(1, 0, PlantedAt);
+        var later = PlantedAt.AddDays(5);
+
+        Assert.Null(plant.AfterTreat(later));
+        Assert.True(plant.IsDead(later));
+    }
+
+    [Fact]
     public void OnlyAGrownLivingPlantThatHasNotBredCanBreed()
     {
         var grown = PlantedAt.AddDays(2);

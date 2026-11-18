@@ -1,6 +1,6 @@
 # Furni-Matic
 
-Furni-Matic uses the native recycler window and Ecotron boxes. Its configuration is stored in `recycler_settings`, `recycler_levels` and `recycler_prizes`. It stays disabled until an operator supplies a valid distribution and enables it.
+Furni-Matic uses the native recycler window and Ecotron boxes. Its configuration is stored in `recycler_settings`, `recycler_levels` and `recycler_prizes`. Migration 150 gives a hotel that never set it up Habbo's machine: 8 slots, 10 Duckets, 10 seconds between exchanges and Habbo's prize table. A hotel without every prize furni gets only the 8 slots and stays closed. A hotel with its own setup keeps it. A new settings row also starts with 8 slots.
 
 ## Configuration
 
@@ -38,4 +38,4 @@ Achievements:
 - `ACH_RecycleEcoprizes` counts recycled furniture that was won from a box with a receipt.
 - `ACH_RecyclerRarePrize` counts opened boxes of level 3 or higher, and `ACH_RecyclerGrandPrize` counts opened boxes of level 6. A hotel with fewer than six levels never progresses the grand prize achievement.
 
-Migrations preserve existing prize rows, cooldowns, pending boxes and chat-style preferences. No reward catalog is enabled automatically. Removing this feature requires disabling new exchanges; keep its receipts and ownership tables.
+Migrations preserve existing prize rows, cooldowns, pending boxes and chat-style preferences. Only migration 150 enables a reward table, and only on an untouched setup. Removing this feature requires disabling new exchanges; keep its receipts and ownership tables.

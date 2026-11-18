@@ -65,6 +65,11 @@ public static class HorseProducts
     /// <summary>The hair palette a horse shows: hair without a colour of its own wears the default palette.</summary>
     public static int HairPalette(int stored) => stored > 0 ? stored : DefaultHairPalette;
 
+    /// <summary>The furniture a horse gets back when its saddle comes off: the saddle product that puts this saddle part on.</summary>
+    public static ItemDefinition? SaddleProduct(IEnumerable<ItemDefinition> definitions, int saddle) => definitions
+        .Where(definition => Apply(default, definition.InteractionType, definition.CustomParams) is { Saddle: var part } && part == saddle && saddle > 0)
+        .MinBy(definition => definition.Id);
+
     private static HorseStyle? Dye(HorseStyle style, string tag)
     {
         var breed = BodyColours.Values.Where(first => style.Palette >= first && style.Palette < first + 4).Select(first => style.Palette - first).FirstOrDefault(-1);

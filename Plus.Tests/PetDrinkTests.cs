@@ -128,6 +128,7 @@ public partial class PlacedFurniRoomTests
         var bowl = Water(80, "waterbowl*1", "5", 3, 3, true);
         var ai = CommandBot(user, PetCommandSet.Drink);
         ai.OnUserSay(owner, "horse drink");
+        DrainPetCommands();
         Assert.True(_room.GetRoomItemHandler().SetFloorItem(null, bowl, 2, 2, 0, false, false, false));
 
         ArriveAt(ai, user, 3, 3);
@@ -145,6 +146,7 @@ public partial class PlacedFurniRoomTests
         var bowl = Water(80, "waterbowl*1", "5", 3, 3, true);
         var ai = CommandBot(petUser, PetCommandSet.Drink);
         ai.OnUserSay(owner, "horse drink");
+        DrainPetCommands();
         _client.Packets.Clear();
 
         ArriveAt(ai, petUser, 3, 3);

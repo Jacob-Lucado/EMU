@@ -77,6 +77,7 @@ public partial class PlacedFurniRoomTests
         var food = PlaceFood(70, "petfood1", "375,10,0", 3, 3);
         var ai = CommandBot(petUser, PetCommandSet.Eat);
         ai.OnUserSay(owner, "horse eat");
+        DrainPetCommands();
         _client.Packets.Clear();
 
         ArriveAt(ai, petUser, 3, 3);
@@ -96,6 +97,7 @@ public partial class PlacedFurniRoomTests
         var food = PlaceFood(70, "petfood1", "375,10,0", 3, 3);
         var ai = CommandBot(petUser, PetCommandSet.Eat);
         ai.OnUserSay(owner, "horse eat");
+        DrainPetCommands();
         _client.Packets.Clear();
 
         ArriveAt(ai, petUser, 3, 3);
@@ -115,6 +117,7 @@ public partial class PlacedFurniRoomTests
         var food = PlaceFood(70, "petfood1", "375,10,0", 3, 3);
         var ai = CommandBot(petUser, PetCommandSet.Eat);
         ai.OnUserSay(owner, "horse eat");
+        DrainPetCommands();
         _client.Packets.Clear();
 
         ArriveAt(ai, petUser, 3, 3);
@@ -137,6 +140,7 @@ public partial class PlacedFurniRoomTests
         var food = PlaceFood(70, "petfood1", "375,10,0", 3, 3);
         var ai = CommandBot(user, PetCommandSet.Eat);
         ai.OnUserSay(owner, "horse eat");
+        DrainPetCommands();
         Assert.True(_room.GetRoomItemHandler().SetFloorItem(null, food, 2, 2, 0, false, false, false));
 
         ArriveAt(ai, user, 3, 3);
@@ -169,6 +173,7 @@ public partial class PlacedFurniRoomTests
         _room.GetRoomItemHandler().LoadFurniture([food]);
         var ai = CommandBot(user, PetCommandSet.Eat);
         ai.OnUserSay(owner, "horse eat");
+        DrainPetCommands();
 
         ArriveAt(ai, user, 3, 3);
 
@@ -231,6 +236,7 @@ public partial class PlacedFurniRoomTests
         PlaceFood(70, "petfood1", "375,10,0", 3, 3);
         var ai = CommandBot(petUser, PetCommandSet.Eat);
         ai.OnUserSay(owner, "horse eat");
+        DrainPetCommands();
         _client.Packets.Clear();
 
         ArriveAt(ai, petUser, 3, 3);

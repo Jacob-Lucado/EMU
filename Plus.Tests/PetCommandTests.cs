@@ -142,7 +142,10 @@ public partial class PlacedFurniRoomTests
         var ai = new PetBot(petUser.VirtualId, new RecordingLocale(), new RecordingCommands(command));
         ai.Init(50, petUser.VirtualId, RoomId, petUser, _room);
         ai.OnUserSay(owner, "horse do it");
+        DrainPetCommands();
     }
+
+    private void DrainPetCommands() => _room.RunFastPass(_room.GetGameMap().Navigation.DrainCommands);
 
     private static (int PetId, int[] Commands, int[] Enabled) TrainingPanel(byte[] body)
     {

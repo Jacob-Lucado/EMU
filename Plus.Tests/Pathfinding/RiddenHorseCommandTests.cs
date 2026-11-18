@@ -81,6 +81,23 @@ public partial class PlacedFurniRoomTests
         Assert.Equal(0, pet.Experience);
     }
 
+    [Fact]
+    public void ACommandAfterAMountRequestDismountsTheNewRider()
+    {
+        var rider = ExecutorActor(1, 1);
+        var horse = ExternalLifecycleHorse(2, 1);
+        horse.PetData!.Type = HorseProducts.HorseType;
+        ExecutorTick();
+
+        RideExternalHorse(horse, mount: true);
+        Command(horse, rider, 2);
+        ExecutorTick();
+
+        Assert.False(rider.RidingHorse);
+        Assert.False(horse.RidingHorse);
+        Assert.Equal("puz", horse.Statusses.GetValueOrDefault("gst"));
+    }
+
     private (RoomUser Rider, RoomUser Horse, Pet Pet) RiddenCommandHorse(int experience)
     {
         var rider = ExecutorActor(1, 1);

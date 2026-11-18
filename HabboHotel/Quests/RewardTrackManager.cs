@@ -3,6 +3,7 @@ using Dapper;
 using Microsoft.Extensions.Logging;
 using Plus.Communication.Packets;
 using Plus.Communication.Packets.Outgoing.Inventory.Badges;
+using Plus.Communication.Packets.Outgoing.Inventory.Bots;
 using Plus.Communication.Packets.Outgoing.Inventory.Furni;
 using Plus.Communication.Packets.Outgoing.Inventory.Purse;
 using Plus.Communication.Packets.Outgoing.Notifications;
@@ -10,10 +11,15 @@ using Plus.Communication.Packets.Outgoing.Quests;
 using Plus.Core;
 using Plus.Database;
 using Plus.HabboHotel.Badges;
+using Plus.HabboHotel.Catalog;
 using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Habbicons;
+using Plus.HabboHotel.Items;
 using Plus.HabboHotel.Quests.DailyTasks;
 using Plus.HabboHotel.Users;
 using Plus.HabboHotel.Users.Badges;
+using Plus.HabboHotel.Users.Inventory.Bots;
+using Plus.HabboHotel.Users.Inventory.Furniture;
 
 namespace Plus.HabboHotel.Quests;
 
@@ -26,6 +32,11 @@ public sealed class RewardTrackManager : IRewardTrackManager, IStartable
     private readonly IBadgeManager _badgeManager;
     private readonly TimeProvider _clock;
     private readonly IDailyTaskManager? _dailyTasks;
+    private readonly IItemDataManager? _items;
+    private readonly IItemFactory? _itemFactory;
+    private static readonly CatalogBotPurchaseStore BotStore = new();
+    private readonly IHabbiconService? _habbicons;
+    private readonly IHabbiconAchievementService? _habbiconAchievements;
     private readonly object _definitions = new();
     private readonly object _gates = new();
     private readonly Dictionary<int, object> _userGates = new();
@@ -34,7 +45,8 @@ public sealed class RewardTrackManager : IRewardTrackManager, IStartable
     private List<RewardTrack> _tracks = new();
 
     public RewardTrackManager(ILogger<RewardTrackManager> logger, IDatabase database, IBadgeManager badgeManager, TimeProvider clock,
-        IDailyTaskManager? dailyTasks = null)
+        IDailyTaskManager? dailyTasks = null, IItemDataManager? items = null, IItemFactory? itemFactory = null, IHabbiconService? habbicons = null,
+        IHabbiconAchievementService? habbiconAchievements = null)
     {
         _logger = logger;
         _database = database;
@@ -42,6 +54,10 @@ public sealed class RewardTrackManager : IRewardTrackManager, IStartable
         _clock = clock;
         // Every progress action also reaches the daily tasks, and a claimed daily task is an action of its own.
         _dailyTasks = dailyTasks;
+        _items = items;
+        _itemFactory = itemFactory;
+        _habbicons = habbicons;
+        _habbiconAchievements = habbiconAchievements;
 
         if (dailyTasks != null) {
             dailyTasks.TaskClaimed += session => Progress(session, RewardTrackActions.ClaimDailyTask);
@@ -231,43 +247,16 @@ public sealed class RewardTrackManager : IRewardTrackManager, IStartable
 
             var prize = track.GetPrize(prizeId);
 
-            if (prize == null) {
+            // Every product is looked up before the claim is stored, so a claim is never stored without its reward.
+            if (prize == null || RewardTrackRules.Grant(prize) is not { } grant || Resolve(habbo, grant) is not { } resolved) {
+                _logger.LogError("Reward track prize {PrizeId} of track {TrackId} has no grantable product", prizeId, trackId);
                 LogClaim(habbo.Id, trackId, prizeId, RewardTrackResults.Unknown);
                 SendTrackPacket(session, new RewardTrackClaimResultComposer(trackId, prizeId, RewardTrackResults.Unknown));
 
                 return Task.CompletedTask;
             }
 
-            string? badge = null;
-            var credits = 0;
-            var duckets = 0;
-            var diamonds = 0;
-
-            switch (prize.RewardType.Trim().ToLowerInvariant()) {
-                case "badge":
-                    badge = prize.ExtraParams;
-                    break;
-                case "credits":
-                    credits = prize.RewardAmount;
-                    break;
-                case "duckets":
-                    duckets = prize.RewardAmount;
-                    break;
-                case "diamonds":
-                    diamonds = prize.RewardAmount;
-                    break;
-            }
-
-            // A badge prize without a grantable definition, or without a loaded inventory to receive it, would commit a claim that never pays out.
-            if (badge != null && (habbo.Inventory == null || !TryResolveBadge(habbo, badge, out badge))) {
-                _logger.LogError("Reward track prize {PrizeId} badge {Badge} has no grantable definition", prize.Id, prize.ExtraParams);
-                LogClaim(habbo.Id, trackId, prizeId, RewardTrackResults.Unknown);
-                SendTrackPacket(session, new RewardTrackClaimResultComposer(trackId, prizeId, RewardTrackResults.Unknown));
-
-                return Task.CompletedTask;
-            }
-
-            if (!StoreClaim(habbo, track.Id, prize.Id, credits, duckets, diamonds, badge, now)) {
+            if (StoreClaim(habbo, track.Id, prize.Id, resolved, now) is not { } delivered) {
                 // Nothing was committed; the prize stays claimable so the player can retry.
                 LogClaim(habbo.Id, trackId, prizeId, RewardTrackResults.Unknown);
                 SendTrackPacket(session, new RewardTrackClaimResultComposer(trackId, prizeId, RewardTrackResults.Unknown));
@@ -276,26 +265,14 @@ public sealed class RewardTrackManager : IRewardTrackManager, IStartable
             }
 
             state.MarkClaimed(prize.Id);
-
-            if (badge != null && habbo.Inventory is { } inventory && !inventory.Badges.HasBadge(badge)) {
-                inventory.Badges.AddBadge(new Badge(badge, 0));
-                session.SendBadgeInventory(habbo.Id, inventory.Badges.Badges.Values);
-                session.Send(new FurniListNotificationComposer(1, 4));
-            }
-
+            Publish(session, habbo, resolved, delivered);
             LogClaim(habbo.Id, trackId, prizeId, RewardTrackResults.Ok);
             SendTrackPacket(session, new RewardTrackClaimResultComposer(trackId, prizeId, RewardTrackResults.Ok));
 
-            if (credits > 0) {
-                session.Send(new CreditBalanceComposer(habbo.Credits));
-            }
-
-            if (duckets > 0) {
-                session.Send(new HabboActivityPointNotificationComposer(habbo.Duckets, duckets));
-            }
-
-            if (diamonds > 0) {
-                session.Send(new HabboActivityPointNotificationComposer(habbo.Diamonds, diamonds, 5));
+            if (resolved is RewardTrackCurrencyGrant currency) {
+                session.Send(currency.Type == ProductItemType.Credits
+                    ? new CreditBalanceComposer(habbo.Credits)
+                    : new HabboActivityPointNotificationComposer(habbo.Currencies[currency.Type], currency.Amount, currency.Type));
             }
         }
 
@@ -389,43 +366,101 @@ public sealed class RewardTrackManager : IRewardTrackManager, IStartable
         return true;
     }
 
-    private bool StoreClaim(Habbo habbo, string trackId, string prizeId, int credits, int duckets, int diamonds, string? badge, DateTimeOffset claimedAt)
+    /// <summary>The grant with what it needs looked up: the badge's own code, or the furni definition. Null when it cannot be delivered.</summary>
+    private RewardTrackGrant? Resolve(Habbo habbo, RewardTrackGrant grant) => grant switch
     {
-        var currency = credits != 0 || duckets != 0 || diamonds != 0;
+        RewardTrackCurrencyGrant => grant,
+        RewardTrackBadgeGrant badge when habbo.Inventory != null && TryResolveBadge(habbo, badge.Code, out var code) => new RewardTrackBadgeGrant(code),
+        RewardTrackFurniGrant furni when habbo.Inventory != null && _itemFactory != null && FindFurni(furni) is { } definition =>
+            new FurniDefinitionGrant(definition, furni.Amount, ""),
+        // Habbo gives a pet prize as its pet package furni, which holds the pet's figure until the player opens it.
+        RewardTrackPetGrant pet when habbo.Inventory != null && _itemFactory != null && FindPetPackage(pet.PetType) is { } package =>
+            new FurniDefinitionGrant(package, pet.Amount, pet.Figure),
+        RewardTrackBotGrant bot when habbo.Inventory != null && FindBotPreset(bot) is { } preset => new BotPresetGrant(preset, bot.Amount),
+        RewardTrackHabbiconGrant when _habbicons != null => grant,
+        _ => null
+    };
 
-        if (currency) {
-            lock (habbo.WalletSync) {
-                if (habbo.WalletClosed) {
-                    _logger.LogError("Reward track claim skipped because the wallet is closed for user {UserId}", habbo.Id);
+    // A pet type can have several packages; the newest one is the package the reward tracks give, such as newbie_cat_package.
+    private ItemDefinition? FindPetPackage(int petType) =>
+        _items?.Items.Values
+            .Where(definition => definition.Type == ItemType.Floor && definition.PetPackage is { } package && package.PetType == petType
+                                 && _items.GetItemByName(package.FurniName) != null)
+            .OrderByDescending(definition => definition.Revision)
+            .ThenBy(definition => definition.Id)
+            .FirstOrDefault();
 
-                    return false;
-                }
+    /// <summary>
+    /// The bot preset that names the prize's bot: the preset of its AI type with the same figure, else the first preset of that type.
+    /// The bot keeps the prize's figure.
+    /// </summary>
+    private CatalogBot? FindBotPreset(RewardTrackBotGrant bot)
+    {
+        try {
+            using var connection = _database.Connection();
+            var preset = connection.Query<CatalogBot>(
+                    "SELECT id AS Id, name AS Name, figure AS Figure, gender AS Gender, motto AS Motto, ai_type AS AiType FROM catalog_bot_presets")
+                .Where(preset => string.Equals(preset.AiType, bot.AiType, StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(preset => preset.Figure == bot.Figure)
+                .ThenBy(preset => preset.Id)
+                .FirstOrDefault();
 
-                if (!InsertClaim(habbo.Id, trackId, prizeId, credits, duckets, diamonds, badge, claimedAt)) {
-                    return false;
-                }
-
-                if (credits != 0) {
-                    habbo.Credits += credits;
-                }
-
-                if (duckets != 0) {
-                    habbo.Duckets += duckets;
-                }
-
-                if (diamonds != 0) {
-                    habbo.Diamonds += diamonds;
-                }
-
-                return true;
-            }
+            return preset == null
+                ? null
+                : new CatalogBot { Id = preset.Id, Name = preset.Name, Gender = preset.Gender, Motto = preset.Motto, AiType = preset.AiType, Figure = bot.Figure };
         }
+        catch (Exception exception) {
+            _logger.LogError(exception, "Reward track bot presets failed to load");
 
-        return InsertClaim(habbo.Id, trackId, prizeId, 0, 0, 0, badge, claimedAt);
+            return null;
+        }
     }
 
-    private bool InsertClaim(int userId, string trackId, string prizeId, int credits, int duckets, int diamonds, string? badge, DateTimeOffset claimedAt)
+    // Several definitions can share a sprite; the lowest id is the original.
+    private ItemDefinition? FindFurni(RewardTrackFurniGrant furni) =>
+        _items?.Items.Values
+            .Where(definition => definition.SpriteId == furni.SpriteId && definition.Type == furni.Type
+                                 && definition.ProductType == (furni.Type == ItemType.Wall ? "i" : "s"))
+            .MinBy(definition => definition.Id);
+
+    private Delivered? StoreClaim(Habbo habbo, string trackId, string prizeId, RewardTrackGrant grant, DateTimeOffset claimedAt)
     {
+        if (grant is not RewardTrackCurrencyGrant currency) {
+            return InsertClaim(habbo, trackId, prizeId, grant, claimedAt);
+        }
+
+        lock (habbo.WalletSync) {
+            if (habbo.WalletClosed) {
+                _logger.LogError("Reward track claim skipped because the wallet is closed for user {UserId}", habbo.Id);
+
+                return null;
+            }
+
+            var balance = currency.Type == ProductItemType.Credits ? habbo.Credits : habbo.Currencies[currency.Type];
+
+            if ((long)balance + currency.Amount > int.MaxValue) {
+                return null;
+            }
+
+            if (InsertClaim(habbo, trackId, prizeId, grant, claimedAt) is not { } delivered) {
+                return null;
+            }
+
+            if (currency.Type == ProductItemType.Credits) {
+                habbo.Credits += currency.Amount;
+            }
+            else {
+                habbo.Currencies[currency.Type] += currency.Amount;
+            }
+
+            return delivered;
+        }
+    }
+
+    private Delivered? InsertClaim(Habbo habbo, string trackId, string prizeId, RewardTrackGrant grant, DateTimeOffset claimedAt)
+    {
+        var userId = habbo.Id;
+
         try {
             using var connection = _database.Connection();
             connection.Open();
@@ -433,29 +468,85 @@ public sealed class RewardTrackManager : IRewardTrackManager, IStartable
             connection.Execute(
                 "INSERT INTO users_reward_track_prizes (user_id, track_id, prize_id, claimed_at) VALUES (@userId, @trackId, @prizeId, @claimedAt)",
                 new { userId, trackId, prizeId, claimedAt = claimedAt.UtcDateTime }, transaction);
+            var delivered = new Delivered([], [], null);
 
-            if (credits != 0) {
-                connection.Execute("UPDATE users SET credits = credits + @credits WHERE id = @userId", new { userId, credits }, transaction);
-            }
+            switch (grant) {
+                case RewardTrackCurrencyGrant { Type: ProductItemType.Credits } credits:
+                    connection.Execute("UPDATE users SET credits = credits + @amount WHERE id = @userId", new { userId, amount = credits.Amount }, transaction);
+                    break;
+                case RewardTrackCurrencyGrant points:
+                    UserCurrencyStore.Add(connection, userId, points.Type, points.Amount, transaction);
+                    break;
+                case RewardTrackBadgeGrant badge:
+                    // An owned badge keeps its slot.
+                    connection.Execute(
+                        "INSERT INTO user_badges (user_id, badge_id, badge_slot) VALUES (@userId, @badge, 0) ON DUPLICATE KEY UPDATE badge_slot = badge_slot",
+                        new { userId, badge = badge.Code }, transaction);
+                    break;
+                case FurniDefinitionGrant furni:
+                    delivered = delivered with { Items = FurniDelivery.Create(_itemFactory!, connection, transaction, habbo, furni.Definition, furni.ExtraData, furni.Amount, 0, 0) };
 
-            UserCurrencyStore.Add(connection, userId, ActivityPointType.Duckets, duckets, transaction);
-            UserCurrencyStore.Add(connection, userId, ActivityPointType.Diamonds, diamonds, transaction);
+                    if (delivered.Items.Count == 0) {
+                        return null;
+                    }
 
-            if (badge != null) {
-                // Same transaction as the claim row; an owned badge keeps its slot.
-                connection.Execute(
-                    "INSERT INTO user_badges (user_id, badge_id, badge_slot) VALUES (@userId, @badge, 0) ON DUPLICATE KEY UPDATE badge_slot = badge_slot",
-                    new { userId, badge }, transaction);
+                    break;
+                case BotPresetGrant bots:
+                    for (var i = 0; i < bots.Amount; i++) {
+                        delivered.Bots.Add(BotStore.Create(connection, transaction, bots.Preset, userId));
+                    }
+
+                    break;
+                case RewardTrackHabbiconGrant habbicon:
+                    delivered = delivered with { Habbicons = _habbicons!.Grant(connection, transaction, userId, habbicon.Id) };
+                    break;
             }
 
             transaction.Commit();
 
-            return true;
+            return delivered;
         }
         catch (Exception exception) {
             _logger.LogError(exception, "Reward track claim write failed for user {UserId} prize {PrizeId}", userId, prizeId);
 
-            return false;
+            return null;
+        }
+    }
+
+    /// <summary>Puts the committed reward in the loaded inventory and tells the client, with the same packets as a catalog purchase.</summary>
+    private void Publish(GameClient session, Habbo habbo, RewardTrackGrant grant, Delivered delivered)
+    {
+        switch (grant) {
+            case RewardTrackBadgeGrant badge when habbo.Inventory is { } inventory && !inventory.Badges.HasBadge(badge.Code):
+                inventory.Badges.AddBadge(new Badge(badge.Code, 0));
+                session.SendBadgeInventory(habbo.Id, inventory.Badges.Badges.Values);
+                session.Send(new FurniListNotificationComposer(1, 4));
+                break;
+            case FurniDefinitionGrant when habbo.Inventory is { } inventory:
+                foreach (var item in delivered.Items) {
+                    if (inventory.Furniture.AddItem(item.ToInventoryItem())) {
+                        session.Send(new FurniListNotificationComposer(item.Id, 1));
+                    }
+                }
+
+                session.Send(new FurniListUpdateComposer());
+                break;
+            case BotPresetGrant when habbo.Inventory is { } inventory:
+                foreach (var bot in delivered.Bots) {
+                    inventory.Bots.AddBot(bot);
+                }
+
+                session.Send(new BotInventoryComposer(BotInventorySnapshot.Capture(inventory.Bots.Bots.Values)));
+
+                foreach (var bot in delivered.Bots) {
+                    session.Send(new FurniListNotificationComposer((uint)bot.Id, 5));
+                }
+
+                break;
+            case RewardTrackHabbiconGrant when delivered.Habbicons is { } change:
+                HabbiconMessages.Publish(session, change);
+                _habbiconAchievements?.Reconcile(session, change.Snapshot);
+                break;
         }
     }
 
@@ -772,4 +863,10 @@ public sealed class RewardTrackManager : IRewardTrackManager, IStartable
         public string TrackId { get; set; } = "";
         public string PrizeId { get; set; } = "";
     }
+
+    private sealed record FurniDefinitionGrant(ItemDefinition Definition, int Amount, string ExtraData) : RewardTrackGrant;
+
+    private sealed record BotPresetGrant(CatalogBot Preset, int Amount) : RewardTrackGrant;
+
+    private sealed record Delivered(List<Item> Items, List<Bot> Bots, HabbiconChange? Habbicons);
 }

@@ -49,7 +49,7 @@ building the solution. The solution's example plugin also needs the existing
 PLUS_EMULATOR_HOME setting to find the emulator assembly:
 
 ```bash
-PLUS_EMULATOR_HOME="$PWD/bin/Release/net10.0" \
+PLUS_EMULATOR_HOME="$PWD/bin/Release/net11.0" \
   dotnet build 'Plus Emulator.sln' -c Release
 ```
 

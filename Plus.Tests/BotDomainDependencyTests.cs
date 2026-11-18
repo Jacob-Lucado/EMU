@@ -2,6 +2,8 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using Plus.HabboHotel.GameClients;
 using Plus.Communication.Flash;
+using Plus.Communication.Packets.Outgoing;
+using Plus.Communication.Revisions;
 using Plus.HabboHotel.Quests;
 using Plus.HabboHotel.Rooms;
 using Plus.HabboHotel.Rooms.AI;
@@ -138,7 +140,16 @@ public class BotDomainDependencyTests
 
     private sealed class Client : GameClient
     {
-        public Client() : base(TestGameServer.Instance, new FlashPacketFactory(), TestLogging.GameClient) { }
+        public Client() : base(TestGameServer.Instance, new FlashPacketFactory(), TestLogging.GameClient)
+        {
+            Revision = new Revision
+            {
+                InternalIdToOutgoingIdMapping = typeof(ServerPacketHeader).GetFields()
+                    .Where(field => field.IsLiteral && field.FieldType == typeof(uint))
+                    .Select(field => (uint)field.GetRawConstantValue()!).Distinct().ToDictionary(id => id)
+            };
+            SendCallback = _ => false;
+        }
         internal override (bool Complete, bool Malformed, uint MessageId, int HeaderLength, int Length) GetMessageIdAndPacketLength(ReadOnlyMemory<byte> buffer) =>
             (true, false, 0, 0, 0);
         public override void CreateHeader(Memory<byte> memory, uint messageId) { }

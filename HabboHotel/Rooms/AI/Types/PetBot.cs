@@ -240,6 +240,7 @@ public class PetBot : BotAi
 
             return;
         }
+
         var food = commandId == PetCommandSet.Eat ? FindFood(botRoom, pet, petData) : null;
         var water = commandId == PetCommandSet.Drink ? FindWater(botRoom, pet) : null;
 

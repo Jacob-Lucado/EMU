@@ -1,6 +1,7 @@
 -- PlusEMU fresh install: the full schema plus game content (catalog, furniture, roles, ...).
 -- Import into an empty database instead of Original Database.sql and the update scripts.
 -- Regenerate with scripts/build-fresh-install-sql.sh after adding a migration.
+ALTER DATABASE CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 -- MariaDB dump 10.20-11.8.9-MariaDB, for debian-linux-gnu (x86_64)
 --
 -- ------------------------------------------------------

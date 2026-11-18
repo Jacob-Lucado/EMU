@@ -72,7 +72,7 @@ public partial class PlacedFurniRoomTests
             Assert.Empty(_client.Sent);
             calls.Add(group);
         }));
-        WithUnavailableRoomGame(() => _room.OnUserShoot(actor, ball));
+        WithUnavailableRoomGame(() => _room.OnGoalScored(actor));
         Assert.Equal(["ACH_FootballGoalScored"], calls);
         Assert.Equal([ServerPacketHeader.ActionComposer], _client.Sent);
     }

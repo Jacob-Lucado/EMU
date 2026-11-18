@@ -210,14 +210,6 @@ public sealed class LandingEffects
 
     private void ApplyGames(RoomUser actor, Location location)
     {
-        if (_room.GotSoccer()) {
-            _room.GetSoccer().OnUserWalk(actor);
-        }
-
-        if (!IsHere(actor, location)) {
-            return;
-        }
-
         if (_room.GotBanzai()) {
             _room.GetBanzai().OnUserWalk(actor);
         }

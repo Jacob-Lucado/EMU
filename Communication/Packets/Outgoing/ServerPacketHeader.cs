@@ -309,6 +309,8 @@ public static class ServerPacketHeader
     public const uint UserFlatCatsComposer = 2513;
     public const uint UnbanUserFromRoomComposer = 2136;
     public const uint PetTrainingPanelComposer = 2476;
+    public const uint PetAddedToInventoryComposer = 3793;
+    public const uint PetRemovedFromInventoryComposer = 2622;
     public const uint PetLevelNotificationComposer = 1774;
     public const uint PetStatusUpdateComposer = 1835;
     public const uint PetLevelUpdateComposer = 415;

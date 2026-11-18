@@ -10,6 +10,7 @@ namespace Plus.HabboHotel.Rooms.AI.Types;
 public class PetBot : BotAi
 {
     private int _actionTimer;
+    private static readonly int EnergyRestTicks = (int)(TimeSpan.FromSeconds(40) / RoomCycle.Interval);
     private int _energyTimer;
     private int _speechTimer;
     private readonly IPetLocale _locale;
@@ -21,7 +22,7 @@ public class PetBot : BotAi
         _commands = commands;
         _speechTimer = Random.Shared.Next(10, 60);
         _actionTimer = Random.Shared.Next(10, 30 + virtualId);
-        _energyTimer = Random.Shared.Next(10, 60);
+        _energyTimer = EnergyRestTicks - 1;
     }
 
     private void RemovePetStatus()
@@ -169,7 +170,7 @@ public class PetBot : BotAi
         if (_energyTimer <= 0) {
             RemovePetStatus(); // Remove Status
             petData.PetEnergy(true); // Add Energy
-            _energyTimer = Random.Shared.Next(30, 120 + 1); // 2 Min Max
+            _energyTimer = EnergyRestTicks - 1;
         }
         else {
             _energyTimer--;

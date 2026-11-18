@@ -228,6 +228,40 @@ public class PetBot : BotAi
             return;
         }
 
+        if (petData.Type == HorseProducts.HorseType) {
+            var navigation = botRoom.GetGameMap().Navigation;
+            navigation.RunOwner(pet, (_, _) =>
+            {
+                if (!ReferenceEquals(botRoom.GetRoomUserManager().GetRoomUserByVirtualId(user.VirtualId), user)) {
+                    return;
+                }
+
+                if (pet.RidingHorse) {
+                    var rider = botRoom.GetRoomUserManager().GetRoomUserByVirtualId(pet.HorseId);
+
+                    if (commandId == PetCommandSet.Free || rider == null || !rider.RidingHorse || rider.HorseId != pet.VirtualId) {
+                        return;
+                    }
+
+                    navigation.Mounts.Ride(rider, pet, false, _locale);
+
+                    if (pet.RidingHorse) {
+                        return;
+                    }
+                }
+
+                Respond(botRoom, pet, petData, user, commandId);
+            });
+
+            return;
+        }
+
+        Respond(botRoom, pet, petData, user, commandId);
+    }
+
+    private void Respond(Room botRoom, RoomUser pet, Pet petData, RoomUser user, int commandId)
+    {
+        var commands = PetCommandSet.For(petData.Type);
         RemovePetStatus();
         pet.UpdateNeeded = true;
 

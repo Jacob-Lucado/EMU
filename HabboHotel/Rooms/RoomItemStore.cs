@@ -18,7 +18,7 @@ public interface IRoomItemStore
     void Restore(uint roomId, IReadOnlyList<RoomItemSave> items) => throw new NotSupportedException("Restoring loaded furni is unavailable.");
     void PlaceFloor(uint itemId, uint roomId, int x, int y, double z, int rotation);
     void PlaceWall(uint itemId, uint roomId, int x, int y, double z, int rotation, string wallPosition);
-    void Delete(uint itemId, uint roomId) => throw new NotSupportedException("Deleting furni is unavailable.");
+    void DeleteConsumed(uint roomId, IReadOnlyCollection<uint> itemIds) => throw new NotSupportedException("Deleting furni is unavailable.");
 }
 
 public sealed class RoomItemStore(IDatabase database) : IRoomItemStore
@@ -26,7 +26,7 @@ public sealed class RoomItemStore(IDatabase database) : IRoomItemStore
     public void AssignOwner(uint itemId, int userId) => Execute("UPDATE items SET user_id = @userId WHERE id = @itemId LIMIT 1", new { userId, itemId });
     public void ClearRoom(uint itemId) => Execute("UPDATE items SET room_id = 0 WHERE id = @itemId LIMIT 1", new { itemId });
     public void SaveWallPosition(uint itemId, string wallPosition) => Execute("UPDATE items SET wall_pos = @wallPosition WHERE id = @itemId LIMIT 1", new { wallPosition, itemId });
-    public void Delete(uint itemId, uint roomId) => Execute("DELETE FROM items WHERE id = @itemId AND room_id = @roomId LIMIT 1", new { itemId, roomId });
+    public void DeleteConsumed(uint roomId, IReadOnlyCollection<uint> itemIds) => Execute("DELETE FROM items WHERE room_id = @roomId AND id IN @itemIds", new { roomId, itemIds });
     public void MoveWall(uint itemId, uint roomId, string wallPosition)
     {
         using var connection = database.Connection();

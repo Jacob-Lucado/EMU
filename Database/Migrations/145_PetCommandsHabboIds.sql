@@ -1,7 +1,6 @@
 -- Pet commands use the client's command ids (pet.command.N) and Habbo's English command words. Idempotent.
 SET @migration_145_mode = @@SESSION.sql_mode;
 SET SESSION sql_mode = CONCAT(@@SESSION.sql_mode, ',NO_AUTO_VALUE_ON_ZERO');
-DELETE FROM `bots_pet_commands`;
 INSERT INTO `bots_pet_commands` (`id`, `input`) VALUES
 (0, 'free'),
 (1, 'sit'),
@@ -48,5 +47,6 @@ INSERT INTO `bots_pet_commands` (`id`, `input`) VALUES
 (43, 'eat'),
 (44, 'wag tail'),
 (45, 'count'),
-(46, 'breed');
+(46, 'breed')
+ON DUPLICATE KEY UPDATE `input` = VALUES(`input`);
 SET SESSION sql_mode = @migration_145_mode;

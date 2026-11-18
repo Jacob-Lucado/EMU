@@ -523,42 +523,52 @@ public class Habbo
 
     public bool EnterRoom(Room? room)
     {
-        if (room == null || Client == null) {
+        if (room == null || Client == null || !room.TryBeginEntry()) {
             return false;
         }
 
-        Client.GetHabbo().CurrentRoom = room;
+        try {
+            EnterOpenRoom(Client, room);
+        }
+        finally {
+            room.EndEntry();
+        }
+
+        return true;
+    }
+
+    private void EnterOpenRoom(GameClient client, Room room)
+    {
+        client.GetHabbo().CurrentRoom = room;
         // The NFT chat styles come before RoomReady, the entry tile right after it.
-        Client.Send(new Plus.Communication.Packets.Outgoing.Rooms.Session.UserNftChatStylesComposer());
-        Client.Send(new RoomReadyComposer(room.RoomId, room.ModelName));
+        client.Send(new Plus.Communication.Packets.Outgoing.Rooms.Session.UserNftChatStylesComposer());
+        client.Send(new RoomReadyComposer(room.RoomId, room.ModelName));
 
         if (room.GetGameMap()?.Model is { } model) {
-            Client.Send(new Plus.Communication.Packets.Outgoing.Rooms.FloorPlan.RoomEntryTileComposer(model.DoorX, model.DoorY, model.DoorOrientation));
+            client.Send(new Plus.Communication.Packets.Outgoing.Rooms.FloorPlan.RoomEntryTileComposer(model.DoorX, model.DoorY, model.DoorOrientation));
         }
 
         if (room.Wallpaper != "0.0") {
-            Client.Send(new RoomPropertyComposer("wallpaper", room.Wallpaper));
+            client.Send(new RoomPropertyComposer("wallpaper", room.Wallpaper));
         }
 
         if (room.Floor != "0.0") {
-            Client.Send(new RoomPropertyComposer("floor", room.Floor));
+            client.Send(new RoomPropertyComposer("floor", room.Floor));
         }
 
-        Client.Send(new RoomPropertyComposer("landscape", room.Landscape));
-        _roomVisits.RecordEntry(Client.GetHabbo().Id, room.RoomId);
+        client.Send(new RoomPropertyComposer("landscape", room.Landscape));
+        _roomVisits.RecordEntry(client.GetHabbo().Id, room.RoomId);
 
         if (room.OwnerId != Id) {
             if (HabboStats is { } stats) {
                 stats.RoomVisits += 1;
             }
 
-            _roomAchievements.ProgressAchievement(Client, "ACH_RoomEntry", 1);
+            _roomAchievements.ProgressAchievement(client, "ACH_RoomEntry", 1);
         }
 
         // The server sends the room data right after opening it; the client asks for nothing.
-        _roomEntry?.Enter(Client);
-
-        return true;
+        _roomEntry?.Enter(client);
     }
 
     // UserDataFactory wires every loaded user; a hand-built user has no hotel to unregister from or enter rooms in.

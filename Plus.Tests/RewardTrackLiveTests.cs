@@ -11,11 +11,13 @@ using Plus.Communication.Revisions;
 using Plus.Database;
 using Plus.HabboHotel.Badges;
 using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Items;
 using Plus.HabboHotel.Quests;
 using Plus.HabboHotel.Users;
 using Plus.HabboHotel.Users.Badges;
 using Plus.HabboHotel.Users.Inventory;
 using Plus.HabboHotel.Users.Inventory.Badges;
+using Plus.HabboHotel.Users.Inventory.Furniture;
 using Plus.HabboHotel.Permissions;
 using Xunit;
 
@@ -123,19 +125,157 @@ public class RewardTrackLiveTests
         Assert.True(habbo.Inventory.Badges.HasBadge(Badge));
     }
 
+    [Fact]
+    public async Task FurniPrizeIsDeliveredToTheInventoryInTheClaimTransaction()
+    {
+        var database = TrackDatabase(1, "1534", 2);
+        var (client, habbo, manager) = await Claimer(database, new BadgeDefinitions(), new FurniDefinitions(Sofa()));
+
+        await manager.Claim(client, "introduction", "track_champ");
+
+        Assert.Equal(RewardTrackResults.Ok, client.ClaimResult());
+        var write = Assert.Single(database.Committed);
+        Assert.Contains(write, sql => sql.Contains("INTO users_reward_track_prizes"));
+        Assert.Equal(2, write.Count(sql => sql.Contains("INSERT INTO `items`")));
+        Assert.True(habbo.Inventory!.Furniture.HasItem(NewItemId));
+        Assert.Contains(ServerHeader(client, ServerPacketHeader.FurniListNotificationComposer), client.Sent);
+        Assert.Contains(ServerHeader(client, ServerPacketHeader.FurniListUpdateComposer), client.Sent);
+    }
+
+    [Fact]
+    public async Task WallFurniPrizeIsDeliveredByItsWallSprite()
+    {
+        var database = TrackDatabase(0, "4001", 1);
+        var poster = new ItemDefinition { Id = 78, SpriteId = 4001, ItemName = "poster", Type = ItemType.Wall, ProductType = "i" };
+        var (client, habbo, manager) = await Claimer(database, new BadgeDefinitions(), new FurniDefinitions(Sofa(), poster));
+
+        await manager.Claim(client, "introduction", "track_champ");
+
+        Assert.Equal(RewardTrackResults.Ok, client.ClaimResult());
+        Assert.Equal(78u, habbo.Inventory!.Furniture.Wall[NewItemId].Definition.Id);
+    }
+
+    [Fact]
+    public async Task FurniPrizeWithoutADefinitionIsUnknownAndStoresNothing()
+    {
+        var database = TrackDatabase(1, "9999", 1);
+        var (client, habbo, manager) = await Claimer(database, new BadgeDefinitions(), new FurniDefinitions(Sofa()));
+
+        await manager.Claim(client, "introduction", "track_champ");
+
+        Assert.Equal(RewardTrackResults.Unknown, client.ClaimResult());
+        Assert.Empty(database.Committed);
+        Assert.Empty(habbo.Inventory!.Furniture.AllItems);
+    }
+
+    [Fact]
+    public async Task FailedFurniWriteStoresNoClaimAndTheRetryGrantsOnce()
+    {
+        var database = TrackDatabase(1, "1534", 1);
+        database.FailOn = "INSERT INTO `items`";
+        var (client, habbo, manager) = await Claimer(database, new BadgeDefinitions(), new FurniDefinitions(Sofa()));
+
+        await manager.Claim(client, "introduction", "track_champ");
+
+        Assert.Equal(RewardTrackResults.Unknown, client.ClaimResult());
+        Assert.Empty(database.Committed);
+        Assert.Equal(1, database.RolledBack);
+        Assert.Empty(habbo.Inventory!.Furniture.AllItems);
+
+        database.FailOn = null;
+        await manager.Claim(client, "introduction", "track_champ");
+        Assert.Equal(RewardTrackResults.Ok, client.ClaimResult());
+
+        await manager.Claim(client, "introduction", "track_champ");
+        Assert.Equal(RewardTrackResults.AlreadyClaimed, client.ClaimResult());
+        var write = Assert.Single(database.Committed);
+        Assert.Single(write, sql => sql.Contains("INSERT INTO `items`"));
+    }
+
+    [Fact]
+    public async Task ActivityPointPrizeAddsItsCurrencyInTheClaimTransaction()
+    {
+        var database = TrackDatabase(8, "104", 100);
+        var (client, habbo, manager) = await Claimer(database, new BadgeDefinitions());
+
+        await manager.Claim(client, "introduction", "track_champ");
+
+        Assert.Equal(RewardTrackResults.Ok, client.ClaimResult());
+        var write = Assert.Single(database.Committed);
+        Assert.Contains(write, sql => sql.Contains("INTO users_reward_track_prizes"));
+        Assert.Contains(write, sql => sql.Contains("INTO user_currencies"));
+        Assert.Equal(100, habbo.Currencies[104]);
+        Assert.Contains(ServerHeader(client, ServerPacketHeader.HabboActivityPointNotificationComposer), client.Sent);
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(104)]
+    public async Task FullWalletLeavesTheCurrencyPrizeClaimable(int currency)
+    {
+        var database = TrackDatabase(8, currency.ToString(System.Globalization.CultureInfo.InvariantCulture), 5);
+        var (client, habbo, manager) = await Claimer(database, new BadgeDefinitions());
+
+        if (currency == -1) {
+            habbo.Credits = int.MaxValue;
+        }
+        else {
+            habbo.Currencies[currency] = int.MaxValue;
+        }
+
+        await manager.Claim(client, "introduction", "track_champ");
+
+        Assert.Equal(RewardTrackResults.Unknown, client.ClaimResult());
+        Assert.Empty(database.Committed);
+        Assert.Equal(int.MaxValue, currency == -1 ? habbo.Credits : habbo.Currencies[currency]);
+
+        if (currency == -1) {
+            habbo.Credits -= 5;
+        }
+        else {
+            habbo.Currencies[currency] -= 5;
+        }
+
+        await manager.Claim(client, "introduction", "track_champ");
+
+        Assert.Equal(RewardTrackResults.Ok, client.ClaimResult());
+        Assert.Single(database.Committed);
+        Assert.Equal(int.MaxValue, currency == -1 ? habbo.Credits : habbo.Currencies[currency]);
+    }
+
+    [Fact]
+    public async Task CreditPrizeAddsCreditsInTheClaimTransaction()
+    {
+        var database = TrackDatabase(8, "-1", 5);
+        var (client, habbo, manager) = await Claimer(database, new BadgeDefinitions());
+
+        await manager.Claim(client, "introduction", "track_champ");
+
+        Assert.Equal(RewardTrackResults.Ok, client.ClaimResult());
+        Assert.Contains(Assert.Single(database.Committed), sql => sql.Contains("UPDATE users SET credits"));
+        Assert.Equal(5, habbo.Credits);
+        Assert.Contains(ServerHeader(client, ServerPacketHeader.CreditBalanceComposer), client.Sent);
+    }
+
+    private const uint NewItemId = 9001;
+
+    private static ItemDefinition Sofa() => new() { Id = 77, SpriteId = 1534, ItemName = "club_sofa", Type = ItemType.Floor, ProductType = "s" };
+
     private static uint ServerHeader(TestClient client, uint internalId) => Assert.IsType<Plus.Communication.Revisions.Revision>(client.Revision).InternalIdToOutgoingIdMapping[internalId];
 
     private static Task<Revision> Profile() => Task.FromResult(new RevisionsCache().InternalRevision);
 
-    private static async Task<RewardTrackManager> Manager(FakeDatabase database, IBadgeManager badges)
+    private static async Task<RewardTrackManager> Manager(FakeDatabase database, IBadgeManager badges, IItemDataManager? items = null)
     {
-        var manager = new RewardTrackManager(NullLogger<RewardTrackManager>.Instance, database, badges, new FixedTimeProvider(FixedTimeProvider.Epoch));
+        var manager = new RewardTrackManager(NullLogger<RewardTrackManager>.Instance, database, badges, new FixedTimeProvider(FixedTimeProvider.Epoch),
+            items: items, itemFactory: new ItemFactory(database));
         await manager.Start();
 
         return manager;
     }
 
-    private static async Task<(TestClient Client, Habbo Habbo, RewardTrackManager Manager)> Claimer(FakeDatabase database, IBadgeManager badges)
+    private static async Task<(TestClient Client, Habbo Habbo, RewardTrackManager Manager)> Claimer(FakeDatabase database, IBadgeManager badges,
+        IItemDataManager? items = null)
     {
         var client = new TestClient(await Profile());
         var habbo = new Habbo
@@ -143,23 +283,27 @@ public class RewardTrackLiveTests
             Id = 7,
             Username = "player",
             Access = UserAccess.Empty,
-            Inventory = new InventoryComponent { Badges = new BadgesInventoryComponent(new()) }
+            Inventory = new InventoryComponent { Badges = new BadgesInventoryComponent(new()), Furniture = new FurnitureInventoryComponent([], []) }
         };
         client.SetHabbo(habbo);
 
-        return (client, habbo, await Manager(database, badges));
+        return (client, habbo, await Manager(database, badges, items));
     }
 
     /// <summary>The introduction track's champ prize, with the player 10 points past it.</summary>
-    private static FakeDatabase TrackDatabase()
+    private static FakeDatabase TrackDatabase() => TrackDatabase(4, Badge, 1);
+
+    /// <summary>A track with one prize named track_champ, worth 50 points, with the player 10 points past it.</summary>
+    private static FakeDatabase TrackDatabase(int productType, string rewardType, int amount)
     {
         var database = new FakeDatabase();
         database.Tables["FROM reward_tracks "] = Table(
             ("Id", "introduction"), ("Theme", "blue"), ("SortOrder", 0), ("StartsAt", DBNull.Value), ("EndsAt", DBNull.Value), ("HasPremium", 1),
             ("Boost", 1.0), ("InstantPoints", 0), ("CostDiamonds", 0), ("CostCredits", 25));
         database.Tables["FROM reward_track_prizes"] = Table(
-            ("TrackId", "introduction"), ("Id", "track_champ"), ("RequiredPoints", 50), ("ProductItemTypeId", 4), ("RewardType", "badge"),
-            ("ExtraParams", Badge), ("RewardAmount", 1), ("Premium", 0), ("SortOrder", 1));
+            ("TrackId", "introduction"), ("Id", "track_champ"), ("RequiredPoints", 50), ("ProductItemTypeId", productType), ("RewardType", rewardType),
+            ("ExtraParams", ""), ("RewardAmount", amount), ("Premium", 0), ("SortOrder", 1));
+        database.Tables["LAST_INSERT_ID"] = Table(("Id", NewItemId));
         database.Tables["FROM users_reward_tracks "] = Table(("TrackId", "introduction"), ("Points", 60), ("Premium", 0));
 
         return database;
@@ -176,6 +320,14 @@ public class RewardTrackLiveTests
         table.Rows.Add(row.Select(cell => cell.Value).ToArray());
 
         return table;
+    }
+
+    private sealed class FurniDefinitions(params ItemDefinition[] definitions) : IItemDataManager
+    {
+        public Dictionary<uint, ItemDefinition> Items { get; } = definitions.ToDictionary(definition => definition.Id);
+        public Dictionary<int, uint> Gifts { get; } = new();
+        public void Init() { }
+        public ItemDefinition? GetItemByName(string name) => Items.Values.FirstOrDefault(definition => definition.ItemName == name);
     }
 
     private sealed class BadgeDefinitions : IBadgeManager

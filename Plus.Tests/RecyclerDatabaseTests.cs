@@ -725,6 +725,7 @@ public sealed class RecyclerDatabaseTests
                 END IF;
             END;
             """);
+
         using (var startup = new MySqlConnection(fixture.ConnectionString)) {
             startup.Open();
             Assert.Throws<MySqlException>(() => startup.Execute(HabboDefaultsMigration));

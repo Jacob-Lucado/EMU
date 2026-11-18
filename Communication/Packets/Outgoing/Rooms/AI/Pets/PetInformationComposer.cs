@@ -23,7 +23,7 @@ public sealed class PetInformationComposer(PetInformationSnapshot pet) : IServer
         packet.WriteInteger(pet.OwnerId);
         packet.WriteInteger(pet.AgeInDays);
         packet.WriteString(pet.OwnerName);
-        packet.WriteInteger(1);
+        packet.WriteInteger(pet.Plant?.BreedId ?? 1);
         packet.WriteBoolean(pet.HasSaddle);
         packet.WriteBoolean(false);
         packet.WriteInteger(pet.SkillThresholds.Count);
@@ -33,6 +33,20 @@ public sealed class PetInformationComposer(PetInformationSnapshot pet) : IServer
         }
 
         packet.WriteInteger(pet.AnyoneCanRide);
+
+        if (pet.Plant is { } plant) {
+            packet.WriteBoolean(plant.CanBreed);
+            packet.WriteBoolean(false);
+            packet.WriteBoolean(plant.CanRevive);
+            packet.WriteInteger(plant.Rarity);
+            packet.WriteInteger(plant.MaxWellbeingSeconds);
+            packet.WriteInteger(plant.RemainingWellbeingSeconds);
+            packet.WriteInteger(plant.RemainingGrowthSeconds);
+            packet.WriteBoolean(plant.BreedingPermission);
+
+            return;
+        }
+
         packet.WriteBoolean(false);
         packet.WriteBoolean(false);
         packet.WriteBoolean(false);

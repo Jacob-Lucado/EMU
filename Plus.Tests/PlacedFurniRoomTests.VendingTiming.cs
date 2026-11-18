@@ -12,7 +12,7 @@ using Xunit;
 namespace Plus.Tests;
 
 // A vending machine runs on its own timer, not on the 500 ms room tick: the hand item 1250 ms after the use and state 0 at 1500 ms.
-// A machine without a hand item goes back to 0 at 1000 ms. Both states go out as ObjectDataUpdate.
+// A machine without a hand item or an effect goes back to 0 at 1000 ms. Both states go out as ObjectDataUpdate.
 public partial class PlacedFurniRoomTests
 {
     private const uint VendingId = 90;
@@ -54,6 +54,24 @@ public partial class PlacedFurniRoomTests
         Assert.InRange(reset.At - usedAt, 1000, 1049);
         Assert.DoesNotContain(passes, pass => pass.Packets.Any(packet => packet.Header == ServerPacketHeader.CarryObjectComposer));
         Assert.Equal(0, actor.CarryItemId);
+        Assert.True(actor.CanWalk);
+    }
+
+    [Fact]
+    public async Task AVendingMachineWithAnEffectGoesBackToZeroAt1500MsAfterTheUse()
+    {
+        var (clock, manager) = GridRoom();
+        var vending = VendingMachine();
+        vending.Definition.EffectId = 164;
+        var actor = ExecutorActor(2, 1);
+        clock.Ms += 130;
+        var usedAt = clock.Ms;
+
+        await UseVending(vending);
+        var passes = RunRoom(manager, clock, usedAt + 2500, period: 25);
+
+        var reset = Assert.Single(passes, pass => VendingStates(pass.Packets).Contains("0"));
+        Assert.InRange(reset.At - usedAt, 1500, 1549);
         Assert.True(actor.CanWalk);
     }
 

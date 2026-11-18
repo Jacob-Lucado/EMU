@@ -212,7 +212,7 @@ public partial class PlacedFurniRoomTests
         Assert.False(module.Mutate(reference, holder, WiredVariableMutation.Set, 2147483648L, frame));
         Assert.Equal(0, calls);
         Assert.True(module.Mutate(reference, holder, WiredVariableMutation.Set, 255, frame));
-        Assert.Equal((255, 33, 44, 1), (_room.TonerData.Hue, _room.TonerData.Saturation, _room.TonerData.Lightness, _room.TonerData.Enabled));
+        Assert.Equal((255, 33, 44, 0), (_room.TonerData.Hue, _room.TonerData.Saturation, _room.TonerData.Lightness, _room.TonerData.Enabled));
         var change = Assert.Single(module.DrainChanges());
         Assert.Equal((22L, 255L), (change.Before!.Value, change.After!.Value));
         Assert.Same(item, ((ConcurrentDictionary<uint, Item>)typeof(RoomItemHandling).GetField("_movedItems", BindingFlags.Instance | BindingFlags.NonPublic)!

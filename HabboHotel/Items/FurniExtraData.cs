@@ -200,6 +200,8 @@ internal static class FurniExtraData
                 }
             case InteractionType.AreaHide:
                 return AreaHide.AreaHideState.Load(stored);
+            case InteractionType.Toner when Data.Toner.TonerState.Load(stored) is { } toner:
+                return toner;
             case InteractionType.Background: {
                     var data = definition.CreateData();
 

@@ -581,6 +581,10 @@ public partial class RoomUserManager
                     }
                 }
 
+                if (user.RoomEffect != 0 && session.GetHabbo().Effects is { } roomEffects && roomEffects.CurrentEffect == user.RoomEffect) {
+                    roomEffects.CurrentEffect = 0;
+                }
+
                 // A football gate outfit belongs to its room: the user's own figure is given back on leaving.
                 if (user.FootballGateOutfit is { } outfit && outfit.BaseLook == session.GetHabbo().Look) {
                     user.FootballGateOutfit = null;
@@ -955,7 +959,8 @@ public partial class RoomUserManager
         return user.GetClient()?.GetHabbo()?.CurrentRoom == _room;
     }
 
-    private const short IdleKickCloseReason = 2;
+    /// <summary>The CloseConnection reason for an idle kick or a walk onto the door tile.</summary>
+    internal const short HotelViewCloseReason = 2;
 
     internal bool ValidateMovementActor(RoomUser actor)
     {
@@ -972,7 +977,7 @@ public partial class RoomUserManager
         var client = actor.GetClient();
 
         if (client?.GetHabbo()?.CurrentRoom == _room) {
-            RemoveUserFromRoom(client, true, closeReason: valid ? IdleKickCloseReason : null);
+            RemoveUserFromRoom(client, true, closeReason: valid ? HotelViewCloseReason : null);
         }
         else {
             RemoveAbandonedRoomUser(actor);

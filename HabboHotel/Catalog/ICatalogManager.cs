@@ -15,6 +15,7 @@ public interface ICatalogManager
     bool TryGetOffer(int offerId, Habbo habbo, [NotNullWhen(true)] out CatalogPage? page, [NotNullWhen(true)] out CatalogOffer? offer);
     // First Builders Club page the user can open that shows this offer.
     bool TryGetBuildersClubOffer(int offerId, Habbo habbo, [NotNullWhen(true)] out CatalogPage? page, [NotNullWhen(true)] out CatalogOffer? offer);
+    int? FindPetType(string productCode);
     ICollection<CatalogPage> Pages { get; }
     // Goes up by one each time the catalog is loaded.
     int Revision { get; }

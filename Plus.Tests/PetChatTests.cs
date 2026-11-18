@@ -11,7 +11,7 @@ using Xunit;
 
 namespace Plus.Tests;
 
-// A pet never chats on its own, but it answers in chat when it refuses a command, when it gets a command it has
+// A pet answers in chat when it refuses a command, when it gets a command it has
 // not learned yet and when it is scratched. Each pet type has its own lines, and a muted room hears nothing.
 public partial class PlacedFurniRoomTests
 {

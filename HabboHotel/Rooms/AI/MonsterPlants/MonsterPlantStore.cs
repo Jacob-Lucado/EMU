@@ -71,17 +71,24 @@ public sealed class MonsterPlantStore(IDatabase database, ILogger<MonsterPlantSt
         VALUES (@PetId, @Rarity, @GrowthStartedAt, @WellbeingUntil, @CanBreed, @BreedingPermission)
         """, Row(plant), transaction);
 
-    internal static MonsterPlant? Load(IDbConnection connection, int petId)
+    internal static Dictionary<int, MonsterPlant> LoadForPets(IDbConnection connection, IEnumerable<int> petIds)
     {
-        var row = connection.QuerySingleOrDefault<PlantRow>("""
-            SELECT pet_id AS PetId, rarity, growth_started_at AS GrowthStartedAt, wellbeing_until AS WellbeingUntil,
-                   can_breed AS CanBreed, breeding_permission AS BreedingPermission
-            FROM bots_monsterplants WHERE pet_id = @petId LIMIT 1
-            """, new { petId });
+        var plants = new Dictionary<int, MonsterPlant>();
 
-        return row == null
-            ? null
-            : new MonsterPlant(petId, row.Rarity, Utc(row.GrowthStartedAt), Utc(row.WellbeingUntil), row.CanBreed, row.BreedingPermission);
+        foreach (var ids in petIds.Chunk(500)) {
+            var rows = connection.Query<PlantRow>("""
+                SELECT pet_id AS PetId, rarity, growth_started_at AS GrowthStartedAt, wellbeing_until AS WellbeingUntil,
+                       can_breed AS CanBreed, breeding_permission AS BreedingPermission
+                FROM bots_monsterplants WHERE pet_id IN @ids
+                """, new { ids });
+
+            foreach (var row in rows) {
+                plants[row.PetId] = new MonsterPlant(row.PetId, row.Rarity, Utc(row.GrowthStartedAt), Utc(row.WellbeingUntil),
+                    row.CanBreed, row.BreedingPermission);
+            }
+        }
+
+        return plants;
     }
 
     private static DateTimeOffset Utc(DateTime value) => new(DateTime.SpecifyKind(value, DateTimeKind.Utc));
@@ -98,6 +105,7 @@ public sealed class MonsterPlantStore(IDatabase database, ILogger<MonsterPlantSt
 
     private sealed class PlantRow
     {
+        public int PetId { get; set; }
         public int Rarity { get; set; }
         public DateTime GrowthStartedAt { get; set; }
         public DateTime WellbeingUntil { get; set; }

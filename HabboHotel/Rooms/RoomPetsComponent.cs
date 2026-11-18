@@ -15,9 +15,10 @@ public sealed class RoomPetsComponent(IDatabase database) : IRoomComponent
     {
         using var connection = database.Connection();
 
-        foreach (var row in Load(connection, _room.Id)) {
-            var data = LoadData(connection, row.Id);
+        var pets = Load(connection, _room.Id).Select(row => (Row: row, Data: LoadData(connection, row.Id))).ToArray();
+        var plants = MonsterPlantStore.LoadForPets(connection, pets.Where(pet => pet.Data?.Type == MonsterPlant.PetType).Select(pet => pet.Row.Id));
 
+        foreach (var (row, data) in pets) {
             if (data == null) {
                 continue;
             }
@@ -26,7 +27,7 @@ public sealed class RoomPetsComponent(IDatabase database) : IRoomComponent
                 data.Experience, data.Energy, data.Nutrition, data.Respect, data.CreatedAt, row.X, row.Y, row.Z,
                 data.HaveSaddle, data.AnyoneRide, data.Hairdye, data.Pethair, data.GnomeClothing, row.OwnerName)
             {
-                Plant = data.Type == MonsterPlant.PetType ? MonsterPlantStore.Load(connection, row.Id) : null
+                Plant = plants.GetValueOrDefault(row.Id)
             };
             var speeches = new List<RandomSpeech>();
             _room.GetRoomUserManager().DeployBot(new(pet.PetId, _room.Id, "pet", "freeroam", pet.Name, "", pet.Look,

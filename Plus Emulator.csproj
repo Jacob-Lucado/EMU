@@ -48,14 +48,6 @@
 	<ItemGroup>
 		<PackageReference Include="Dapper" Version="2.0.123" />
 		<PackageReference Include="Dapper.Contrib" Version="2.0.78" />
-		<PackageReference Include="Microsoft.Extensions.Configuration" Version="10.0.12" />
-		<PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.12" />
-		<PackageReference Include="Microsoft.Extensions.Configuration.Ini" Version="10.0.12" />
-		<PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="10.0.12" />
-		<PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.12" />
-		<PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.12" />
-		<PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.12" />
-		<PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.12" />
 		<PackageReference Include="Microsoft.IO.RecyclableMemoryStream" Version="2.2.1" />
 		<PackageReference Include="MySqlConnector" Version="2.2.5" />
 		<PackageReference Include="NetCoreServer" Version="7.0.0" />

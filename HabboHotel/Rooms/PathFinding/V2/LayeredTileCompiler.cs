@@ -33,7 +33,7 @@ internal sealed class LayeredTileCompiler(NavGrid grid, PathfindingSettings sett
     {
         List<PlannedSurface> surfaces = compat.Kind is SurfaceKind.Door or SurfaceKind.WalkMagic
             ? [new(new(compat.Z, compat.Flags, compat.Kind, compat.Support, compat.Group, 0), [compat.Support], compat.Pillows)]
-            : Cap(t, Coalesce(Candidates(t, items).Where(candidate => Clear(candidate, items))));
+            : Cap(t, Coalesce(Candidates(t, items).Where(candidate => Clear(t, candidate, items))));
         AssignContacts(surfaces, items);
 
         return surfaces;
@@ -46,7 +46,7 @@ internal sealed class LayeredTileCompiler(NavGrid grid, PathfindingSettings sett
         }
 
         foreach (var item in items) {
-            var candidate = SurfaceRules.ItemCandidate(item);
+            var candidate = SurfaceRules.ItemCandidate(item, t);
 
             if (candidate.Standable) {
                 yield return candidate;
@@ -55,7 +55,7 @@ internal sealed class LayeredTileCompiler(NavGrid grid, PathfindingSettings sett
     }
 
     // Keep a candidate at s only if no other item's blocking interval meets [s, s + clearance).
-    private bool Clear(SurfaceCandidate candidate, List<NavItemRecord> items)
+    private bool Clear(int t, SurfaceCandidate candidate, List<NavItemRecord> items)
     {
         var headroom = candidate.Z + settings.AvatarClearance;
 
@@ -64,7 +64,7 @@ internal sealed class LayeredTileCompiler(NavGrid grid, PathfindingSettings sett
                 continue;
             }
 
-            var (from, to) = SurfaceRules.BlockingInterval(item);
+            var (from, to) = SurfaceRules.BlockingInterval(item, t);
 
             if (from < to && from < headroom && candidate.Z < to) {
                 return false;

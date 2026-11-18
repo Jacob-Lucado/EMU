@@ -93,7 +93,8 @@ public sealed class WiredVariableBuiltinStateTests
         });
         var module = new WiredVariableModule(1, new Directory(), new MemoryWiredVariableStore(), new FixedTimeProvider(DateTimeOffset.FromUnixTimeMilliseconds(1)), builtins);
         var reference = new WiredVariableReference(WiredVariableTarget.Furni, "internal:@state");
-        var engine = Task.Run(() =>
+        // Each side gets its own thread, so a busy thread pool cannot delay it past the deadlock timeouts.
+        var engine = Task.Factory.StartNew(() =>
         {
             lock (engineGate) {
                 engineEntered.Set();
@@ -101,9 +102,10 @@ public sealed class WiredVariableBuiltinStateTests
                 // Mirrors engine-owned FX reading values while a creator state callback enters Dispatch.
                 Assert.Equal(1, module.Read(reference, holder, frame)!.Value);
             }
-        });
+        }, TaskCreationOptions.LongRunning);
         Assert.True(engineEntered.Wait(TimeSpan.FromSeconds(3)));
-        var creator = Task.Run(() => Assert.True(module.Mutate(reference, holder, WiredVariableMutation.Set, 1, frame, origin: 2)));
+        var creator = Task.Factory.StartNew(() => Assert.True(module.Mutate(reference, holder, WiredVariableMutation.Set, 1, frame, origin: 2)),
+            TaskCreationOptions.LongRunning);
         await Task.WhenAll(engine, creator).WaitAsync(TimeSpan.FromSeconds(6));
         Assert.True(notified);
         Assert.Equal(2, Assert.Single(module.DrainChanges()).Origin);

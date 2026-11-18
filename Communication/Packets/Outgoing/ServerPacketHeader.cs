@@ -13,6 +13,7 @@ public static class ServerPacketHeader
     public const uint UserPerksComposer = 420;
     public const uint KickbackInfoComposer = 3923;
     public const uint UserRightsComposer = 2446;
+    public const uint GamePlayerValueComposer = 1727;
     public const uint GenericErrorComposer = 2097;
     public const uint DisconnectReasonComposer = 4000;
     public const uint SetUniqueIdComposer = 65511;
@@ -307,7 +308,6 @@ public static class ServerPacketHeader
     public const uint FriendListUpdateComposer = 1054;
 
     public const uint UserFlatCatsComposer = 2513;
-    public const uint UpdateFreezeLivesComposer = 1929;
     public const uint UnbanUserFromRoomComposer = 2136;
     public const uint PetTrainingPanelComposer = 2476;
     public const uint PetLevelNotificationComposer = 1774;

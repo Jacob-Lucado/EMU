@@ -1,11 +1,14 @@
+using Plus.Communication.Packets.Outgoing.Rooms.Avatar;
 using Plus.HabboHotel.Items;
 using Plus.HabboHotel.GameClients;
 
 namespace Plus.HabboHotel.Rooms.PathFinding;
 
-public sealed class FloorEffectService(Room room, Action<GameClient> progressSwim)
+/// <param name="random">Returns a number from 0 to the given bound, exclusive.</param>
+public sealed class FloorEffectService(Room room, Action<GameClient> progressSwim, Func<int, int>? random = null)
 {
-    public void Apply(RoomUser actor, int x, int y, SurfaceRef? surface = null)
+    /// <param name="lastStep">Whether the step onto the tile ends the walk.</param>
+    public void Apply(RoomUser actor, int x, int y, SurfaceRef? surface = null, bool lastStep = true)
     {
         // A rider keeps the riding effect: water and skates do not replace it.
         if (actor.IsBot || actor.RidingHorse) {
@@ -44,11 +47,15 @@ public sealed class FloorEffectService(Room room, Action<GameClient> progressSwi
 
             var kind = ByteToItemEffectEnum.Parse(value);
 
+            if (!lastStep && actor.CurrentItemEffect == ItemEffectType.Snowboard && JumpAt(x, y)) {
+                room.SendPacket(new ActionComposer(actor.VirtualId, (random ?? Random.Shared.Next)(2) == 0 ? 8 : 9));
+            }
+
             if (kind == actor.CurrentItemEffect && (iceEffect < 0 || habbo.Effects.CurrentEffect == iceEffect)) {
                 return;
             }
 
-            habbo.Effects.ApplyEffect(kind == ItemEffectType.Iceskates && iceEffect >= 0 ? iceEffect : EffectId(kind, habbo.Gender));
+            habbo.Effects.ApplyEffect(kind == ItemEffectType.Iceskates && iceEffect >= 0 ? iceEffect : EffectId(kind, habbo.Gender, actor.CurrentItemEffect));
             actor.CurrentItemEffect = kind;
 
             if (kind == ItemEffectType.Swim) {
@@ -57,6 +64,10 @@ public sealed class FloorEffectService(Room room, Action<GameClient> progressSwi
         }
         catch { }
     }
+
+    // A snowboarder crossing a jump does an ollie or a 360 at random.
+    private bool JumpAt(int x, int y) => room.GetGameMap().GetCoordinatedItems(new(x, y))
+        .Any(item => item.Definition.InteractionType == InteractionType.SnowboardJump);
 
     // K=1 reads the legacy tile map. A layered surface takes the effect of its highest owned item,
     // so skates under a deck do not apply on the deck; a walk magic surface has none (as legacy).
@@ -88,16 +99,19 @@ public sealed class FloorEffectService(Room room, Action<GameClient> progressSwi
         InteractionType.IceSkates => 3,
         InteractionType.Lowpool => 4,
         InteractionType.Haloweenpool => 5,
+        InteractionType.SnowboardSlope => 7,
         _ => 0
     };
 
-    private static int EffectId(ItemEffectType kind, string gender) => kind switch
+    // Stepping off skates, ice or a snowboard slope clears the effect with 0.
+    private static int EffectId(ItemEffectType kind, string gender, ItemEffectType left) => kind switch
     {
         ItemEffectType.Iceskates => gender == "M" ? 38 : 39,
         ItemEffectType.Normalskates => gender == "M" ? 55 : 56,
         ItemEffectType.Swim => 29,
         ItemEffectType.SwimLow => 30,
         ItemEffectType.SwimHalloween => 37,
-        _ => -1
+        ItemEffectType.Snowboard => 97,
+        _ => left is ItemEffectType.Iceskates or ItemEffectType.Normalskates or ItemEffectType.Snowboard ? 0 : -1
     };
 }

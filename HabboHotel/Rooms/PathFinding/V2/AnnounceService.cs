@@ -265,7 +265,11 @@ internal sealed class AnnounceService(Room room, RoomNavigation navigation, Move
         actor.SetZ = target.Z;
         actor.IsWalking = true;
         actor.UpdateNeeded = true;
-        context.FloorEffects.Apply(actor, target.X, target.Y, state.Pending[state.PendingCount - 1]);
+        context.FloorEffects.Apply(actor, target.X, target.Y, state.Pending[state.PendingCount - 1], state.Cursor + state.PendingCount >= state.Route.Count);
+
+        if (room.GotSoccer()) {
+            room.GetSoccer().OnStepAnnounced(actor, target.X, target.Y, state.Cursor + state.PendingCount >= state.Route.Count);
+        }
 
         // The first step off a sit or lay tile fires User Performs Action - Stand.
         if (wasPosed) {

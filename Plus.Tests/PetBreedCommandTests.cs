@@ -50,9 +50,9 @@ public partial class PlacedFurniRoomTests
     {
         var (owner, dog) = BreedingDog(0, 2);
         BreedingFurni(70, "pet_breeding_dog", 0, 3, 3);
-        Blocker(71, 2, 2);
-        Blocker(72, 2, 3);
-        Blocker(73, 3, 2);
+        PlaceBreedingPathBlocker(71, 2, 2);
+        PlaceBreedingPathBlocker(72, 2, 3);
+        PlaceBreedingPathBlocker(73, 3, 2);
 
         Command(dog, owner, Breed);
         ExecutorTick();
@@ -107,7 +107,7 @@ public partial class PlacedFurniRoomTests
         Assert.True(_room.GetRoomItemHandler().SetFloorItem(null!, item, x, y, 0, true, false, false));
     }
 
-    private void Blocker(uint id, int x, int y)
+    private void PlaceBreedingPathBlocker(uint id, int x, int y)
     {
         var item = Furni(id, InteractionType.None, WiredBoxType.None);
         item.Definition.Height = 1;

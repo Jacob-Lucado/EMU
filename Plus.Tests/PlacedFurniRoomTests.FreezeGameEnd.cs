@@ -33,12 +33,12 @@ public partial class PlacedFurniRoomTests
         Assert.False(blue.Freezed);
         Assert.Equal(Team.Blue, blue.Team);
         Assert.Contains(blue, _room.GetTeamManagerForFreeze().BlueTeam);
-        Assert.Equal(30, _room.GetGameManager().Points[(int)Team.Blue]);
+        Assert.Equal(40, _room.GetGameManager().Points[(int)Team.Blue]);
         Assert.Equal(1, ends());
     }
 
     [Fact]
-    public void FreezeBlastThatEndsTheGameDoesNotHitItsRemainingVictims()
+    public void FreezeBlastThatTakesALastLifeEndsTheGameOnceWhenThatFreezeEnds()
     {
         var ends = CountFreezeGameEnds();
         var tile = FreezeTile(10, 1, 1);
@@ -52,10 +52,18 @@ public partial class PlacedFurniRoomTests
         freeze.OnFreezeTiles(tile, FreezePowerUp.None);
         RunFreezeWired();
 
+        Assert.True(freeze.GameIsStarted);
+        Assert.Equal((2, true), (blue.FreezeLives, blue.Freezed));
+
+        for (var tick = 0; tick < 11; tick++) {
+            freeze.CycleUser(red);
+            freeze.CycleUser(blue);
+        }
+
+        RunFreezeWired();
+
         Assert.False(freeze.GameIsStarted);
         Assert.Equal(Team.None, red.Team);
-        Assert.Equal(0, blue.FreezeLives);
-        Assert.False(blue.Freezed);
         Assert.Equal(Team.Blue, blue.Team);
         Assert.Contains(blue, _room.GetTeamManagerForFreeze().BlueTeam);
         Assert.Equal(30, _room.GetGameManager().Points[(int)Team.Blue]);

@@ -231,7 +231,8 @@ namespace Plus.HabboHotel.Groups.Forums
 
             using var connection = database.Connection();
             connection.Open();
-            using var transaction = connection.BeginTransaction();
+            // A write's locked reads must see rows committed after its first plain read; REPEATABLE READ refuses that on MariaDB 11.6 and newer.
+            using var transaction = connection.BeginTransaction(write ? IsolationLevel.ReadCommitted : IsolationLevel.RepeatableRead);
             var args = new { groupId, userId = viewer.UserId, staff = viewer.Staff };
 
             if (write) {

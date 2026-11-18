@@ -20,16 +20,20 @@ public interface IFurnitureUseStore
 
 public sealed class FurnitureUseStore(IDatabase database) : IFurnitureUseStore
 {
+    // items.extra_data mirrors the four values for the inventory.
     public void SetTonerEnabled(uint itemId, uint roomId, bool enabled)
     {
         using var connection = database.Connection();
-
-        if (connection.Execute("""
-            UPDATE room_items_toner toner JOIN items item ON item.id=toner.id
-            SET toner.enabled=@enabled WHERE toner.id=@itemId AND item.room_id=@roomId
-            """, new { itemId, roomId, enabled }) != 1) {
-            throw new InvalidOperationException("Toner state was not persisted.");
-        }
+        connection.Open();
+        using var transaction = connection.BeginTransaction();
+        var row = connection.Query<Plus.HabboHotel.Items.Data.Toner.TonerRecord>("""
+            SELECT toner.data1 AS Hue,toner.data2 AS Saturation,toner.data3 AS Lightness FROM room_items_toner toner JOIN items item ON item.id=toner.id
+            WHERE toner.id=@itemId AND item.room_id=@roomId FOR UPDATE
+            """, new { itemId, roomId }, transaction).FirstOrDefault() ?? throw new InvalidOperationException("Toner state was not persisted.");
+        var data = new Plus.HabboHotel.Items.Data.Toner.TonerRecord { Enabled = enabled, Hue = row.Hue, Saturation = row.Saturation, Lightness = row.Lightness }.Serialize();
+        connection.Execute("UPDATE room_items_toner SET enabled=@enabled WHERE id=@itemId", new { itemId, enabled }, transaction);
+        connection.Execute("UPDATE items SET extra_data=@data WHERE id=@itemId", new { itemId, data }, transaction);
+        transaction.Commit();
     }
 }
 
@@ -200,7 +204,7 @@ public sealed class FurnitureUseService(IFurnitureUseStore store, IQuestManager 
 
         if (item.Definition.InteractionType == InteractionType.Toner) {
             lock (room.NavigationSync) {
-                if (habbo.CurrentRoom != room || !room.CheckRights(session, true) ||
+                if (habbo.CurrentRoom != room || !room.CheckRights(session, false, true) ||
                     room.GetRoomItemHandler().GetItem(item.Id) != item || room.TonerData?.ItemId != item.Id) {
                     return;
                 }
@@ -209,7 +213,8 @@ public sealed class FurnitureUseService(IFurnitureUseStore store, IQuestManager 
                 store.SetTonerEnabled(item.Id, room.Id, enabled);
                 room.TonerData.Enabled = enabled ? 1 : 0;
                 Plus.HabboHotel.Items.Data.Toner.TonerState.Synchronize(room, item);
-                item.UpdateState();
+                item.UpdateState(true, false);
+                room.SendObjectData(item, FurnitureDataSnapshot.Capture(item.ExtraData), false);
             }
 
             return;

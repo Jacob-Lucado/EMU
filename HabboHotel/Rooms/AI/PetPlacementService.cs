@@ -82,10 +82,11 @@ public sealed class PetPlacementService(
             var speeches = new List<RandomSpeech>();
             var roomBot = new RoomBot(pet.PetId, pet.RoomId, "pet", "freeroam", pet.Name, "", pet.Look,
                 x, y, z, 0, 0, 0, 0, 0, ref speeches, "", 0, pet.OwnerId, false, 0, false, 0);
-            room.GetRoomUserManager().DeployBot(roomBot, pet);
+            var placed = room.GetRoomUserManager().DeployBot(roomBot, pet);
             pet.DbState = PetDatabaseUpdateState.Updated;
             inventory.Pets.RemovePet(pet.PetId);
             session.Send(new PetInventoryComposer(PetAppearanceSnapshots.Inventory(inventory.Pets.Pets.Values)));
+            (placed.BotAi as Types.PetBot)?.Greet();
         }
     }
 

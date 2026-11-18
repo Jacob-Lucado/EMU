@@ -56,6 +56,7 @@ public partial class PlacedFurniRoomTests
             Assert.Throws<InvalidOperationException>(() => service.ApplyEffect(_room, _client, 40, horse.PetId));
             Assert.Equal(previous, horse.Saddle);
             Assert.Same(stand, _room.GetRoomItemHandler().GetItem(40));
+
             return;
         }
 

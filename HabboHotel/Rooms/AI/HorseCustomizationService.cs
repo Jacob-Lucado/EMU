@@ -154,6 +154,7 @@ public sealed class HorseCustomizationService(
         }
 
         SaddleRefund? refund = null;
+
         if (current.Saddle > 0 && item.Definition.InteractionType is InteractionType.HorseSaddle1 or InteractionType.HorseSaddle2) {
             if (session.GetHabbo().Inventory == null || HorseProducts.SaddleProduct(itemDataManager.Items.Values, current.Saddle) is not { } saddle) {
                 return;

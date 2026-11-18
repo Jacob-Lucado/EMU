@@ -9,7 +9,7 @@ using Xunit;
 
 namespace Plus.Tests;
 
-// A pet says one welcome line when it is placed and otherwise talks only with gestures.
+// A pet says one welcome line when it is placed. A horse does not chat on its own.
 public partial class PlacedFurniRoomTests
 {
     [Theory]
@@ -40,7 +40,7 @@ public partial class PlacedFurniRoomTests
     }
 
     [Fact]
-    public void APetNeverChatsOnItsOwn()
+    public void AHorseNeverChatsOnItsOwn()
     {
         LegacyRider();
         var (petUser, _) = HighLevelPet(100);

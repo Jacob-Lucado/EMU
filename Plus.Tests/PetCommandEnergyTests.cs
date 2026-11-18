@@ -39,7 +39,7 @@ public partial class PlacedFurniRoomTests
         ai.OnUserSay(owner, "horse sit");
 
         Assert.Contains("sit", petUser.Statusses.Keys);
-        Assert.Equal(1605, pet.Experience);
+        Assert.Equal(1610, pet.Experience);
         Assert.Contains(ServerPacketHeader.AddExperiencePointsComposer, _client.Sent);
     }
 

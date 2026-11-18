@@ -8,7 +8,7 @@ using Xunit;
 namespace Plus.Tests;
 
 // Habbo pet commands use the client's command ids (pet.command.N). Each pet type has its own list; a level 1
-// pet knows the first few and learns the next one at every level. An obeyed command gives 5 experience and costs
+// pet knows the first few and learns the next one at every level. An obeyed command gives experience and costs
 // 5 energy, a command the pet has not learned yet gets a puzzled look, and a command outside its list is ignored.
 public partial class PlacedFurniRoomTests
 {

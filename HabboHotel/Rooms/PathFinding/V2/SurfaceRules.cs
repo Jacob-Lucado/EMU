@@ -14,7 +14,7 @@ internal static class SurfaceRules
 {
     internal const double Epsilon = 0.001;
 
-    internal static SurfaceCandidate ItemCandidate(NavItemRecord item)
+    internal static SurfaceCandidate ItemCandidate(NavItemRecord item, int tile)
     {
         if (item.Seat || item.Interaction is InteractionType.Bed or InteractionType.TentSmall) {
             return item.Seat
@@ -26,7 +26,7 @@ internal static class SurfaceRules
             return new(item.Top, NavFlags.Transit | NavFlags.GuildGate, SurfaceKind.GateBase, item.ItemId, item.GroupId, 2, item);
         }
 
-        var flags = item.Walkable || OpenGate(item) ? NavFlags.Transit : NavFlags.None;
+        var flags = item.WalkableAt(tile) || OpenGate(item) ? NavFlags.Transit : NavFlags.None;
 
         if (item.Interaction == InteractionType.Roller && flags != NavFlags.None) {
             flags |= NavFlags.Roller;
@@ -44,9 +44,9 @@ internal static class SurfaceRules
 
     // Walkable items, open gates, seats and beds block [z, z + h); everything else, including a closed
     // non-walkable guild gate, blocks at least epsilon, so zero-height blockers still block.
-    internal static (double From, double To) BlockingInterval(NavItemRecord item)
+    internal static (double From, double To) BlockingInterval(NavItemRecord item, int tile)
     {
-        var passable = item.Walkable || item.Seat || OpenGate(item)
+        var passable = item.WalkableAt(tile) || item.Seat || OpenGate(item)
             || item.Interaction is InteractionType.Bed or InteractionType.TentSmall;
 
         return (item.Z, item.Z + (passable ? item.Height : Math.Max(item.Height, Epsilon)));

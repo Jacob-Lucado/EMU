@@ -79,7 +79,7 @@ public partial class PlacedFurniRoomTests
         }
 
         Assert.Equal((0, 1), (actor.X, actor.Y));
-        Assert.Equal(-1, Assert.IsType<Plus.HabboHotel.Users.Effects.EffectsComponent>(_client.GetHabbo().Effects).CurrentEffect);
+        Assert.Equal(0, Assert.IsType<Plus.HabboHotel.Users.Effects.EffectsComponent>(_client.GetHabbo().Effects).CurrentEffect);
         Assert.Contains((7, "ACH_TagC", 1), awards);
     }
 
@@ -127,7 +127,7 @@ public partial class PlacedFurniRoomTests
         actor.SetPos(0, 1, 0);
         IceContact(actor, v2);
         Assert.Contains((7, "ACH_TagC", 1), awards);
-        Assert.Equal(-1, Assert.IsType<Plus.HabboHotel.Users.Effects.EffectsComponent>(_client.GetHabbo().Effects).CurrentEffect);
+        Assert.Equal(0, Assert.IsType<Plus.HabboHotel.Users.Effects.EffectsComponent>(_client.GetHabbo().Effects).CurrentEffect);
         actor.SetPos(1, 1, 0);
         IceContact(actor, v2);
         _interactionClock.Now = _interactionClock.Now.AddSeconds(60);

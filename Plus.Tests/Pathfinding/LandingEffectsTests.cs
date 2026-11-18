@@ -325,6 +325,22 @@ public partial class PlacedFurniRoomTests
         Assert.Equal(ItemEffectType.None, actor.CurrentItemEffect);
     }
 
+    [Theory]
+    [InlineData(2)]
+    [InlineData(3)]
+    public void SteppingOffSkatesOrIceClearsTheEffectWithZero(byte mapValue)
+    {
+        var actor = LandingActor();
+        var service = new FloorEffectService(_room, _ => { });
+        _room.GetGameMap().EffectMap[2, 1] = mapValue;
+        service.Apply(actor, 2, 1);
+        _client.Packets.Clear();
+        service.Apply(actor, 1, 1);
+        Assert.Equal(0, Assert.IsType<Plus.HabboHotel.Users.Effects.EffectsComponent>(_client.GetHabbo().Effects).CurrentEffect);
+        var body = Assert.Single(_client.Packets, packet => packet.Header == Plus.Communication.Packets.Outgoing.ServerPacketHeader.AvatarEffectComposer).Body;
+        Assert.Equal(0, System.Buffers.Binary.BinaryPrimitives.ReadInt32BigEndian(body.AsSpan(4)));
+    }
+
     [Fact]
     public void FloorEffectBotSkipsEffectAndSwimProgress()
     {

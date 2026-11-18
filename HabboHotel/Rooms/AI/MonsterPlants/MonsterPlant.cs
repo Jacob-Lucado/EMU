@@ -24,7 +24,7 @@ public sealed class MonsterPlant(int petId, int rarity, DateTimeOffset growthSta
     public DateTimeOffset GrowthStartedAt { get; private set; } = growthStartedAt;
     public DateTimeOffset WellbeingUntil { get; private set; } = wellbeingUntil;
     public bool CanBreed { get; private set; } = canBreed;
-    public bool BreedingPermission { get; private set; } = breedingPermission;
+    public bool BreedingPermission { get; internal set; } = breedingPermission;
 
     /// <summary>A freshly planted seed.</summary>
     public static MonsterPlant Seeded(int petId, int rarity, DateTimeOffset plantedAt) =>

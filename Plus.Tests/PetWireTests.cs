@@ -32,7 +32,7 @@ public class PetWireTests
         var composer = new PetInventoryComposer(PetAppearanceSnapshots.Inventory(pets));
         composer.Compose(packet);
 
-        Assert.Equal(new object[] { 1, 0, 1, 42, "LifePet", 12, 2, "FFFFFF", 0, 2, 2, -1, 0, 3, -1, 0, 3, -1 }, packet.Writes);
+        Assert.Equal(new object[] { 1, 0, 1, 42, "LifePet", 12, 2, "FFFFFF", 0, 0, 3, -1 }, packet.Writes);
         pets.Clear();
         pet.Name = "Changed";
         pet.Race = "invalid";
@@ -43,15 +43,15 @@ public class PetWireTests
     }
 
     [Theory]
-    [InlineData(0, "-1", "12 2 FFFFFF 2 2 -1 0 3 -1 0")]
-    [InlineData(9, "-1", "12 2 FFFFFF 3 2 -1 0 3 -1 0 4 9 0")]
-    [InlineData(0, "1 3 302 4", "12 2 FFFFFF 1 3 302 4")]
+    [InlineData(0, "-1", "15 2 FFFFFF 2 2 -1 1 3 -1 1")]
+    [InlineData(9, "-1", "15 2 FFFFFF 3 2 -1 1 3 -1 1 4 9 0")]
+    [InlineData(0, "1 3 302 4", "15 2 FFFFFF 1 3 302 4")]
     public void RoomAndInventoryUseTheSameCompleteCustomParts(int saddle, string clothing, string expectedFigure)
     {
         var pet = (Pet)RuntimeHelpers.GetUninitializedObject(typeof(Pet));
         pet.PetId = 42;
         pet.Name = "LifePet";
-        pet.Type = 12;
+        pet.Type = 15;
         pet.Race = "2";
         pet.Color = "FFFFFF";
         pet.PetHair = -1;

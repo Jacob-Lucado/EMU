@@ -110,6 +110,22 @@ public sealed class DatabaseCollationTests
     }
 
     [SchemaMigrationDatabaseFact]
+    public async Task MigrationPreservesLiteralsWhenBackslashEscapesAreDisabled()
+    {
+        await InDatabase("CHARACTER SET latin1", (_, _, connection) =>
+        {
+            connection.Execute("""SET SESSION sql_mode = 'NO_BACKSLASH_ESCAPES'; CREATE TABLE paths (path VARCHAR(50) DEFAULT 'a\b' COMMENT 'c\d')""");
+
+            ApplyInSession(connection);
+
+            connection.Execute("INSERT INTO paths () VALUES ()");
+            Assert.Equal(@"a\b", connection.QuerySingle<string>("SELECT path FROM paths"));
+            Assert.Equal(@"c\d", connection.QuerySingle<string>(
+                "SELECT COLUMN_COMMENT FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'paths' AND COLUMN_NAME = 'path'"));
+        });
+    }
+
+    [SchemaMigrationDatabaseFact]
     public async Task RunningTheMigrationAgainChangesNothing()
     {
         await InDatabase("CHARACTER SET latin1", async (_, _, connection) =>
@@ -169,7 +185,11 @@ public sealed class DatabaseCollationTests
     {
         using var session = new MySqlConnection(connection.ConnectionString);
         session.Open();
+        ApplyInSession(session);
+    }
 
+    private static void ApplyInSession(MySqlConnection session)
+    {
         foreach (var statement in SqlScript.Split(File.ReadAllText(HabbiconPacketTests.Repo(MigrationFile)))) {
             session.Execute(statement);
         }

@@ -5,8 +5,9 @@
 -- MariaDB 11.5 and newer), and string joins and foreign keys between two collations fail.
 -- Only tables and columns that differ are changed, so a database that already has one collation is left alone.
 
--- Strict conversion stops on a value that cannot fit after conversion to UTF-8.
-SET SESSION sql_mode = CONCAT_WS(',', NULLIF(@@sql_mode, ''), 'STRICT_ALL_TABLES');
+-- Metadata literals use backslash escapes. Strict conversion rejects values that no longer fit.
+SET SESSION sql_mode = CONCAT_WS(',', NULLIF(TRIM(BOTH ',' FROM
+    REPLACE(CONCAT(',', @@sql_mode, ','), ',NO_BACKSLASH_ESCAPES,', ',')), ''), 'STRICT_ALL_TABLES');
 SET SESSION group_concat_max_len = 1048576;
 
 CREATE TEMPORARY TABLE `migration_162_columns` AS

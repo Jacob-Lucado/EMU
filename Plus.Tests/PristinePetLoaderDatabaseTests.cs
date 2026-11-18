@@ -29,6 +29,7 @@ public sealed class PristinePetLoaderDatabaseTests
     {
         PristineStagedDatabase.Run(["users", "bots", "bots_petdata"], (database, connection) =>
         {
+            connection.Execute(File.ReadAllText(HabbiconPacketTests.Repo("Database/Migrations/155_PetBreedingPermission.sql")));
             var loader = new PetLoader(database);
             Assert.Empty(loader.GetPetsForUser(7));
             connection.Execute("INSERT INTO users(id,username,auth_ticket) VALUES (7,'owner','ticket'); ALTER TABLE bots_petdata MODIFY createstamp INT NULL");
@@ -47,7 +48,6 @@ public sealed class PristinePetLoaderDatabaseTests
                 INSERT INTO bots_petdata (id) VALUES (11), (12), (13);
                 """);
             connection.Execute(File.ReadAllText(HabbiconPacketTests.Repo("Database/Migrations/20_UseUtcPetCreationTime.sql")));
-            connection.Execute(File.ReadAllText(HabbiconPacketTests.Repo("Database/Migrations/155_PetBreedingPermission.sql")));
             connection.Execute("UPDATE bots_petdata SET allow_breeding = 1 WHERE id = 10");
 
             var pets = loader.GetPetsForUser(7);

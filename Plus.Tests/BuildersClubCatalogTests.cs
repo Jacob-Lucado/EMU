@@ -50,7 +50,7 @@ public sealed class BuildersClubCatalogTests
 
             return null;
         });
-        var service = new CatalogBrowsingService(null!, null!, null!, TimeProvider.System, catalog, CatalogSnapshotTestSupport.Snapshots(), buildersClub);
+        var service = new CatalogBrowsingService(null!, null!, TimeProvider.System, catalog, CatalogSnapshotTestSupport.Snapshots(), buildersClub);
         var (client, sent) = HabbiconTestSupport.Client(EditorTestSupport.Player());
 
         service.ShowMode(client, "BUILDERS_CLUB");
@@ -79,7 +79,7 @@ public sealed class BuildersClubCatalogTests
                     throw new InvalidOperationException(method);
             }
         });
-        var service = new CatalogBrowsingService(null!, null!, null!, TimeProvider.System, catalog, new CatalogSnapshotService(catalog, TimeProvider.System));
+        var service = new CatalogBrowsingService(null!, null!, TimeProvider.System, catalog, new CatalogSnapshotService(catalog, TimeProvider.System));
         var (client, sent) = HabbiconTestSupport.Client(EditorTestSupport.Player());
 
         service.ShowPage(client, new(7, -1, "NORMAL"));

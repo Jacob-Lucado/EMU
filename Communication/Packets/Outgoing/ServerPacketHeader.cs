@@ -310,6 +310,7 @@ public static class ServerPacketHeader
     public const uint PetTrainingPanelComposer = 2476;
     public const uint PetAddedToInventoryComposer = 3793;
     public const uint PetRemovedFromInventoryComposer = 2622;
+    public const uint PetLevelNotificationComposer = 1774;
     public const uint FlatAccessDeniedComposer = 1964;
     public const uint LatencyPingResponseComposer = 3231;
     public const uint HabboUserBadgesComposer = 3377;

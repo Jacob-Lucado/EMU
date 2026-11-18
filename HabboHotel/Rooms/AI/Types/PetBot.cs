@@ -228,29 +228,35 @@ public class PetBot : BotAi
             return;
         }
 
-        if (pet.RidingHorse) {
-            ObeyRidden(botRoom, pet, petData, user, commandId);
+        if (petData.Type == HorseProducts.HorseType) {
+            var navigation = botRoom.GetGameMap().Navigation;
+            navigation.RunOwner(pet, (_, _) =>
+            {
+                if (!ReferenceEquals(botRoom.GetRoomUserManager().GetRoomUserByVirtualId(user.VirtualId), user)) {
+                    return;
+                }
+
+                if (pet.RidingHorse) {
+                    var rider = botRoom.GetRoomUserManager().GetRoomUserByVirtualId(pet.HorseId);
+
+                    if (commandId == PetCommandSet.Free || rider == null || !rider.RidingHorse || rider.HorseId != pet.VirtualId) {
+                        return;
+                    }
+
+                    navigation.Mounts.Ride(rider, pet, false, _locale);
+
+                    if (pet.RidingHorse) {
+                        return;
+                    }
+                }
+
+                Respond(botRoom, pet, petData, user, commandId);
+            });
 
             return;
         }
 
         Respond(botRoom, pet, petData, user, commandId);
-    }
-
-    // A ridden horse ignores Free. Any other command first puts the rider down, then the horse responds.
-    private void ObeyRidden(Room botRoom, RoomUser pet, Pet petData, RoomUser user, int commandId)
-    {
-        if (commandId == PetCommandSet.Free) {
-            return;
-        }
-
-        var navigation = botRoom.GetGameMap().Navigation;
-
-        if (botRoom.GetRoomUserManager().GetRoomUserByVirtualId(pet.HorseId) is { } rider) {
-            navigation.Mounts.Ride(rider, pet, false, _locale);
-        }
-
-        navigation.RunOwner(pet, (_, _) => Respond(botRoom, pet, petData, user, commandId));
     }
 
     private void Respond(Room botRoom, RoomUser pet, Pet petData, RoomUser user, int commandId)

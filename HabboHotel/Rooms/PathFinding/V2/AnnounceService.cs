@@ -118,6 +118,10 @@ internal sealed class AnnounceService(Room room, RoomNavigation navigation, Move
             state.PendingZ[state.PendingCount] = target.Z;
             state.Pending[state.PendingCount++] = landing.Support ?? surface;
             from = target;
+
+            if (profile.Rider && purpose == StepPurpose.Transit && (navigation.Grid.Flags[target.Slot] & MovementRules.JumpBar) != 0) {
+                break;
+            }
         }
 
         return from;
@@ -329,27 +333,42 @@ internal sealed class AnnounceService(Room room, RoomNavigation navigation, Move
     }
     private const int RideJumpExpression = 10;
 
-    // The step onto a horse jump's bar shows the horse jumping and the rider in the ride-jump expression; the next step ends both.
+    private readonly List<(RoomUser Rider, RoomUser Horse)> _jumps = [];
+
+    internal void EndJumps()
+    {
+        foreach (var (rider, horse) in _jumps) {
+            horse.RemoveStatus("jmp");
+            horse.UpdateNeeded = true;
+
+            if (ReferenceEquals(room.GetRoomUserManager().GetRoomUserByVirtualId(rider.VirtualId), rider)) {
+                room.SendPacket(new ActionComposer(rider.VirtualId, 0));
+            }
+        }
+
+        _jumps.Clear();
+    }
+
     private void AnnounceJump(RoomUser rider, RoomUser horse)
     {
         var state = rider.Movement;
         var grid = navigation.Grid;
-        var jumping = rider.HasStatus("mv") && state.PendingCount > 0
-            && grid.SlotOf(state.Pending[state.PendingCount - 1]) is >= 0 and var slot
-            && (grid.Flags[slot] & MovementRules.JumpBar) != 0;
 
-        if (jumping == horse.HasStatus("jmp")) {
+        var last = state.PendingCount - 1;
+
+        if (last < 0 || !rider.HasStatus("mv") || state.PendingPurpose[last] != StepPurpose.Transit) {
             return;
         }
 
-        if (jumping) {
-            horse.SetStatus("jmp", "");
-        }
-        else {
-            horse.RemoveStatus("jmp");
+        var slot = grid.SlotOf(state.Pending[last]);
+
+        if (slot < 0 || (grid.Flags[slot] & MovementRules.JumpBar) == 0) {
+            return;
         }
 
-        room.SendPacket(new ActionComposer(rider.VirtualId, jumping ? RideJumpExpression : 0));
+        horse.SetStatus("jmp");
+        _jumps.Add((rider, horse));
+        room.SendPacket(new ActionComposer(rider.VirtualId, RideJumpExpression));
     }
 
     public void SynchronizeHorse(RoomUser actor)

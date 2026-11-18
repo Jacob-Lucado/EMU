@@ -156,7 +156,7 @@ public sealed class MovementRules(NavGrid grid, PathfindingSettings settings, Ac
             return new(StepReason.NotStandable);
         }
 
-        if (FlagsAt(from) is var source && (source & JumpBar) != 0 && !AlongJump(source, from, to)) {
+        if (actor.Rider && purpose != StepPurpose.Roller && (FlagsAt(from) & JumpBar) is var source && source != 0 && !AlongJump(source, from, to)) {
             return new(StepReason.NotStandable);
         }
 
@@ -197,8 +197,21 @@ public sealed class MovementRules(NavGrid grid, PathfindingSettings settings, Ac
     private static bool AlongJump(NavFlags bar, in NavPosition from, in NavPosition to)
         => (bar & NavFlags.JumpAlongX) != 0 ? from.Y == to.Y : from.X == to.X;
 
-    private NavFlags FlagsAt(in NavPosition position) => position.Slot >= 0 ? grid.Flags[position.Slot]
-        : grid.InBounds(position.X, position.Y) ? grid.Flags[grid.Tile(position.X, position.Y)] : NavFlags.None;
+    private NavFlags FlagsAt(in NavPosition position)
+    {
+        if (position.Slot >= 0) {
+            return grid.Flags[position.Slot];
+        }
+
+        if (!grid.InBounds(position.X, position.Y)) {
+            return NavFlags.None;
+        }
+
+        var tile = grid.Tile(position.X, position.Y);
+        var slot = grid.Layered ? SurfaceSelection.Select(grid, tile, position.Z, ForceResolution.ExactZ) : tile;
+
+        return slot >= 0 ? grid.Flags[slot] : NavFlags.None;
+    }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private bool IsStandable(NavFlags flags, int slot, StepPurpose purpose, OccupancyView view)

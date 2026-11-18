@@ -222,7 +222,7 @@ public sealed class Trade
         items.Any(item => recipient.Inventory.Furniture.HasItem(item.Id));
 
     private static bool ShouldRedeem(Plus.HabboHotel.Users.Habbo recipient, InventoryItem item, bool autoRedeem) =>
-        autoRedeem && item.Definition.InteractionType == InteractionType.Exchange && !recipient.WalletClosed;
+        autoRedeem && item.Definition.RedeemableForCredits && !recipient.WalletClosed;
 
     private static int RedeemedCredits(Plus.HabboHotel.Users.Habbo recipient, IEnumerable<InventoryItem> items, bool autoRedeem) =>
         items.Where(item => ShouldRedeem(recipient, item, autoRedeem)).Sum(item => item.Definition.BehaviourData);
@@ -313,7 +313,7 @@ public sealed class Trade
     {
         var habbo = recipient.GetHabbo();
 
-        if (item.Definition.InteractionType == InteractionType.Exchange && autoRedeem) {
+        if (item.Definition.RedeemableForCredits && autoRedeem) {
             lock (habbo.WalletSync) {
                 if (!habbo.WalletClosed) {
                     habbo.Credits += item.Definition.BehaviourData;

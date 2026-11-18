@@ -75,6 +75,8 @@ public sealed class HorseProductsTests
     [InlineData(InteractionType.HorseHairDye, "14 2,3 50,50")]
     [InlineData(InteractionType.HorseBodyDye, "")]
     [InlineData(InteractionType.HorseHairstyle, "15 2,3")]
+    [InlineData(InteractionType.HorseHairDye, "15 2,3 invalid")]
+    [InlineData(InteractionType.HorseSaddle1, "15 4 2147483648 0 77")]
     [InlineData(InteractionType.None, "15 2,3 50,50")]
     public void ProductForAnotherPetOrWithoutParamsDoesNothing(InteractionType product, string customParams)
     {

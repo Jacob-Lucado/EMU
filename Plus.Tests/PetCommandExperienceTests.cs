@@ -20,6 +20,7 @@ public partial class PlacedFurniRoomTests
         var pet = CommandPet(type, 17_600, 300);
 
         Command(PetUser(pet), owner, command);
+        DrainPetCommands();
 
         Assert.Equal(17_600 + experience, pet.Experience);
     }

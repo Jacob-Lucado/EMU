@@ -62,6 +62,7 @@ public partial class PlacedFurniRoomTests
         _client.Packets.Clear();
 
         Command(petUser, owner, PetCommandSet.Eat);
+        DrainPetCommands();
 
         Assert.Equal((3, 3), WalkTarget(petUser));
         Assert.Equal((17_600, 420), (pet.Experience, pet.Energy));
@@ -191,6 +192,7 @@ public partial class PlacedFurniRoomTests
         PlaceFood(70, "petfood26", "375,15,0 15,26,35", 3, 3);
 
         Command(petUser, owner, PetCommandSet.Eat);
+        DrainPetCommands();
 
         Assert.NotEqual((3, 3), WalkTarget(petUser));
         Assert.Equal(17_600, pet.Experience);

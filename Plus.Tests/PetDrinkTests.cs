@@ -88,6 +88,7 @@ public partial class PlacedFurniRoomTests
         Water(80, "waterbowl*1", "5", 3, 3, true);
 
         Command(petUser, owner, PetCommandSet.Drink);
+        DrainPetCommands();
 
         Assert.Equal((3, 3), WalkTarget(petUser));
     }
@@ -101,6 +102,7 @@ public partial class PlacedFurniRoomTests
         var trough = Water(81, "horse_trough", "5", 3, 3, false);
 
         Command(petUser, owner, PetCommandSet.Drink);
+        DrainPetCommands();
 
         var target = Assert.NotNull(WalkTarget(petUser));
         Assert.NotEqual((3, 3), target);
@@ -115,6 +117,7 @@ public partial class PlacedFurniRoomTests
         var petUser = PetUser(pet);
 
         Command(petUser, owner, PetCommandSet.Drink);
+        DrainPetCommands();
 
         Assert.Null(WalkTarget(petUser));
         Assert.Equal(17_600, pet.Experience);

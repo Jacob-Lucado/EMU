@@ -58,6 +58,7 @@ public partial class PlacedFurniRoomTests
         var petUser = PetUser(pet);
 
         Command(petUser, owner, command);
+        DrainPetCommands();
 
         Assert.Equal((17_605, 295), (pet.Experience, pet.Energy));
         Assert.Contains(posture, petUser.Statusses.Keys);
@@ -70,6 +71,7 @@ public partial class PlacedFurniRoomTests
         var pet = CommandPet(15, 17_600, 300);
 
         Command(PetUser(pet), owner, 0);
+        DrainPetCommands();
 
         Assert.Equal(17_600, pet.Experience);
     }
@@ -83,6 +85,7 @@ public partial class PlacedFurniRoomTests
         _client.Packets.Clear();
 
         Command(petUser, owner, 2);
+        DrainPetCommands();
 
         Assert.Equal("puz", petUser.Statusses.GetValueOrDefault("gst"));
         Assert.Equal((0, 120), (pet.Experience, pet.Energy));
@@ -98,6 +101,7 @@ public partial class PlacedFurniRoomTests
         _client.Packets.Clear();
 
         Command(petUser, owner, 1);
+        DrainPetCommands();
 
         Assert.Empty(petUser.Statusses);
         Assert.Equal((17_600, 300), (pet.Experience, pet.Energy));
@@ -113,6 +117,7 @@ public partial class PlacedFurniRoomTests
         _client.Packets.Clear();
 
         Command(petUser, owner, -1);
+        DrainPetCommands();
 
         Assert.Equal((17_600, 300), (pet.Experience, pet.Energy));
         Assert.Empty(_client.Packets);
@@ -142,7 +147,6 @@ public partial class PlacedFurniRoomTests
         var ai = new PetBot(petUser.VirtualId, new RecordingLocale(), new RecordingCommands(command));
         ai.Init(50, petUser.VirtualId, RoomId, petUser, _room);
         ai.OnUserSay(owner, "horse do it");
-        DrainPetCommands();
     }
 
     private void DrainPetCommands() => _room.RunFastPass(_room.GetGameMap().Navigation.DrainCommands);

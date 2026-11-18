@@ -132,8 +132,10 @@ public class Pet
     public string CustomParts => !string.IsNullOrEmpty(GnomeClothing) && GnomeClothing != "-1"
         ? GnomeClothing
         : Saddle > 0
-            ? $"3 2 {PetHair} {HairDye} 3 {PetHair} {HairDye} 4 {Saddle} 0"
-            : $"2 2 {PetHair} {HairDye} 3 {PetHair} {HairDye}";
+            ? $"3 2 {PetHair} {HairPalette} 3 {PetHair} {HairPalette} 4 {Saddle} 0"
+            : $"2 2 {PetHair} {HairPalette} 3 {PetHair} {HairPalette}";
+
+    private int HairPalette => Type == HorseProducts.HorseType ? HorseProducts.HairPalette(HairDye) : HairDye;
 
     public string Look => $"{Type} {Race} {Color} {CustomParts}";
 

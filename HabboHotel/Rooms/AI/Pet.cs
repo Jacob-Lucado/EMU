@@ -3,6 +3,7 @@ using Plus.Communication.Packets.Outgoing.Pets;
 using Plus.Communication.Packets.Outgoing.Rooms.AI.Pets;
 using Plus.Communication.Packets.Outgoing.Rooms.Chat;
 using Plus.HabboHotel.Quests;
+using Plus.HabboHotel.Rooms.AI.MonsterPlants;
 using Plus.HabboHotel.GameClients;
 using Plus.Utilities;
 
@@ -29,6 +30,9 @@ public class Pet
     public int Nutrition;
     public int OwnerId;
     public int PetHair;
+
+    /// <summary>The plant state of a monster plant (pet type 16); null for every other pet.</summary>
+    public MonsterPlant? Plant;
     public int PetId;
     public bool PlacedInRoom;
     public string Race;
@@ -130,11 +134,13 @@ public class Pet
     /// <summary>A pet's figure parts: its clothing, a horse's hair and saddle, or none, as Habbo sends them.</summary>
     public string CustomParts => !string.IsNullOrEmpty(GnomeClothing) && GnomeClothing != "-1"
         ? GnomeClothing
-        : Type != HorseType
+        : Type != HorseProducts.HorseType
             ? ""
             : Saddle > 0
-                ? $"3 2 {PetHair} {HairDye} 3 {PetHair} {HairDye} 4 {Saddle} 0"
-                : $"2 2 {PetHair} {HairDye} 3 {PetHair} {HairDye}";
+                ? $"3 2 {PetHair} {HairPalette} 3 {PetHair} {HairPalette} 4 {Saddle} 0"
+                : $"2 2 {PetHair} {HairPalette} 3 {PetHair} {HairPalette}";
+
+    private int HairPalette => HorseProducts.HairPalette(HairDye);
 
     public string Look => CustomParts.Length == 0 ? $"{Type} {Race} {Color}" : $"{Type} {Race} {Color} {CustomParts}";
 

@@ -13,10 +13,14 @@ public sealed class WiredWakeClock : IDisposable
     private readonly object _gate = new();
     private readonly PriorityQueue<Action, double> _queue = new();
     private readonly Thread _thread;
+    private readonly TimeProvider _time;
     private bool _stopped;
 
-    public WiredWakeClock()
+    public WiredWakeClock() : this(TimeProvider.System) { }
+
+    internal WiredWakeClock(TimeProvider time)
     {
+        _time = time;
         _thread = new(Run) { IsBackground = true, Name = "Wired wake clock", Priority = ThreadPriority.AboveNormal };
         _thread.Start();
     }
@@ -25,7 +29,9 @@ public sealed class WiredWakeClock : IDisposable
 
     public static double Now => Stopwatch.GetElapsedTime(0).TotalMilliseconds;
 
-    public void After(double delayMs, Action wake) => At(Now + delayMs, wake);
+    private double Elapsed => _time.GetElapsedTime(0).TotalMilliseconds;
+
+    public void After(double delayMs, Action wake) => At(Elapsed + delayMs, wake);
 
     public void At(double dueMs, Action wake)
     {
@@ -58,7 +64,7 @@ public sealed class WiredWakeClock : IDisposable
                     continue;
                 }
 
-                var left = dueMs - Now;
+                var left = dueMs - Elapsed;
 
                 if (left > YieldWindowMs) {
                     Monitor.Wait(_gate, TimeSpan.FromMilliseconds(left - YieldWindowMs));

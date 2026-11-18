@@ -143,9 +143,9 @@ public class PetWireTests
         var composer = new PetHorseFigureInformationComposer(PetAppearanceSnapshots.Horse(user));
         var packet = new RecordingPacket();
         composer.Compose(packet);
-        var expected = new List<object> { 4, 42, 12, 2, "abcdef" };
-        expected.AddRange(saddle > 0 ? new object[] { 4, 3, 3, 7, 8, 2, 7, 8, 4, 9, 0 }
-            : new object[] { 1, 2, 2, 7, 8, 3, 7, 8 });
+        var expected = new List<object> { 4, 42, 12, 2, "abcdef", 1 };
+        expected.AddRange(saddle > 0 ? new object[] { 3, 2, 7, 8, 3, 7, 8, 4, 9, 0 }
+            : new object[] { 2, 2, 7, 8, 3, 7, 8 });
         expected.AddRange(new object[] { saddle > 0, true });
         Assert.Equal(expected, packet.Writes);
         pet.Race = "invalid";
@@ -155,6 +155,33 @@ public class PetWireTests
         var repeated = new RecordingPacket();
         composer.Compose(repeated);
         Assert.Equal(packet.Writes, repeated.Writes);
+    }
+
+    [Theory]
+    [InlineData("2", 0, 1, "15 2 ffffff 2 2 -1 1 3 -1 1")]
+    [InlineData("7", 55, 2, "15 7 ffffff 2 2 -1 55 3 -1 55")]
+    [InlineData("89", 0, 4, "15 89 ffffff 2 2 -1 1 3 -1 1")]
+    [InlineData("1", 0, 0, "15 1 ffffff 2 2 -1 1 3 -1 1")]
+    public void HorseLookSendsTheBreedAndDefaultHairColour(string palette, int hairDye, int breed, string look)
+    {
+        var pet = (Pet)RuntimeHelpers.GetUninitializedObject(typeof(Pet));
+        pet.VirtualId = 4;
+        pet.PetId = 42;
+        pet.Type = 15;
+        pet.Race = palette;
+        pet.Color = "ffffff";
+        pet.GnomeClothing = "";
+        pet.PetHair = -1;
+        pet.HairDye = hairDye;
+        var user = (RoomUser)RuntimeHelpers.GetUninitializedObject(typeof(RoomUser));
+        user.PetData = pet;
+        var packet = new RecordingPacket();
+
+        new PetHorseFigureInformationComposer(PetAppearanceSnapshots.Horse(user)).Compose(packet);
+
+        var hair = hairDye > 0 ? hairDye : 1;
+        Assert.Equal(new object[] { 4, 42, 15, int.Parse(palette), "ffffff", breed, 2, 2, -1, hair, 3, -1, hair, false, false }, packet.Writes);
+        Assert.Equal(look, pet.Look);
     }
 
     private sealed class RecordingPacket : IOutgoingPacket

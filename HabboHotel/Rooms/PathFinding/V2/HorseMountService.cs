@@ -8,7 +8,7 @@ namespace Plus.HabboHotel.Rooms.PathFinding;
 
 internal sealed class HorseMountService(Room room, RoomNavigation navigation, MovementContext context)
 {
-    private sealed record PendingMount(RoomUser Horse, long HorseLifetime, long RiderLifetime, int GoalX, int GoalY, IPetLocale Locale)
+    private sealed record PendingMount(RoomUser Horse, long HorseLifetime, long RiderLifetime, int GoalX, int GoalY, IPetLocale Locale, int Effect)
     {
         public int Waited { get; set; }
     }
@@ -18,7 +18,7 @@ internal sealed class HorseMountService(Room room, RoomNavigation navigation, Mo
     // Riders who asked to mount from a distance and are walking up to the horse.
     private readonly Dictionary<RoomUser, PendingMount> _pending = new();
 
-    internal void Ride(RoomUser rider, RoomUser horse, bool mount, IPetLocale locale)
+    internal void Ride(RoomUser rider, RoomUser horse, bool mount, IPetLocale locale, int effect = HorseProducts.DefaultRidingEffect)
     {
         var lifetime = horse.Movement.LifetimeId;
         var sequence = horse.Movement.Commands.Read()?.Sequence ?? 0;
@@ -31,13 +31,13 @@ internal sealed class HorseMountService(Room room, RoomNavigation navigation, Mo
             _pending.Remove(actor);
 
             if (mount && !actor.RidingHorse && !horse.RidingHorse && !NextTo(actor, horse)) {
-                WalkUp(actor, horse, lifetime, locale);
+                WalkUp(actor, horse, lifetime, locale, effect);
 
                 return;
             }
 
             if (mount) {
-                TryMount(actor, horse, discardThrough, sequence, locale);
+                TryMount(actor, horse, discardThrough, sequence, locale, effect);
             }
             else {
                 TryDismount(actor, horse, discardThrough, sequence);
@@ -91,12 +91,12 @@ internal sealed class HorseMountService(Room room, RoomNavigation navigation, Mo
             _pending.Remove(rider);
 
             if (!gone && arrived && NextTo(rider, pending.Horse)) {
-                Ride(rider, pending.Horse, true, pending.Locale);
+                Ride(rider, pending.Horse, true, pending.Locale, pending.Effect);
             }
         }
     }
 
-    private void WalkUp(RoomUser rider, RoomUser horse, long horseLifetime, IPetLocale locale)
+    private void WalkUp(RoomUser rider, RoomUser horse, long horseLifetime, IPetLocale locale, int effect)
     {
         var map = room.GetGameMap();
         var target = Neighbours(horse)
@@ -110,7 +110,7 @@ internal sealed class HorseMountService(Room room, RoomNavigation navigation, Mo
         }
 
         rider.MoveTo(tile.X, tile.Y);
-        _pending[rider] = new(horse, horseLifetime, rider.Movement.LifetimeId, tile.X, tile.Y, locale);
+        _pending[rider] = new(horse, horseLifetime, rider.Movement.LifetimeId, tile.X, tile.Y, locale, effect);
     }
 
     private static IEnumerable<(int X, int Y)> Neighbours(RoomUser horse)
@@ -131,7 +131,7 @@ internal sealed class HorseMountService(Room room, RoomNavigation navigation, Mo
         && horse.Movement.State == NavState.Active
         && ReferenceEquals(room.GetRoomUserManager().GetRoomUserByVirtualId(horse.VirtualId), horse);
 
-    private void TryMount(RoomUser rider, RoomUser horse, long riderSequence, long horseSequence, IPetLocale locale)
+    private void TryMount(RoomUser rider, RoomUser horse, long riderSequence, long horseSequence, IPetLocale locale, int effect)
     {
         if (horse.RidingHorse) {
             var speech = locale.GetValue("pet.alreadymounted");
@@ -141,11 +141,11 @@ internal sealed class HorseMountService(Room room, RoomNavigation navigation, Mo
             rider.GetClient()?.SendNotification("You are already riding a horse!");
         }
         else {
-            Mount(rider, horse, riderSequence, horseSequence);
+            Mount(rider, horse, riderSequence, horseSequence, effect);
         }
     }
 
-    private void Mount(RoomUser rider, RoomUser horse, long riderSequence, long horseSequence)
+    private void Mount(RoomUser rider, RoomUser horse, long riderSequence, long horseSequence, int effect)
     {
         var origin = (horse.X, horse.Y, horse.Z);
         var riderOrigin = (rider.X, rider.Y, rider.Z);
@@ -158,7 +158,8 @@ internal sealed class HorseMountService(Room room, RoomNavigation navigation, Mo
         navigation.ForcePlaceThrough(rider, horse.X, horse.Y, supportZ, ForceResolution.Highest, riderSequence);
         rider.RotHead = horse.RotHead;
         rider.RotBody = horse.RotBody;
-        rider.ApplyEffect(77);
+        rider.RidingEffect = effect;
+        rider.ApplyEffect(effect);
         rider.UpdateNeeded = horse.UpdateNeeded = true;
         room.SendPacket(new SlideObjectBundleComposer(origin.X, origin.Y, origin.Z,
             horse.X, horse.Y, horse.Z, 0, horse.VirtualId, 0));

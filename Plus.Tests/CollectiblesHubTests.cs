@@ -767,13 +767,10 @@ public sealed class CollectiblesHubTests
 
     // 111 needs the tables and columns that 113 removes, so it runs again on a hotel before 113.
     [RoomComponentDatabaseFact]
-    public async Task RunningTheContentMigrationAgainKeepsStaffEditsAndAddsNothing()
+    public async Task RunningTheContentMigrationAgainKeepsStaffPricesAndRestoresMissingDefaults()
     {
         await BeforeEmeraldsOnly(async db =>
         {
-            db.Execute("UPDATE collectible_shop_offers SET emerald_price = 1 WHERE product_code = 'nft_h26_witchchair'");
-            db.Execute("DELETE FROM collectible_mintable_items WHERE sprite_id = 19169");
-
             const string counts = """
                 SELECT (SELECT COUNT(*) FROM collectible_collections), (SELECT COUNT(*) FROM collectible_products),
                     (SELECT COUNT(*) FROM collectible_shop_offers), (SELECT COUNT(*) FROM collectible_mint_token_offers),
@@ -781,9 +778,13 @@ public sealed class CollectiblesHubTests
                 """;
             var before = db.QuerySingle<(int, int, int, int, int, int)>(counts);
 
+            db.Execute("UPDATE collectible_shop_offers SET emerald_price = 1 WHERE product_code = 'nft_h26_witchchair'");
+            db.Execute("DELETE FROM collectible_mintable_items WHERE sprite_id = 19169");
+
             await Apply(db, "Database/Migrations/111_CollectiblesHubContent.sql");
 
             Assert.Equal(before, db.QuerySingle<(int, int, int, int, int, int)>(counts));
+            Assert.Equal(1, db.QuerySingle<int>("SELECT COUNT(*) FROM collectible_mintable_items WHERE sprite_id = 19169"));
             Assert.Equal(1, db.QuerySingle<int>("SELECT emerald_price FROM collectible_shop_offers WHERE product_code = 'nft_h26_witchchair'"));
         });
     }

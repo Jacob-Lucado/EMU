@@ -143,6 +143,28 @@ public partial class ModernWiredRuntimeTests
         return Placed(f, item, x, y);
     }
 
+    [Theory]
+    [InlineData(1, true)]
+    [InlineData(0, false)]
+    public void ProgressRewardTrackScoresTheNamedTaskOfTheNamedTrack(int addFlag, bool addToExisting)
+    {
+        using var f = new TeleportFixture();
+        Assert.True(f.Engine.Remove(100));
+        // [add to existing score, value or variable option, literal score, variable target]; the text is track id, tab, task id.
+        OctoberBox<WiredModernAction>(f, 110, "wf_act_progress_reward_track", 0, 0, native => native with
+        {
+            OwnedIntParams = [addFlag, 0, 40, 0],
+            Text = "habboween2026\tfind_frogs"
+        });
+
+        f.Fire(land: false);
+
+        var call = Assert.Single(f.HandRewards.WiredCalls);
+        Assert.Same(f.Client, call.Session);
+        Assert.Equal(("habboween2026", "find_frogs", 40, addToExisting), (call.TrackId, call.TaskId, call.Score, call.AddToExisting));
+        Assert.Empty(f.HandRewards.Calls);
+    }
+
     private static T OctoberBox<T>(TeleportFixture f, uint id, string name, int x, int y,
         Func<WiredNativeEditorConfiguration, WiredNativeEditorConfiguration> edit) where T : class, IWiredConfiguredItem
     {

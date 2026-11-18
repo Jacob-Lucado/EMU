@@ -215,6 +215,7 @@ CREATE TABLE `bots_petdata` (
   `hairdye` int(11) DEFAULT 1,
   `pethair` int(11) DEFAULT -1,
   `anyone_ride` int(11) DEFAULT 0,
+  `allow_breeding` tinyint(1) NOT NULL DEFAULT 0,
   `gnome_clothing` varchar(85) DEFAULT '-1',
   PRIMARY KEY (`id`),
   CONSTRAINT `fk_bots_petdata_id` FOREIGN KEY (`id`) REFERENCES `bots` (`id`) ON DELETE CASCADE

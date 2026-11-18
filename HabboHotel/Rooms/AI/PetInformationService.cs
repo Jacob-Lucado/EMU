@@ -7,7 +7,7 @@ namespace Plus.HabboHotel.Rooms.AI;
 
 public sealed record PetInformationSnapshot(int Id, string Name, int Level, int MaxLevel, int Experience,
     int ExperienceGoal, int Energy, int MaxEnergy, int Nutrition, int MaxNutrition, int Respect, int OwnerId,
-    int AgeInDays, string OwnerName, bool HasSaddle, int AnyoneCanRide, IReadOnlyList<int> SkillThresholds, PetPlantInformation? Plant = null);
+    int AgeInDays, string OwnerName, bool HasSaddle, int AnyoneCanRide, IReadOnlyList<int> SkillThresholds, bool HasBreedingPermission = false, PetPlantInformation? Plant = null);
 
 /// <summary>The monster plant fields of the pet information window.</summary>
 public sealed record PetPlantInformation(int BreedId, bool CanBreed, bool CanRevive, int Rarity, int MaxWellbeingSeconds,
@@ -89,14 +89,14 @@ public sealed class PetInformationService(TimeProvider clock) : IPetInformationS
             return new(pet.PetId, pet.Name, plant.Level(now), MonsterPlant.AdultLevel, plant.Experience(now),
                 plant.ExperienceGoal(now), plant.Energy(now), MonsterPlant.BarMaximum, 100, 100, pet.Respect, pet.OwnerId,
                 days, pet.OwnerName, false, pet.AnyoneCanRide, [],
-                new(int.TryParse(pet.Race, out var breed) ? breed : 0, plant.CanBreedNow(now), plant.IsDead(now), plant.Rarity,
+                Plant: new(int.TryParse(pet.Race, out var breed) ? breed : 0, plant.CanBreedNow(now), plant.IsDead(now), plant.Rarity,
                     (int)plant.MaxWellbeing(now).TotalSeconds, (int)Math.Ceiling(plant.RemainingWellbeing(now).TotalSeconds),
                     (int)Math.Ceiling(plant.RemainingGrowth(now).TotalSeconds), plant.BreedingPermission));
         }
 
         return new(pet.PetId, pet.Name, pet.Level, Pet.MaxLevel, pet.Experience, pet.ExperienceGoal,
             pet.Energy, pet.MaxEnergy, pet.Nutrition, Pet.MaxNutrition, pet.Respect, pet.OwnerId,
-            days, pet.OwnerName, pet.Saddle > 0, pet.AnyoneCanRide, pet.Type == HorseType ? HorseJumpSkillLevels : []);
+            days, pet.OwnerName, pet.Saddle > 0, pet.AnyoneCanRide, pet.Type == HorseType ? HorseJumpSkillLevels : [], pet.AllowBreeding);
     }
 
     internal static PetInformationSnapshot Capture(Habbo habbo, DateTimeOffset now)

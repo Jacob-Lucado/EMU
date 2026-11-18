@@ -57,7 +57,7 @@ public sealed class UsersComposer : IServerPacket
                 packet.WriteBoolean(user.Plant?.CanBreed ?? false);
                 packet.WriteBoolean(false);
                 packet.WriteBoolean(user.Plant?.CanRevive ?? false);
-                packet.WriteBoolean(user.Plant?.BreedingPermission ?? false);
+                packet.WriteBoolean(user.Plant?.BreedingPermission ?? user.HasBreedingPermission);
                 packet.WriteInteger(user.PetLevel);
                 packet.WriteString(user.Plant?.Posture ?? "");
             }

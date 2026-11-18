@@ -582,6 +582,7 @@ public class HabbiconDatabaseTests
         var voucher = new Plus.HabboHotel.Users.Inventory.Furniture.InventoryItem
         {
             Id = 910005,
+            OwnerId = 910002,
             Definition = new Plus.HabboHotel.Items.ItemDefinition
             {
                 InteractionType = Plus.HabboHotel.Items.InteractionType.Exchange,
@@ -590,16 +591,18 @@ public class HabbiconDatabaseTests
             }
         };
         var store = (Plus.HabboHotel.Rooms.ITradeStore)new Plus.HabboHotel.Rooms.RoomTradingComponent(_database, _clock, TestRoomSettings.Empty);
-        // Live wallet redeems exactly once and consumes the voucher.
+        habbo.Credits = 90;
         Plus.HabboHotel.Rooms.Trading.Trade.ReceiveTradedItem(client, voucher, true, store);
-        Assert.Equal(110, habbo.Credits);
+        Assert.Equal(100, habbo.Credits);
+        Assert.Equal(100, Scalar("SELECT credits FROM users WHERE id = 910001"));
         Assert.Equal(0, Scalar("SELECT COUNT(*) FROM items WHERE id = 910005"));
         Assert.Empty(habbo.Inventory.Furniture.AllItems);
         sent.Clear();
         SaveWallet(habbo);
+        Assert.Equal(100, Scalar("SELECT credits FROM users WHERE id = 910001"));
         voucher.Id = 910006;
         Plus.HabboHotel.Rooms.Trading.Trade.ReceiveTradedItem(client, voucher, true, store);
-        Assert.Equal(110, habbo.Credits);
+        Assert.Equal(100, habbo.Credits);
         Assert.Same(voucher, habbo.Inventory.Furniture.GetItem(910006));
         Assert.Equal(UserId, Scalar("SELECT user_id FROM items WHERE id = 910006"));
         Assert.DoesNotContain(sent, packet => packet.Header == Plus.Communication.Packets.Outgoing.ServerPacketHeader.CreditBalanceComposer);

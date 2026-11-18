@@ -84,6 +84,16 @@ public sealed class ActorTickService(Room room)
     }
     public void AfterMovement(RoomUser actor)
     {
+        if (actor.PendingVendingEffect > 0 && actor.SetStep) {
+            var effect = actor.PendingVendingEffect;
+            actor.PendingVendingEffect = 0;
+
+            if (actor.CurrentEffect != effect) {
+                actor.ApplyEffect(effect);
+                actor.RoomEffect = effect;
+            }
+        }
+
         if (actor.RidingHorse && !actor.IsBot && actor.GetClient()?.GetHabbo()?.Effects is { } effects && effects.CurrentEffect != actor.RidingEffect) {
             actor.ApplyEffect(actor.RidingEffect);
         }

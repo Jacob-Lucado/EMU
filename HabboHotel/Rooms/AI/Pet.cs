@@ -210,6 +210,16 @@ public class Pet
         SpendEnergy(5);
     }
 
+    /// <summary>Food can push the energy above the maximum.</summary>
+    public void Feed(int energy)
+    {
+        Energy += energy;
+
+        if (DbState != PetDatabaseUpdateState.NeedsInsert) {
+            DbState = PetDatabaseUpdateState.NeedsUpdate;
+        }
+    }
+
     public void SpendEnergy(int amount)
     {
         Energy = Math.Max(0, Energy - amount);

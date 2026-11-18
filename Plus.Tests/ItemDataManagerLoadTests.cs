@@ -94,6 +94,43 @@ public class ItemDataManagerLoadTests
     }
 
     [Fact]
+    public void APetPackageTakesItsPetAndFurniFromCustomParamsAndKeepsItsRevision()
+    {
+        var manager = new ItemDataManager(new RecordingLogger(), null!);
+        var table = CreateFurnitureTable(typeof(object));
+        table.Columns.Add("custom_params", typeof(object));
+        table.Columns.Add("revision", typeof(object));
+        table.Rows.Add("3", "18978", "newbie_cat_package", "Your first Habbo Cat", "s", "1", "1", "1", true, false, DBNull.Value, true, true, false, true, true,
+            "default", "0", "0", "1", "", "0", "0", false, false, "1 newbie_nest", 75424);
+        table.Rows.Add("4", "3897", "newbie_nest", "Nest", "s", "1", "1", "0.1", true, false, DBNull.Value, true, true, false, true, true,
+            "default", "0", "0", "1", "", "0", "0", false, false, DBNull.Value, DBNull.Value);
+
+        manager.Load(table);
+
+        Assert.Equal(new PetPackage(1, "newbie_nest"), manager.Items[3].PetPackage);
+        Assert.Equal(75424, manager.Items[3].Revision);
+        Assert.Null(manager.Items[4].PetPackage);
+        Assert.Equal(0, manager.Items[4].Revision);
+    }
+
+    [Theory]
+    [InlineData("1 newbie_nest", 1, "newbie_nest")]
+    [InlineData("2 waterbowl*2", 2, "waterbowl*2")]
+    [InlineData("11 nest_frog PET05", 11, "nest_frog")]
+    [InlineData(" 12  nest_dragon ", 12, "nest_dragon")]
+    public void PetPackagesAreReadFromHabboCustomParams(string customParams, int petType, string furniName) =>
+        Assert.Equal(new PetPackage(petType, furniName), ItemDataManager.ReadPetPackage(customParams));
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("3442, 3443")]
+    [InlineData("6608")]
+    [InlineData("-1 newbie_nest")]
+    [InlineData("cat newbie_nest")]
+    public void OtherCustomParamsHoldNoPetPackage(string? customParams) => Assert.Null(ItemDataManager.ReadPetPackage(customParams));
+
+    [Fact]
     public void ABadRowIsLoggedAndSkippedWithoutWaitingForTheConsole()
     {
         var logger = new RecordingLogger();

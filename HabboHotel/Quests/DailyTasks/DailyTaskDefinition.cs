@@ -19,11 +19,11 @@ public enum DailyTaskStatus : byte
 /// </summary>
 public sealed record DailyTaskReward(short ProductItemTypeId, string RewardTypeId, string ExtraParams, int Amount)
 {
-    public const short WallItem = 0;
-    public const short FloorItem = 1;
-    public const short Badge = 4;
-    public const short Currency = 8;
-    public const int Credits = -1;
+    public const short WallItem = ProductItemType.WallItem;
+    public const short FloorItem = ProductItemType.FloorItem;
+    public const short Badge = ProductItemType.Badge;
+    public const short Currency = ProductItemType.Currency;
+    public const int Credits = ProductItemType.Credits;
 }
 
 /// <summary>

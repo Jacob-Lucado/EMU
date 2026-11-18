@@ -24,6 +24,9 @@ public class ItemDefinition
     /// <summary>The furniture row's type letter: s, i, p, e, r or b. Purchase reads this; <see cref="Type"/> only distinguishes floor and wall.</summary>
     public string ProductType { get; set; } = "s";
     public FurniCategory Category { get; set; } = FurniCategory.Default;
+
+    /// <summary>Habbo's furnidata special type, such as 19 for a monster plant seed.</summary>
+    public int SpecialType { get; set; } = 1;
     public int Width { get; set; }
     public int Length { get; set; }
     public double Height { get; set; }
@@ -59,6 +62,8 @@ public class ItemDefinition
 
     /// <summary>The furnidata revision of the furni's asset. Newer furni have higher revisions.</summary>
     public int Revision { get; set; }
+    /// <summary>The Habbo furnidata customparams, as in "15 2,3 50,50" for a horse hair dye.</summary>
+    public string CustomParams { get; set; } = string.Empty;
 
     public int Modes { get; set; }
     public List<int> VendingIds { get; set; } = new();

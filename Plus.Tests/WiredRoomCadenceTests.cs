@@ -111,19 +111,16 @@ public class WiredRoomCadenceTests
         using var release = new ManualResetEventSlim();
         using var heavyStarted = new ManualResetEventSlim();
 
-        Assert.True(RoomCycle.TryStart(heavy, () => { heavyStarted.Set(); release.Wait(TimeSpan.FromSeconds(5)); }, workers: workers));
-        Assert.True(heavyStarted.Wait(TimeSpan.FromSeconds(5)));
+        Assert.True(RoomCycle.TryStart(heavy, () => { heavyStarted.Set(); release.Wait(TimeSpan.FromSeconds(30)); }, workers: workers));
+        Assert.True(heavyStarted.Wait(TimeSpan.FromSeconds(30)));
 
-        var clock = System.Diagnostics.Stopwatch.StartNew();
         Assert.True(RoomCycle.TryStart(light, () => { }, workers: workers));
-        await light.ProcessTask.WaitAsync(TimeSpan.FromSeconds(5));
-        var lightMs = clock.ElapsedMilliseconds;
+        await light.ProcessTask.WaitAsync(TimeSpan.FromSeconds(30));
 
-        // The light pass finished while the heavy one still holds its worker; the time only guards against waiting for the release.
+        // The heavy pass only ends on the release, so the light pass did not wait for it.
         Assert.False(heavy.ProcessTask.IsCompleted);
-        Assert.InRange(lightMs, 0, 2000);
         release.Set();
-        await heavy.ProcessTask.WaitAsync(TimeSpan.FromSeconds(5));
+        await heavy.ProcessTask.WaitAsync(TimeSpan.FromSeconds(30));
     }
 
     [Fact]

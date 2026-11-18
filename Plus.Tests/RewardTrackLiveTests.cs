@@ -515,21 +515,6 @@ public class RewardTrackLiveTests
         return table;
     }
 
-    private static DataTable Rows(string[] columns, params object[][] rows)
-    {
-        var table = new DataTable();
-
-        for (var i = 0; i < columns.Length; i++) {
-            table.Columns.Add(columns[i], rows[0][i].GetType());
-        }
-
-        foreach (var row in rows) {
-            table.Rows.Add(row);
-        }
-
-        return table;
-    }
-
     private sealed class FurniDefinitions(params ItemDefinition[] definitions) : IItemDataManager
     {
         public Dictionary<uint, ItemDefinition> Items { get; } = definitions.ToDictionary(definition => definition.Id);

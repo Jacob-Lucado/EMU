@@ -116,11 +116,15 @@ public sealed class RconConnectionTests
         using var connection = new RconConnection(sockets.Server, NullLogger<RconConnection>.Instance, commands, time);
 
         await sockets.Client.SendAsync(Encoding.UTF8.GetBytes("{\"command\":\"disconnect_user\",\"parameters\":[\"42\"]}\n"));
-        await commands.Entered.Task.WaitAsync(HangGuard);
-        time.Advance(TimeSpan.FromSeconds(2.2));
-        Assert.False(sockets.Client.Poll(0, SelectMode.SelectRead));
+        try {
+            await commands.Entered.Task.WaitAsync(HangGuard);
+            time.Advance(TimeSpan.FromSeconds(2.2));
+            Assert.False(sockets.Client.Poll(0, SelectMode.SelectRead));
+        }
+        finally {
+            commands.Release.TrySetResult();
+        }
 
-        commands.Release.SetResult();
         Assert.Equal(0, (await ReadResponse(sockets.Client)).GetProperty("status").GetInt32());
     }
 

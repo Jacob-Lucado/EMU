@@ -21,6 +21,9 @@ public class ItemDefinition
     /// <summary>The furniture row's type letter: s, i, p, e, r or b. Purchase reads this; <see cref="Type"/> only distinguishes floor and wall.</summary>
     public string ProductType { get; set; } = "s";
     public FurniCategory Category { get; set; } = FurniCategory.Default;
+
+    /// <summary>Habbo's furnidata special type, such as 19 for a monster plant seed.</summary>
+    public int SpecialType { get; set; } = 1;
     public int Width { get; set; }
     public int Length { get; set; }
     public double Height { get; set; }

@@ -33,7 +33,7 @@ public partial class PlacedFurniRoomTests
         Assert.False(blue.Freezed);
         Assert.Equal(Team.Blue, blue.Team);
         Assert.Contains(blue, _room.GetTeamManagerForFreeze().BlueTeam);
-        Assert.Equal(30, _room.GetGameManager().Points[(int)Team.Blue]);
+        Assert.Equal(40, _room.GetGameManager().Points[(int)Team.Blue]);
         Assert.Equal(1, ends());
     }
 
@@ -58,7 +58,7 @@ public partial class PlacedFurniRoomTests
         Assert.False(blue.Freezed);
         Assert.Equal(Team.Blue, blue.Team);
         Assert.Contains(blue, _room.GetTeamManagerForFreeze().BlueTeam);
-        Assert.Equal(30, _room.GetGameManager().Points[(int)Team.Blue]);
+        Assert.Equal(40, _room.GetGameManager().Points[(int)Team.Blue]);
         Assert.Equal(1, ends());
     }
 

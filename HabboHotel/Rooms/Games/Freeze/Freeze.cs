@@ -230,7 +230,7 @@ public class Freeze
             user.FreezeLives = 3;
             user.ShieldActive = false;
             user.ShieldCounter = 11;
-            _room.GetGameManager().AddPointToTeam(user.Team, 30);
+            _room.GetGameManager().AddPointToTeam(user.Team, 40);
             user.GetClient().Send(new GamePlayerValueComposer(user.VirtualId, user.FreezeLives));
         }
     }

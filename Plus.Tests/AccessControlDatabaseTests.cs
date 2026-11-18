@@ -182,10 +182,13 @@ public sealed partial class AccessControlDatabaseTests : IDisposable
     [AccessControlDatabaseFact]
     public void MutationChecksStoredActorGrantsAndCannotUseAStaleInMemoryPrivilege()
     {
+        using var connection = _database.Connection();
+        connection.Execute("UPDATE roles SET weight = 300 WHERE id = @PeerRole", new { PeerRole });
+        _access.Reload();
+        _sent.Clear();
         Assert.False(_access.AssignRole(_actor, Actor, LimitedRole));
         Assert.False(_access.AssignRole(_actor, Peer, LimitedRole));
         Assert.False(_access.AssignRole(_actor, Target, PeerRole));
-        using var connection = _database.Connection();
         connection.Execute("INSERT INTO user_permissions (user_id, permission_key, effect) VALUES (@Actor, 'camera.use', 'deny')", new { Actor });
         Assert.True(_actor.Access.Can(PermissionKeys.CameraUse)); // deliberately stale session
         Assert.False(_access.AssignRole(_actor, Target, LimitedRole));

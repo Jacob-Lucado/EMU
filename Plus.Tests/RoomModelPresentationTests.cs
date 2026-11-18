@@ -106,6 +106,7 @@ public sealed class RoomModelPresentationTests
     private static void AssertEntry(WiredChestDatabaseTests.Fixture fixture, RoomModel model, bool halfScale, int x, int y, float z)
     {
         var world = new WiredChestProtocolTests.World(fixture.Database);
+        TestRoomUserSnapshots.Install(world.Room);
         Set(world.Room, "_gamemap", new Gamemap(world.Room, model, TestLogging.Navigation, TestRoomSettings.Empty, TestGroupManager.Empty, TestNavigationDatabase.Instance, TestNavigationRewards.Instance));
         world.Room.GetGameMap().GenerateMaps();
         ((ConcurrentDictionary<int, RoomUser>)Get(world.Room.GetRoomUserManager(), "_users")).Clear();

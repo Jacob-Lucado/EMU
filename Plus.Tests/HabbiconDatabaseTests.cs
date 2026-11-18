@@ -180,7 +180,7 @@ public class HabbiconDatabaseTests
     public void StarterUnavailableFreeClaimAndOwnershipSurviveNewServiceInstance()
     {
         var snapshot = _service.Load(UserId);
-        Assert.Equal(44, snapshot.Items.Count);
+        Assert.Equal(55, snapshot.Items.Count);
         Assert.Equal(new[] { 28 }, snapshot.Items.Values.Where(item => item.Owned).Select(item => item.Id));
         Assert.False(_service.Use(UserId, 61));
         Assert.False(_service.Use(UserId, int.MaxValue));

@@ -102,6 +102,8 @@ public class ItemDataManager : IItemDataManager, IStartable
                         Directions = FurnitureDirections.For(Convert.ToString(row["item_name"])),
                         DefaultDirection = row.Table.Columns.Contains("default_dir") && row["default_dir"] is not DBNull ? Convert.ToInt32(row["default_dir"], CultureInfo.InvariantCulture) : 0,
                         FigureSetIds = ReadFigureSetIds(row.Table.Columns.Contains("custom_params") ? row["custom_params"] : null),
+                        PetPackage = ReadPetPackage(row.Table.Columns.Contains("custom_params") ? row["custom_params"] : null),
+                        Revision = row.Table.Columns.Contains("revision") && row["revision"] is not DBNull ? Convert.ToInt32(row["revision"], CultureInfo.InvariantCulture) : 0,
                         SpecialType = row.Table.Columns.Contains("special_type") && row["special_type"] is not DBNull ? Convert.ToInt32(row["special_type"], CultureInfo.InvariantCulture) : 1,
                     };
 
@@ -180,6 +182,16 @@ public class ItemDataManager : IItemDataManager, IStartable
         }
 
         return ids;
+    }
+
+    /// <summary>Habbo writes a pet package's customparams as "pet type, furni name", such as "1 newbie_nest".</summary>
+    internal static PetPackage? ReadPetPackage(object? cell)
+    {
+        var parts = (Convert.ToString(cell, CultureInfo.InvariantCulture) ?? string.Empty).Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+        return parts.Length >= 2 && int.TryParse(parts[0], NumberStyles.None, CultureInfo.InvariantCulture, out var petType)
+            ? new PetPackage(petType, parts[1])
+            : null;
     }
 
     internal static WiredBoxType ReadWiredType(object cell)

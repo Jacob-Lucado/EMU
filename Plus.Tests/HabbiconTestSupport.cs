@@ -97,6 +97,7 @@ internal static class HabbiconTestSupport
             return new(Data, new[] { Data.RequireItem(61) }, null);
         }
         public HabbiconChange BuyCatalog(Habbo habbo, int id, int credits, int duckets, int diamonds) => throw new NotImplementedException();
+        public HabbiconChange Grant(System.Data.IDbConnection connection, System.Data.IDbTransaction transaction, int userId, int id) => throw new NotImplementedException();
         public bool Use(int userId, int id)
         {
             Used.Add(id);

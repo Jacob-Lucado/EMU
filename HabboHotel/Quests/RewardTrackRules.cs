@@ -30,6 +30,10 @@ public static class RewardTrackRules
         return new RewardTrackStep(true, task.Id, after, peak, granted, state.Points + granted);
     }
 
+    /// <summary>Add mode moves the task by the score; set mode moves it up to the score and never lowers it.</summary>
+    public static RewardTrackStep PlanScore(RewardTrack track, UserRewardTrackState state, RewardTrackTask task, int score, bool addToExisting) =>
+        Plan(track, state, task, addToExisting ? score : score - state.ProgressOf(task.Id));
+
     public static RewardTrackStep Advance(RewardTrack track, UserRewardTrackState state, RewardTrackTask task, int amount)
     {
         var step = Plan(track, state, task, amount);

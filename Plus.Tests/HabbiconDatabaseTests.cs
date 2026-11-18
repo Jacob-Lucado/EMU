@@ -50,9 +50,11 @@ public class HabbiconDatabaseTests
 
             using var connection = new MySqlConnection(connectionString);
             connection.Open();
+
             foreach (var statement in SqlScript.Split(File.ReadAllText(HabbiconPacketTests.Repo("Database/FreshInstall.sql")))) {
                 connection.Execute(statement, commandTimeout: 900);
             }
+
             _importedConnectionString = connectionString;
         }
     }

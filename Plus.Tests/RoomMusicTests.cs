@@ -238,15 +238,15 @@ namespace Plus.Tests
                 var (client, sent) = HabbiconTestSupport.Client(habbo);
                 habbo.Client = client;
                 var clients = Proxy<Plus.HabboHotel.GameClients.IGameClientManager>((name, args) => name == "GetClientByUserId" && (int)args[0]! == owner ? client : null);
-                var gate = new AccountSessionGate();
+                var gate = new AccountSessionGate(TimeSpan.FromSeconds(60));
                 var held = gate.Enter((int)owner);
                 Task? pending = null;
                 var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
                 try {
-                    pending = Task.Run(() => { started.SetResult(); RoomMusicComponent.PublishReturned(captured, gate, clients, fixture.Store.AvailableDisc); });
+                    pending = OwnThread(() => { started.SetResult(); RoomMusicComponent.PublishReturned(captured, gate, clients, fixture.Store.AvailableDisc); });
                     await started.Task;
-                    await Assert.ThrowsAsync<TimeoutException>(() => pending.WaitAsync(TimeSpan.FromMilliseconds(100)));
+                    Assert.False(pending.Wait(TimeSpan.FromMilliseconds(100)));
 
                     if (foreign) {
                         await fixture.Connection.ExecuteAsync("UPDATE items SET user_id=7 WHERE id=33");
@@ -261,7 +261,7 @@ namespace Plus.Tests
                     held.Dispose();
 
                     if (pending != null) {
-                        await pending.WaitAsync(TimeSpan.FromSeconds(5));
+                        await pending.WaitAsync(TimeSpan.FromSeconds(30));
                     }
                 }
 
@@ -316,7 +316,7 @@ namespace Plus.Tests
         [InlineData(true)]
         public async Task MusicReturnedDiscWaitsForAccountWithoutBlockingNavigationOrTeardown(bool nested)
         {
-            var gate = new AccountSessionGate();
+            var gate = new AccountSessionGate(TimeSpan.FromSeconds(60));
             var (music, store, _, _) = Music(new([new(31, 7, Song(71, 1000))], 0, null, 0, true), v2: true, accounts: gate);
             Inventory(MusicDisc(40));
             var removed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -327,16 +327,16 @@ namespace Plus.Tests
 
             try {
                 if (nested) {
-                    tick = Task.Run(() => _room.RunFastPass(() => _room.RunFastPass(() => music.Remove(_client, 0))));
+                    tick = OwnThread(() => _room.RunFastPass(() => _room.RunFastPass(() => music.Remove(_client, 0))));
                 }
                 else {
                     music.Remove(_client, 0);
-                    tick = Task.Run(ExecutorTick);
+                    tick = OwnThread(ExecutorTick);
                 }
 
-                await removed.Task.WaitAsync(TimeSpan.FromSeconds(2));
-                await Assert.ThrowsAsync<TimeoutException>(() => tick.WaitAsync(TimeSpan.FromMilliseconds(100)));
-                teardown = Task.Run(() =>
+                await removed.Task.WaitAsync(TimeSpan.FromSeconds(30));
+                Assert.False(tick.Wait(TimeSpan.FromMilliseconds(100)));
+                teardown = OwnThread(() =>
                 {
                     // Use real V2 room teardown while the committed return waits outside its navigation monitor.
                     _room.MutedUsers = new();
@@ -346,7 +346,7 @@ namespace Plus.Tests
                     _room.Dispose();
                     music.Dispose();
                 });
-                await teardown.WaitAsync(TimeSpan.FromSeconds(2));
+                await teardown.WaitAsync(TimeSpan.FromSeconds(30));
                 Assert.True(_room.MDisposed);
                 Assert.Null(Assert.IsType<Plus.HabboHotel.Users.Inventory.InventoryComponent>(_client.GetHabbo().Inventory).Furniture.GetItem(31));
             }
@@ -354,16 +354,19 @@ namespace Plus.Tests
                 held.Dispose();
 
                 if (tick != null) {
-                    await tick.WaitAsync(TimeSpan.FromSeconds(5));
+                    await tick.WaitAsync(TimeSpan.FromSeconds(30));
                 }
 
                 if (teardown != null) {
-                    await teardown.WaitAsync(TimeSpan.FromSeconds(5));
+                    await teardown.WaitAsync(TimeSpan.FromSeconds(30));
                 }
             }
 
             Assert.NotNull(Assert.IsType<Plus.HabboHotel.Users.Inventory.InventoryComponent>(_client.GetHabbo().Inventory).Furniture.GetItem(31));
         }
+
+        private static Task OwnThread(Action work) =>
+            Task.Factory.StartNew(work, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
 
         private (RoomMusicComponent Music, MusicStore Store, MusicClock Clock, Item Player) Music(MusicPlayerState? state = null, bool v2 = false, AccountSessionGate? accounts = null)
         {

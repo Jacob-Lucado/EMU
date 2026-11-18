@@ -196,9 +196,20 @@ public class Pet
         }
 
         if (Room != null && !Room.Behavior.MuteAllPets) {
-            Room.SendChat(receiver => new ChatComposer(VirtualId, "Leveling up", 0, 0, receiver));
+            Room.SendChat(receiver => new ChatComposer(VirtualId, LevelUpLine, 0, 0, receiver));
         }
     }
+
+    private static readonly Dictionary<int, string> LevelUpLines = new()
+    {
+        [1] = "*pet leveled up - new trick learned!*",
+        [11] = "Level up! Nice one!",
+        [17] = "I just leveled up! Awesome-sauce!",
+        [22] = "I just leveled up. My power grows!",
+        [28] = "YIPPEE - I just leveled up, {0}!"
+    };
+
+    private string LevelUpLine => string.Format(LevelUpLines.GetValueOrDefault(Type, "Leveling up"), OwnerName);
 
     public void PetEnergy(bool add)
     {

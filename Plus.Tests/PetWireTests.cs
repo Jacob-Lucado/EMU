@@ -43,8 +43,8 @@ public class PetWireTests
     }
 
     [Theory]
-    [InlineData(0, "-1", "15 2 FFFFFF 2 2 -1 0 3 -1 0")]
-    [InlineData(9, "-1", "15 2 FFFFFF 3 2 -1 0 3 -1 0 4 9 0")]
+    [InlineData(0, "-1", "15 2 FFFFFF 2 2 -1 1 3 -1 1")]
+    [InlineData(9, "-1", "15 2 FFFFFF 3 2 -1 1 3 -1 1 4 9 0")]
     [InlineData(0, "1 3 302 4", "15 2 FFFFFF 1 3 302 4")]
     public void RoomAndInventoryUseTheSameCompleteCustomParts(int saddle, string clothing, string expectedFigure)
     {

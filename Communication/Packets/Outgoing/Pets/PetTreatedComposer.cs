@@ -19,6 +19,10 @@ public sealed class PetTreatedComposer(int respect, int ownerId, int petId, stri
         packet.WriteString(color.ToLowerInvariant());
         packet.WriteInteger(0);
 
+        if (customParts.Length == 0) {
+            packet.WriteInteger(0);
+        }
+
         foreach (var part in customParts.Split(' ', StringSplitOptions.RemoveEmptyEntries)) {
             packet.WriteInteger(int.Parse(part));
         }

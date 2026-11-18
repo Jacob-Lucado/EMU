@@ -17,8 +17,8 @@ public sealed class PetLookTests
     [Fact]
     public void AHorseKeepsItsHairAndSaddleParts()
     {
-        Assert.Equal("15 2 ffffff 2 2 -1 0 3 -1 0", Pet(15, "2", "ffffff").Look);
-        Assert.Equal("15 2 ffffff 3 2 -1 0 3 -1 0 4 9 0", Pet(15, "2", "ffffff", saddle: 9).Look);
+        Assert.Equal("15 2 ffffff 2 2 -1 1 3 -1 1", Pet(15, "2", "ffffff").Look);
+        Assert.Equal("15 2 ffffff 3 2 -1 1 3 -1 1 4 9 0", Pet(15, "2", "ffffff", saddle: 9).Look);
     }
 
     [Fact]
@@ -34,8 +34,18 @@ public sealed class PetLookTests
 
         Assert.Equal(HabbiconTestSupport.Incoming(1, 0, 2,
                 81, "pixel", 1, 0, "ABABAB", 0, 0, 1, -1,
-                81, "pixel", 15, 2, "ffffff", 0, 2, 2, -1, 0, 3, -1, 0, 1, -1).Buffer.ToArray(),
+                81, "pixel", 15, 2, "ffffff", 0, 2, 2, -1, 1, 3, -1, 1, 1, -1).Buffer.ToArray(),
             Assert.Single(packets).Payload);
+    }
+
+    [Fact]
+    public void ATreatedPetWithoutPartsSendsAZeroCountBeforeItsLevel()
+    {
+        var packet = new HabbiconTestSupport.RecordingPacket();
+        var pet = Pet(16, "0", "FFFFFF");
+        new Plus.Communication.Packets.Outgoing.Pets.PetTreatedComposer(2, 7, 81, "pixel", pet.Type, 0, pet.Color, pet.CustomParts, 7, 4).Compose(packet);
+
+        Assert.Equal(new object[] { 2, 7, 81, "pixel", 16, 0, "ffffff", 0, 0, 7, 4 }, packet.Writes);
     }
 
     private static Pet Pet(int type, string race, string colour, int saddle = 0, string clothing = "-1") =>

@@ -129,7 +129,6 @@ public class Pet
 
     public static int MaxNutrition => 150;
 
-    private const int HorseType = 15;
 
     /// <summary>A pet's figure parts: its clothing, a horse's hair and saddle, or none, as Habbo sends them.</summary>
     public string CustomParts => !string.IsNullOrEmpty(GnomeClothing) && GnomeClothing != "-1"

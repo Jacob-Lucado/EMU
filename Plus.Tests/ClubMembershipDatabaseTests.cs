@@ -286,6 +286,42 @@ public class ClubMembershipDatabaseTests : IDisposable
         Assert.Null(_memberships.Purchase(_habbo, Month));
     }
     [ClubDatabaseFact]
+    public async Task TwoBuyersCanGiftClubToTheSameMemberAtOnce()
+    {
+        Sql("INSERT INTO users (id, username, auth_ticket, credits) VALUES (957002, 'club_test_buyer', '', 1000), (957003, 'club_test_friend', '', 0); " +
+            "INSERT INTO catalog_club_offers (id, enabled, name, days, credits, giftable) VALUES (957102, 1, 'TEST_HC_GIFT', 31, 100, 1)");
+        var gift = new ClubOffer { Id = 957102, Days = 31, Credits = 100, Giftable = true };
+        var buyer = new Habbo { Id = 957002, Username = "club_test_buyer", Credits = 1000, Access = _access.Resolve(957002) };
+        Assert.Equal(_clock.Now.AddDays(31), _memberships.Purchase(_habbo, gift, 957003));
+
+        // Holding the friend's account row lets both gifts read the offer before either one can lock the friend.
+        var connection = Environment.GetEnvironmentVariable(ClubDatabaseFactAttribute.Variable)!;
+        await using var gate = new MySqlConnection(connection);
+        await gate.OpenAsync();
+        await using var hold = await gate.BeginTransactionAsync();
+        await gate.ExecuteAsync("SELECT id FROM users WHERE id = 957003 FOR UPDATE", transaction: hold);
+        var gifts = new[] { Task.Run(() => _memberships.Purchase(_habbo, gift, 957003)), Task.Run(() => _memberships.Purchase(buyer, gift, 957003)) };
+        await using var observer = new MySqlConnection(connection);
+        var waiting = 0L;
+
+        for (var elapsed = System.Diagnostics.Stopwatch.StartNew(); waiting < 2 && elapsed.Elapsed < TimeSpan.FromSeconds(10); await Task.Delay(200)) {
+            waiting = await observer.ExecuteScalarAsync<long>("""
+                SELECT COUNT(DISTINCT w.requesting_trx_id) FROM information_schema.INNODB_LOCK_WAITS w
+                JOIN information_schema.INNODB_TRX blocking ON blocking.trx_id = w.blocking_trx_id
+                WHERE blocking.trx_mysql_thread_id = @blocker
+                """, new { blocker = gate.ServerThread });
+        }
+
+        await hold.RollbackAsync();
+        var expiries = await Task.WhenAll(gifts);
+        Assert.Equal(2, waiting);
+        Assert.All(expiries, expiry => Assert.NotNull(expiry));
+        Assert.Equal(_clock.Now.AddDays(93), _memberships.GetExpiry(957003));
+        Assert.Equal((800, 900), (_habbo.Credits, buyer.Credits));
+        Assert.Equal((800L, 900L), (Scalar("SELECT credits FROM users WHERE id = 957001"), Scalar("SELECT credits FROM users WHERE id = 957002")));
+    }
+
+    [ClubDatabaseFact]
     public void CatalogOfferMetadataComesFromTheServerAndDisabledOffersAreRefused()
     {
         var forged = new ClubOffer { Id = Offer, Days = 186, Credits = 0 };
@@ -501,9 +537,9 @@ public class ClubMembershipDatabaseTests : IDisposable
 
         return connection.ExecuteScalar<DateTime?>(sql);
     }
-    private void Clean() => Sql("DROP TRIGGER IF EXISTS club_test_gift_failure; DELETE FROM user_club_memberships WHERE user_id = 957001; DELETE FROM club_membership_intervals WHERE user_id = 957001; " +
-        "DELETE FROM club_credit_spending WHERE user_id = 957001; DELETE FROM club_paydays WHERE user_id = 957001; DELETE FROM club_gift_claims WHERE user_id = 957001; " +
-        "DELETE FROM items WHERE user_id = 957001; DELETE FROM acl_audit_log WHERE target_id = 957001; DELETE FROM user_permissions WHERE user_id = 957001; DELETE FROM users WHERE id = 957001; DELETE FROM catalog_club_offers WHERE id = 957101; " +
+    private void Clean() => Sql("DROP TRIGGER IF EXISTS club_test_gift_failure; DELETE FROM user_club_memberships WHERE user_id IN (957001, 957003); DELETE FROM club_membership_intervals WHERE user_id IN (957001, 957003); " +
+        "DELETE FROM club_credit_spending WHERE user_id IN (957001, 957002); DELETE FROM club_paydays WHERE user_id = 957001; DELETE FROM club_gift_claims WHERE user_id = 957001; " +
+        "DELETE FROM items WHERE user_id = 957001; DELETE FROM acl_audit_log WHERE target_id IN (957001, 957003); DELETE FROM user_permissions WHERE user_id = 957001; DELETE FROM users WHERE id IN (957001, 957002, 957003); DELETE FROM catalog_club_offers WHERE id IN (957101, 957102); " +
         "DELETE FROM catalog_offer_limited WHERE offer_id = 1000065398; DELETE FROM club_gift_offers WHERE offer_id = 1000065398; DELETE FROM catalog_offers WHERE id = 1000065398");
     public void Dispose()
     {

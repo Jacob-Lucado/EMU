@@ -1,3 +1,4 @@
+using System.Data;
 using Dapper;
 using Plus.Communication.Packets.Outgoing.Inventory.AvatarEffect;
 using Plus.Communication.Packets.Outgoing.Inventory.AvatarEffects;
@@ -28,13 +29,18 @@ public sealed class ItemRedemptionStore(IDatabase database) : IItemRedemptionSto
     public void RedeemExchange(uint itemId, int ownerId, uint roomId, int credits)
     {
         using var connection = database.Connection();
+        connection.Open();
+        using var transaction = connection.BeginTransaction();
         var deleted = connection.Execute(
             "DELETE FROM items WHERE id=@itemId AND user_id=@ownerId AND room_id=@roomId LIMIT 1",
-            new { itemId, ownerId, roomId });
+            new { itemId, ownerId, roomId }, transaction);
 
         if (deleted != 1) {
             throw new InvalidOperationException("Exchange furniture was not deleted.");
         }
+
+        PayCredits(connection, transaction, ownerId, credits);
+        transaction.Commit();
     }
 
     public IReadOnlyList<uint> RedeemInventoryExchanges(int ownerId, IReadOnlyList<ExchangeRedemption> items)
@@ -43,17 +49,31 @@ public sealed class ItemRedemptionStore(IDatabase database) : IItemRedemptionSto
         connection.Open();
         using var transaction = connection.BeginTransaction();
         var redeemed = new List<uint>(items.Count);
+        var credits = 0;
 
         foreach (var item in items) {
             if (connection.Execute("DELETE FROM items WHERE id=@ItemId AND user_id=@ownerId AND room_id=0 LIMIT 1",
                     new { item.ItemId, ownerId }, transaction) == 1) {
                 redeemed.Add(item.ItemId);
+                credits = checked(credits + item.Credits);
             }
+        }
+
+        if (credits > 0) {
+            PayCredits(connection, transaction, ownerId, credits);
         }
 
         transaction.Commit();
 
         return redeemed;
+    }
+
+    // Credits are paid in the transaction that deletes the credit furniture, so the item and its value can never be lost or paid apart.
+    internal static void PayCredits(IDbConnection connection, IDbTransaction transaction, int userId, int credits)
+    {
+        if (connection.Execute("UPDATE users SET credits = credits + @credits WHERE id = @userId", new { userId, credits }, transaction) != 1) {
+            throw new InvalidOperationException("Credit furniture owner no longer exists.");
+        }
     }
 
     public IReadOnlyList<ClothingParts> ConsumeClothing(uint itemId, int ownerId, uint roomId, string name, IReadOnlyCollection<int> partIds)

@@ -1,6 +1,7 @@
 using Dapper;
 using Plus.Database;
 using Plus.Core.Settings;
+using Plus.HabboHotel.Items;
 using Plus.HabboHotel.Rooms.Instance;
 
 namespace Plus.HabboHotel.Rooms;
@@ -35,7 +36,15 @@ public sealed class RoomTradingComponent(IDatabase database, TimeProvider clock,
     void ITradeStore.RedeemItem(uint itemId, int recipientId, int credits)
     {
         using var connection = database.Connection();
-        connection.Execute("DELETE FROM items WHERE id = @itemId LIMIT 1", new { itemId });
+        connection.Open();
+        using var transaction = connection.BeginTransaction();
+
+        if (connection.Execute("DELETE FROM items WHERE id = @itemId LIMIT 1", new { itemId }, transaction) != 1) {
+            throw new InvalidOperationException("Traded credit furniture was not deleted.");
+        }
+
+        ItemRedemptionStore.PayCredits(connection, transaction, recipientId, credits);
+        transaction.Commit();
     }
 
     void ITradeStore.TransferItem(uint itemId, int userId)

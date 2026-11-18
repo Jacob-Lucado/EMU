@@ -46,6 +46,10 @@ public class PetBot : BotAi
 
         if (pet != null) {
             foreach (var kvp in pet.Statusses.ToList()) {
+                if (pet.RidingHorse && kvp.Key is "mv" or "jmp") {
+                    continue;
+                }
+
                 if (pet.Statusses.ContainsKey(kvp.Key)) {
                     pet.Statusses.Remove(kvp.Key);
                 }

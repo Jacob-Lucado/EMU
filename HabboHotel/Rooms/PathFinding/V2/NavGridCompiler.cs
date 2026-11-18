@@ -154,7 +154,7 @@ public sealed class NavGridCompiler(NavGrid grid, NavInputs inputs, PathfindingS
         grid.LegacyZ[t] = surface.LegacyZ;
         var structuralStatus = Volatile.Read(ref grid.FloorStatusOverrides[t]);
         grid.LegacyFloorStatus[t] = structuralStatus >= 0 ? (byte)structuralStatus
-            : (surface.Flags & NavFlags.Transit) != 0 ? (byte)1 : surface.Flags == NavFlags.None ? (byte)0 : (byte)3;
+            : (surface.Flags & NavFlags.Transit) != 0 ? (byte)1 : (surface.Flags & ~MovementRules.JumpBar) == NavFlags.None ? (byte)0 : (byte)3;
 
         if (grid.Layered) {
             return surface;
@@ -181,6 +181,7 @@ internal readonly record struct CompatSurface(double Z, NavFlags Flags, uint Sup
         if (t == grid.DoorTile) {
             // A user on the door tile stands on walkable furni that Wired moves there.
             var doorZ = top is { } onDoor && SurfaceRules.ItemCandidate(onDoor, t) is { Standable: true } standable
+                && (standable.Flags & MovementRules.JumpBar) == 0
                 ? Math.Max(grid.DoorZ, standable.Z) : grid.DoorZ;
 
             return new(doorZ, NavFlags.Door, 0, SurfaceKind.Door, 0, [], legacyZ);

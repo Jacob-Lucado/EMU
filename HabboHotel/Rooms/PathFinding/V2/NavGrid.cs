@@ -4,7 +4,9 @@ namespace Plus.HabboHotel.Rooms.PathFinding;
 public enum NavFlags : ushort
 {
     None = 0, Transit = 1, GoalOnlySeat = 2, GoalOnlyBed = 4, Door = 8,
-    GuildGate = 16, Roller = 32, FloorLocked = 64, ModelSeat = 128
+    GuildGate = 16, Roller = 32, FloorLocked = 64, ModelSeat = 128,
+    // The bar of a horse jump, which a rider crosses straight along the x or the y axis.
+    JumpAlongX = 256, JumpAlongY = 512
 }
 public enum SurfaceKind : byte
 {

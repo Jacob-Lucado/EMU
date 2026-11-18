@@ -28,6 +28,48 @@ public class MovementRulesTests
         }
     }
 
+    [Theory]
+    [InlineData(0.1, false)]
+    [InlineData(3, true)]
+    public void SidewaysRiderExitUsesTheSurfaceAtTheRidersHeight(double z, bool allowed)
+    {
+        var settings = new PathfindingSettings { LayeringEnabled = true };
+        var (grid, inputs, compiler) = NavTest.Create(2, 1, settings);
+        inputs.Publish(NavTest.Record(1, 1, [0], h: 0.1) with { BlockedTiles = [0] });
+        inputs.Publish(NavTest.Record(2, 2, [0], z: 3));
+        compiler.ApplyNow();
+
+        var result = new MovementRules(grid, settings).CanStep(new() { Rider = true },
+            new(0, 0, z), grid.Position(1), StepPurpose.Goal, OccupancyView.Execution);
+
+        Assert.Equal(allowed, result.Ok);
+    }
+
+    [Theory]
+    [InlineData(false, StepPurpose.Goal)]
+    [InlineData(true, StepPurpose.Roller)]
+    public void ForcedPlacementOnABarAllowsOrdinaryWalkAndRollerExits(bool rider, StepPurpose purpose)
+    {
+        var (grid, inputs, compiler) = NavTest.Create(2, 1);
+        inputs.Publish(NavTest.Record(1, 1, [0], h: 0.1) with { BlockedTiles = [0] });
+        compiler.ApplyNow();
+
+        var result = new MovementRules(grid, new()).CanStep(new() { Rider = rider },
+            grid.Position(0), grid.Position(1), purpose, OccupancyView.Execution);
+
+        Assert.True(result.Ok);
+    }
+
+    [Fact]
+    public void ABarMovedOntoTheDoorDoesNotRaiseTheRoomEntrance()
+    {
+        var (grid, inputs, compiler) = NavTest.Create(2, 1, door: 0);
+        inputs.Publish(NavTest.Record(1, 1, [0], z: 2, h: 0.1) with { BlockedTiles = [0] });
+        compiler.ApplyNow();
+
+        Assert.Equal(0d, grid.WalkZ[0]);
+    }
+
     [Fact]
     public void SeatAccessUsesBaseNotTopAndGoalPurpose()
     {

@@ -7,6 +7,7 @@ internal sealed class MovementExecutor(Room room, MovementContext context, Rebin
     private readonly HashSet<RoomUser> _committed = new(ReferenceEqualityComparer.Instance);
     public void Tick()
     {
+        announce.EndJumps();
         _committed.Clear();
         var actors = room.GetRoomUserManager().GetUserList().OrderBy(a => a.VirtualId).ToArray();
 

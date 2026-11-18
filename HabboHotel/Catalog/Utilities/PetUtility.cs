@@ -1,5 +1,7 @@
 using Dapper;
 using System.Data;
+using System.Globalization;
+using Plus.Communication.Packets;
 using Plus.HabboHotel.Rooms.AI;
 using Plus.Utilities;
 
@@ -7,13 +9,15 @@ namespace Plus.HabboHotel.Catalog.Utilities;
 
 public static class PetUtility
 {
+    private const int MaxNameLength = 16;
+
     public static bool CheckPetName(string name)
     {
         if (string.IsNullOrWhiteSpace(name)) {
             return false;
         }
 
-        if (name.Length < 1 || name.Length > 16) {
+        if (name.Length < 1 || name.Length > MaxNameLength) {
             return false;
         }
 
@@ -22,6 +26,24 @@ public static class PetUtility
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Why a pet package name is refused, with the detail Habbo shows: the maximum length, or the characters it does not allow.
+    /// </summary>
+    public static (PetPackageNameError Error, string Info) CheckPackageName(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) {
+            return (PetPackageNameError.TooShort, "");
+        }
+
+        if (name.Length > MaxNameLength) {
+            return (PetPackageNameError.TooLong, MaxNameLength.ToString(CultureInfo.InvariantCulture));
+        }
+
+        var forbidden = string.Concat(name.Where(character => character is not ('@' or '!') && !StringCharFilter.IsValidAlphaNumeric(character)).Distinct());
+
+        return forbidden.Length > 0 ? (PetPackageNameError.InvalidCharacters, forbidden) : (PetPackageNameError.None, "");
     }
 
     /// <summary>

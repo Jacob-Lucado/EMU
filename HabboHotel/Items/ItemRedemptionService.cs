@@ -1,7 +1,6 @@
 using Dapper;
 using Plus.Communication.Packets.Outgoing.Inventory.AvatarEffect;
 using Plus.Communication.Packets.Outgoing.Inventory.AvatarEffects;
-using Plus.Communication.Packets.Outgoing.Inventory.Furni;
 using Plus.Communication.Packets.Outgoing.Inventory.Purse;
 using Plus.Communication.Packets.Outgoing.Rooms.Engine;
 using Plus.Communication.Packets.Outgoing.Rooms.Notifications;
@@ -178,12 +177,11 @@ public sealed class ItemRedemptionService(IItemRedemptionStore store, ISettingsM
 
             store.DeleteExchange(item.Id, habbo.Id, room.RoomId);
             habbo.Credits = balance;
-            room.GetRoomItemHandler().RemoveFurniture(null, item.Id);
+            // Habbo names no picker, so the coin vanishes instead of flying to the inventory.
+            room.GetRoomItemHandler().RemoveFurniture(null, item, pickerId: -1);
             // The exchange item was placed in the room; this only drops a stale inventory copy, which an unloaded inventory cannot hold.
             habbo.Inventory?.Furniture.RemoveItem(item.Id);
             session.Send(new CreditBalanceComposer(balance));
-            session.Send(new FurniListUpdateComposer());
-            session.Send(new FurniListRemoveComposer(item.Id));
         }
     }
 

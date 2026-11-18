@@ -83,6 +83,14 @@ public sealed class MonsterPlantTests
     }
 
     [Fact]
+    public void AFullPlantCannotBeTreatedAgain()
+    {
+        var plant = MonsterPlant.Seeded(1, 0, PlantedAt);
+
+        Assert.False(plant.Treat(PlantedAt));
+    }
+
+    [Fact]
     public void ADeadPlantCannotBeTreated()
     {
         var plant = MonsterPlant.Seeded(1, 0, PlantedAt);

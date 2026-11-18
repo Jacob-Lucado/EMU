@@ -41,6 +41,17 @@ public sealed class MonsterPlantSeedServiceTests
     }
 
     [Fact]
+    public void PlantingASeedProgressesThePlantMonsterPlantTask()
+    {
+        var world = World();
+
+        world.Service.TryPlant(world.Room, world.Client, 7);
+        world.Service.TryPlant(world.Room, world.Client, 7);
+
+        Assert.Equal(["plant_monster_plant"], world.Rewards);
+    }
+
+    [Fact]
     public void OnlyTheSeedOwnerCanPlantIt()
     {
         var world = World();
@@ -229,6 +240,27 @@ public sealed class MonsterPlantSeedServiceTests
             5, 1, 10, 9, 3, 9, 8, 4, 2, 1, 2, 10, 6, 0, -1, 0, 7, 4 }, packet.Writes);
     }
 
+    [Fact]
+    public void TreatingAPlantProgressesTheTreatMonsterPlantTask()
+    {
+        var clock = new MovingClock();
+        var world = World(time: clock);
+        world.Service.TryPlant(world.Room, world.Client, 7);
+        Assert.True(world.Room.GetRoomUserManager().TryGetPet(12, out var plant));
+        plant.PetData!.Plant = new MonsterPlant(12, 4, clock.Now.AddDays(-10), clock.Now.AddDays(1), false, true);
+        Assert.True(world.Room.GetRoomUserManager().AddAvatarToRoom(world.Client));
+        var rewards = new List<string>();
+        var respects = new PetRespectService(
+            CatalogSnapshotTestSupport.Proxy<IAchievementManager>((_, _) => true),
+            CatalogSnapshotTestSupport.Proxy<IQuestManager>((_, _) => null),
+            CatalogSnapshotTestSupport.Proxy<IRewardTrackManager>((_, args) => { rewards.Add((string)args[1]!); return null; }),
+            new SavingStore([]), clock);
+
+        respects.Respect(world.Room, world.Client, 12);
+
+        Assert.Equal(["treat_monster_plant"], rewards);
+    }
+
     private static PetRespectService Respects(List<string> achievements, List<MonsterPlant> saved, TimeProvider clock) => new(
         CatalogSnapshotTestSupport.Proxy<IAchievementManager>((method, args) =>
         {
@@ -289,13 +321,16 @@ public sealed class MonsterPlantSeedServiceTests
         var store = new RecordingStore();
         var clock = new FixedClock();
 
-        return new(room, item, client, sent, store, clock, new(store, new FixedGenetics(), clock));
+        var rewards = new List<string>();
+
+        return new(room, item, client, sent, store, clock, new(store, new FixedGenetics(), clock,
+            CatalogSnapshotTestSupport.Proxy<IRewardTrackManager>((_, args) => { rewards.Add((string)args[1]!); return null; })), rewards);
     }
 
     private static void Set(object instance, string field, object value) => instance.GetType()
         .GetField(field, BindingFlags.NonPublic | BindingFlags.Instance)!.SetValue(instance, value);
 
-    private sealed record Fixture(Room Room, Item Item, GameClient Client, List<(uint Header, byte[] Payload)> Sent, RecordingStore Store, FixedClock Clock, MonsterPlantSeedService Service);
+    private sealed record Fixture(Room Room, Item Item, GameClient Client, List<(uint Header, byte[] Payload)> Sent, RecordingStore Store, FixedClock Clock, MonsterPlantSeedService Service, List<string> Rewards);
 
     private sealed class FixedGenetics : IMonsterPlantGenetics
     {

@@ -13,11 +13,14 @@ internal sealed class PetLoader(IDatabase database) : IPetLoader
     {
         using var connection = database.Connection();
 
-        return Load(connection, userId).Select(row => new Pet(checked((int)row.Id), checked((int)row.UserId), row.RoomId, row.Name, checked((int)row.Type), row.Race,
+        var rows = Load(connection, userId).AsList();
+        var plants = MonsterPlantStore.LoadForPets(connection, rows.Where(row => row.Type == MonsterPlant.PetType).Select(row => checked((int)row.Id)));
+
+        return rows.Select(row => new Pet(checked((int)row.Id), checked((int)row.UserId), row.RoomId, row.Name, checked((int)row.Type), row.Race,
                 row.Color, row.Experience, row.Energy, row.Nutrition, row.Respect, row.CreatedAt,
                 row.X, row.Y, row.Z, row.HaveSaddle, row.AnyoneRide, row.Hairdye, row.Pethair, row.GnomeClothing, row.OwnerName)
         {
-            Plant = row.Type == MonsterPlant.PetType ? MonsterPlantStore.Load(connection, checked((int)row.Id)) : null
+            Plant = plants.GetValueOrDefault(checked((int)row.Id))
         }).ToList();
     }
 

@@ -51,6 +51,8 @@ public class ItemDefinition
 
     /// <summary>The furnidata revision of the furni's asset. Newer furni have higher revisions.</summary>
     public int Revision { get; set; }
+    /// <summary>The Habbo furnidata customparams, as in "15 2,3 50,50" for a horse hair dye.</summary>
+    public string CustomParams { get; set; } = string.Empty;
 
     public int Modes { get; set; }
     public List<int> VendingIds { get; set; } = new();

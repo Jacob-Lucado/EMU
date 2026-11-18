@@ -86,7 +86,7 @@ public sealed class HorseCustomizationServiceTests
 
             Updates.Add((petId, column, value));
         }
-        public void ConsumeItem(int petId, string column, object value, uint itemId, uint roomId, int ownerId)
+        public void ConsumeItem(int petId, HorseStyle style, uint itemId, uint roomId, int ownerId)
         {
             if (Fail) {
                 throw new InvalidOperationException("forced failure");

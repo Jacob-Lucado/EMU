@@ -122,13 +122,13 @@ public static class WiredOctoberActions
         return changed;
     }
 
-    // The task id names the reward track action progressed; the score is the amount.
+    // The text is the track id and the task id, split by a tab. Option 0 is 1 to add the score to the progress, 0 to set the progress to it.
     private static bool ProgressRewardTrack(WiredRuntimeContext context, WiredConfiguration config, RoomUser[] recipients)
     {
         var parts = config.Text.Split('\t');
 
-        if (parts.Length != 2 || parts[1].Length == 0 || Amount(context, config, P(config, 1), P(config, 2), P(config, 3)) is not { } amount
-            || amount is <= 0 or > int.MaxValue) {
+        if (parts.Length != 2 || parts[0].Length == 0 || parts[1].Length == 0
+            || Amount(context, config, P(config, 1), P(config, 2), P(config, 3)) is not { } amount || amount is <= 0 or > int.MaxValue) {
             return false;
         }
 
@@ -136,7 +136,7 @@ public static class WiredOctoberActions
 
         foreach (var user in recipients.Where(user => !user.IsBot)) {
             if (user.GetClient() is { } client) {
-                user.RewardTracks.Progress(client, parts[1], (int)amount);
+                user.RewardTracks.ProgressWiredTask(client, parts[0], parts[1], (int)amount, P(config, 0) == 1);
                 changed = true;
             }
         }

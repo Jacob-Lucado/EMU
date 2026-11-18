@@ -45,7 +45,7 @@ public sealed class RoomScopeCleanupTests
         using var release = new ManualResetEventSlim();
         using var fixture = new Fixture(() => { entered.Set(); Assert.True(release.Wait(TimeSpan.FromSeconds(10))); });
         fixture.Create(1);
-        var unloading = Task.Run(() => fixture.Manager.UnloadRoom(1));
+        var unloading = OwnThread(() => fixture.Manager.UnloadRoom(1));
 
         try {
             Assert.True(entered.Wait(TimeSpan.FromSeconds(10)));
@@ -169,25 +169,25 @@ public sealed class RoomScopeCleanupTests
         {
             lock (stuck.NavigationSync) {
                 started.Set();
-                gate.Wait(TimeSpan.FromSeconds(30));
+                gate.Wait();
             }
         }, full: true));
-        Assert.True(started.Wait(TimeSpan.FromSeconds(5)));
+        Assert.True(started.Wait(TimeSpan.FromSeconds(30)));
 
         try {
             for (var tick = 0; tick <= RoomCycle.MissesUntilCrash; tick++) {
                 clock.Now += RoomCycle.Interval;
-                await Task.Run(fixture.Manager.OnCycle).WaitAsync(TimeSpan.FromSeconds(5));
-                await other.ProcessTask.WaitAsync(TimeSpan.FromSeconds(5));
+                await OwnThread(fixture.Manager.OnCycle).WaitAsync(TimeSpan.FromSeconds(30));
+                await other.ProcessTask.WaitAsync(TimeSpan.FromSeconds(30));
             }
 
             Assert.True(stuck.IsCrashed);
             Assert.True(fixture.Manager.TryGetRoom(stuck.Id, out _));
             var otherPass = other.ProcessTask;
             clock.Now += RoomCycle.Interval;
-            await Task.Run(fixture.Manager.OnCycle).WaitAsync(TimeSpan.FromSeconds(5));
+            await OwnThread(fixture.Manager.OnCycle).WaitAsync(TimeSpan.FromSeconds(30));
             Assert.NotSame(otherPass, other.ProcessTask);
-            await other.ProcessTask.WaitAsync(TimeSpan.FromSeconds(5));
+            await other.ProcessTask.WaitAsync(TimeSpan.FromSeconds(30));
             Assert.False(other.IsCrashed);
             Assert.True(fixture.Manager.TryGetRoom(other.Id, out _));
         }
@@ -195,7 +195,7 @@ public sealed class RoomScopeCleanupTests
             gate.Set();
         }
 
-        var deadline = DateTime.UtcNow.AddSeconds(5);
+        var deadline = DateTime.UtcNow.AddSeconds(30);
 
         while (fixture.Manager.TryGetRoom(stuck.Id, out _) && DateTime.UtcNow < deadline) {
             await Task.Delay(10);
@@ -205,6 +205,10 @@ public sealed class RoomScopeCleanupTests
         Assert.True(stuck.MDisposed);
         Assert.False(other.MDisposed);
     }
+
+    // A room pass or unload can sit on a busy thread pool for seconds, so each test side gets its own thread.
+    private static Task OwnThread(Action work) =>
+        Task.Factory.StartNew(work, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
 
     private sealed class CycleClock : TimeProvider
     {

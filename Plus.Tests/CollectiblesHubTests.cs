@@ -704,7 +704,7 @@ public sealed class CollectiblesHubTests
         });
     }
 
-    // Habbo's content from Database/Migrations/111_CollectiblesHubContent.sql, with the min level that 113 gives each offer by its price. FreshInstall.sql has no furni for nft_emerald_tome_5000, so its offer is left out.
+    // Habbo's content from Database/Migrations/111_CollectiblesHubContent.sql, with the min level that 113 gives each offer by its price.
     [RoomComponentDatabaseFact]
     public async Task TheShopSellsHabbosOffersInHabbosOrder()
     {
@@ -712,9 +712,9 @@ public sealed class CollectiblesHubTests
         {
             var offers = await hotel.StoreOffers(hotel.JohnDoe);
 
-            Assert.Equal(28, offers.Count);
-            Assert.DoesNotContain(offers, o => o.Code == "nft_emerald_tome_5000");
-            Assert.Equal(new StoreOffer("nft_h26_witchchair", 700, true, false, -1, 0, 5, new Product(1, "19160", 115, null, "", "", "nft_h26_witchchair", "Epic")), offers[0]);
+            Assert.Equal(29, offers.Count);
+            Assert.Equal(("nft_emerald_tome_5000", 5000), (offers[0].Code, offers[0].EmeraldPrice));
+            Assert.Equal(new StoreOffer("nft_h26_witchchair", 700, true, false, -1, 0, 5, new Product(1, "19160", 115, null, "", "", "nft_h26_witchchair", "Epic")), offers[1]);
             Assert.Equal(new StoreOffer("nft_h23_vintaque_chair", 40, false, false, -1, 0, 0, new Product(1, "14101", 10, null, "", "", "nft_h23_vintaque_chair", "Common")),
                 offers.Single(o => o.Code == "nft_h23_vintaque_chair"));
             Assert.Equal([("nft_emerald_100", 101, 2), ("nft_emerald_1000", 1001, 5), ("nft_emerald_500", 501, 4), ("nft_emerald_50", 51, 0), ("nft_emerald_10", 11, 0)],
@@ -767,20 +767,24 @@ public sealed class CollectiblesHubTests
 
     // 111 needs the tables and columns that 113 removes, so it runs again on a hotel before 113.
     [RoomComponentDatabaseFact]
-    public async Task RunningTheContentMigrationAgainKeepsStaffEditsAndAddsNothing()
+    public async Task RunningTheContentMigrationAgainKeepsStaffPricesAndRestoresMissingDefaults()
     {
         await BeforeEmeraldsOnly(async db =>
         {
+            const string counts = """
+                SELECT (SELECT COUNT(*) FROM collectible_collections), (SELECT COUNT(*) FROM collectible_products),
+                    (SELECT COUNT(*) FROM collectible_shop_offers), (SELECT COUNT(*) FROM collectible_mint_token_offers),
+                    (SELECT COUNT(*) FROM collectible_mintable_items), (SELECT COUNT(*) FROM collectible_reward_claims)
+                """;
+            var before = db.QuerySingle<(int, int, int, int, int, int)>(counts);
+
             db.Execute("UPDATE collectible_shop_offers SET emerald_price = 1 WHERE product_code = 'nft_h26_witchchair'");
             db.Execute("DELETE FROM collectible_mintable_items WHERE sprite_id = 19169");
 
             await Apply(db, "Database/Migrations/111_CollectiblesHubContent.sql");
 
-            Assert.Equal((73, 582, 28, 10, 74, 0), db.QuerySingle<(int, int, int, int, int, int)>("""
-                SELECT (SELECT COUNT(*) FROM collectible_collections), (SELECT COUNT(*) FROM collectible_products),
-                    (SELECT COUNT(*) FROM collectible_shop_offers), (SELECT COUNT(*) FROM collectible_mint_token_offers),
-                    (SELECT COUNT(*) FROM collectible_mintable_items), (SELECT COUNT(*) FROM collectible_reward_claims)
-                """));
+            Assert.Equal(before, db.QuerySingle<(int, int, int, int, int, int)>(counts));
+            Assert.Equal(1, db.QuerySingle<int>("SELECT COUNT(*) FROM collectible_mintable_items WHERE sprite_id = 19169"));
             Assert.Equal(1, db.QuerySingle<int>("SELECT emerald_price FROM collectible_shop_offers WHERE product_code = 'nft_h26_witchchair'"));
         });
     }

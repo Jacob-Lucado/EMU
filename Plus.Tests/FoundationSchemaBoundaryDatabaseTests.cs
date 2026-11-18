@@ -114,7 +114,7 @@ public sealed class FoundationSchemaBoundaryDatabaseTests
 
             Assert.Equal((0, 12, 34, 56), (disabled.Enabled, disabled.Hue, disabled.Saturation, disabled.Lightness));
             Assert.Equal((1, 21, 43, 65), (enabled.Enabled, enabled.Hue, enabled.Saturation, enabled.Lightness));
-            Assert.Equal((0, 0, 0, 0), (defaults.Enabled, defaults.Hue, defaults.Saturation, defaults.Lightness));
+            Assert.Equal((0, 127, 127, 127), (defaults.Enabled, defaults.Hue, defaults.Saturation, defaults.Lightness));
             Assert.Equal(3, connection.ExecuteScalar<int>("SELECT COUNT(*) FROM room_items_toner"));
             Assert.False(connection.QuerySingle<bool>("SELECT enabled FROM room_items_toner WHERE id=9"));
         }

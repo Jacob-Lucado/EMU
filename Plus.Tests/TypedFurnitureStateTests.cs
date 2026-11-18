@@ -221,7 +221,7 @@ public sealed class TypedFurnitureStateTests
         Assert.Empty(world.Packets);
     }
 
-    private static void PrepareItems(WiredChestDatabaseTests.Fixture fixture) => fixture.Connection.Execute("ALTER TABLE users ADD username VARCHAR(100) NOT NULL DEFAULT ''; ALTER TABLE items ADD x INT DEFAULT 1,ADD y INT DEFAULT 1,ADD z DOUBLE DEFAULT 0,ADD rot INT DEFAULT 0,ADD wall_pos TEXT; CREATE TABLE items_groups(id INT UNSIGNED PRIMARY KEY,group_id INT)");
+    private static void PrepareItems(WiredChestDatabaseTests.Fixture fixture) => fixture.Connection.Execute("ALTER TABLE items ADD x INT DEFAULT 1,ADD y INT DEFAULT 1,ADD z DOUBLE DEFAULT 0,ADD rot INT DEFAULT 0,ADD wall_pos TEXT; CREATE TABLE items_groups(id INT UNSIGNED PRIMARY KEY,group_id INT); CREATE TABLE items_builders_club(item_id INT UNSIGNED PRIMARY KEY,user_id INT)");
     private static void AssertToner(Item item, int[] expected) => Assert.Equal(expected, Assert.IsType<FurnitureDataSnapshot.Integers>(RoomItemSnapshot.Capture(item).Data).Values);
 
     internal static WiredChestProtocolTests.World TonerWorld()

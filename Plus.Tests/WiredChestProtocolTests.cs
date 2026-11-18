@@ -500,21 +500,21 @@ public sealed class WiredChestProtocolTests
 
             return box;
         }
-        var scanner = Box("wf_xtra_scan_chest_furni_by_type", 90, WiredNativeTestSupport.Chest("wf_xtra_scan_chest_furni_by_type", [0], [], [100, 101], [], ["ctx:10"], [101], [100]));
+        var scanner = Box("wf_xtra_scan_chest_furni_by_type", 90, WiredNativeTestSupport.Chest("wf_xtra_scan_chest_furni_by_type", [0], [], [101, 100], [], ["ctx:10"], [100], [101]));
         Assert.True(scanner.Execute(context));
         Assert.Equal(2, world.Room.GetWired().Variables.Module.Read(new(WiredVariableTarget.Context, "custom:10"), new(WiredVariableTarget.Context, 0, 0), context.VariableFrame)!.Value);
-        scanner = Box("wf_xtra_scan_chest_furni_by_type", 90, WiredNativeTestSupport.Chest("wf_xtra_scan_chest_furni_by_type", [1], [], [100, 101], [], ["ctx:10"], [101], [100]));
+        scanner = Box("wf_xtra_scan_chest_furni_by_type", 90, WiredNativeTestSupport.Chest("wf_xtra_scan_chest_furni_by_type", [1], [], [101, 100], [], ["ctx:10"], [100], [101]));
         Assert.True(scanner.Execute(context));
         Assert.Equal(1, world.Room.GetWired().Variables.Module.Read(new(WiredVariableTarget.Context, "custom:10"), new(WiredVariableTarget.Context, 0, 0), context.VariableFrame)!.Value);
         var addon = Box("wf_xtra_custom_contract", 91, WiredNativeTestSupport.Chest("wf_xtra_custom_contract", [0, 0, 0, 1, 0, 1, 0, 1, 1, 2], [4, 9], [100, 100, 0, 0], [0, 0], ["n", "ctx:10"], [], []));
         Assert.True(addon.Execute(context));
         world.Store.Kind = WiredChestKind.Coins;
-        var initiate = Box("wf_act_init_transaction", 92, WiredNativeTestSupport.Chest("wf_act_init_transaction", [0, 1, 0, 0, 0, 300], [3], [100, 0, 0], [0, 0], ["n"], [100], []));
+        var initiate = Box("wf_act_init_transaction", 92, WiredNativeTestSupport.Chest("wf_act_init_transaction", [0, 1, 0, 0, 0, 300], [3], [100, 0, 0], [0, 0], ["n", "n", "n"], [100], []));
         Assert.True(initiate.Execute(context));
         Assert.Equal(1, Assert.Single(world.Store.Requests).Reward[0].Amount);
         var outcome = Assert.Single(world.Events);
         Assert.Equal(WiredEventKind.TransactionComplete, outcome.Kind);
-        var trigger = (WiredChestTrigger)Box("wf_trg_transaction_complete", 93, WiredNativeTestSupport.Chest("wf_trg_transaction_complete", [], [], [], [], [], [], []));
+        var trigger = (WiredChestTrigger)Box("wf_trg_transaction_complete", 93, WiredNativeEditorProjection.DefaultNative(WiredBoxRegistry.All.Single(entry => entry.CanonicalName == "wf_trg_transaction_complete")));
         var completed = new WiredRuntimeContext(world.Room, outcome, context.Targets, new Operations());
         Assert.True(trigger.CanTrigger(completed));
         Assert.True(trigger.Execute(completed));

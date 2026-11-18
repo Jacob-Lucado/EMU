@@ -385,7 +385,7 @@ public sealed class RewardTrackManager : IRewardTrackManager, IStartable
     private ItemDefinition? FindPetPackage(int petType) =>
         _items?.Items.Values
             .Where(definition => definition.Type == ItemType.Floor && definition.PetPackage is { } package && package.PetType == petType
-                                 && _items.GetItemByName(package.FurniName) != null)
+                                 && package.FurniName is { } furniName && _items.GetItemByName(furniName) != null)
             .OrderByDescending(definition => definition.Revision)
             .ThenBy(definition => definition.Id)
             .FirstOrDefault();

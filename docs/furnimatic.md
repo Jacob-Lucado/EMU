@@ -1,6 +1,6 @@
 # Furni-Matic
 
-Furni-Matic uses the native recycler window and Ecotron boxes. Its configuration is stored in `recycler_settings`, `recycler_levels` and `recycler_prizes`. It stays disabled until an operator supplies a valid distribution and enables it.
+Furni-Matic uses the native recycler window and Ecotron boxes. Its configuration is stored in `recycler_settings`, `recycler_levels` and `recycler_prizes`. Migration 150 gives a hotel that never set it up Habbo's machine: 8 slots, 10 Duckets, 10 seconds between exchanges and Habbo's prize table. A hotel without every prize furni gets only the 8 slots and stays closed. A hotel with its own setup keeps it. A new settings row also starts with 8 slots.
 
 ## Configuration
 
@@ -18,6 +18,10 @@ A paid exchange is checked against the session's Duckets. Before a paid exchange
 
 Chat-style prizes must be enabled, require ownership, and have no HC or permission requirement. They need a client that handles the purchased chat-style messages 470 and 916 and lists owned styles in its chat-style selector. Do not add chat-style prizes while players use a client without this support. Acquired styles belong to the user who opens the box, and the allowed chat-style list (9340) then includes them. Opening another box with the same style keeps one permanent right, records another opening and awards no substitute currency or furniture.
 
+## Boxes
+
+An exchange gives a Mystery Box (`matic_box`, sprite 4692), just like Habbo. The box stores its creation date as `yyyy-MM-dd` and shows it when placed; the inventory lists it without data. Migration 158 makes the box impossible to recycle, trade or sell on the Marketplace. The Furni-Matic stays closed if the hotel has no single valid `matic_box` furniture row. Ecotron boxes (`ecotron_box`, sprite 3095, date `d-M-yyyy`) from older exchanges can still be opened.
+
 ## Transactions and recovery
 
 An exchange consumes eligible owned inventory items, charges Duckets, chooses the box contents, updates the cooldown and records progress in one transaction. Limited items, borrowed Builders Club items, active music objects and unopened containers cannot be recycled. The reward is fixed when the box is created.
@@ -34,4 +38,4 @@ Achievements:
 - `ACH_RecycleEcoprizes` counts recycled furniture that was won from a box with a receipt.
 - `ACH_RecyclerRarePrize` counts opened boxes of level 3 or higher, and `ACH_RecyclerGrandPrize` counts opened boxes of level 6. A hotel with fewer than six levels never progresses the grand prize achievement.
 
-Migrations preserve existing prize rows, cooldowns, pending boxes and chat-style preferences. No reward catalog is enabled automatically. Removing this feature requires disabling new exchanges; keep its receipts and ownership tables.
+Migrations preserve existing prize rows, cooldowns, pending boxes and chat-style preferences. Only migration 150 enables a reward table, and only on an untouched setup. Removing this feature requires disabling new exchanges; keep its receipts and ownership tables.

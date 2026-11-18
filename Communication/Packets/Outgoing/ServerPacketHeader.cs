@@ -180,6 +180,7 @@ public static class ServerPacketHeader
     public const uint FurniListAddComposer = 2857;
     public const uint FurniListNotificationComposer = 178;
     public const uint FurniListRemoveComposer = 883;
+    public const uint FurniListRemoveMultipleComposer = 1778;
     public const uint FurniListComposer = 2911;
     public const uint FurniListUpdateComposer = 1426;
     public const uint AvatarEffectsComposer = 1353;

@@ -130,15 +130,19 @@ public class Pet
 
     public static int MaxNutrition => 100;
 
+
+    /// <summary>A pet's figure parts: its clothing, a horse's hair and saddle, or none, as Habbo sends them.</summary>
     public string CustomParts => !string.IsNullOrEmpty(GnomeClothing) && GnomeClothing != "-1"
         ? GnomeClothing
-        : Saddle > 0
-            ? $"3 2 {PetHair} {HairPalette} 3 {PetHair} {HairPalette} 4 {Saddle} 0"
-            : $"2 2 {PetHair} {HairPalette} 3 {PetHair} {HairPalette}";
+        : Type != HorseProducts.HorseType
+            ? ""
+            : Saddle > 0
+                ? $"3 2 {PetHair} {HairPalette} 3 {PetHair} {HairPalette} 4 {Saddle} 0"
+                : $"2 2 {PetHair} {HairPalette} 3 {PetHair} {HairPalette}";
 
-    private int HairPalette => Type == HorseProducts.HorseType ? HorseProducts.HairPalette(HairDye) : HairDye;
+    private int HairPalette => HorseProducts.HairPalette(HairDye);
 
-    public string Look => $"{Type} {Race} {Color} {CustomParts}";
+    public string Look => CustomParts.Length == 0 ? $"{Type} {Race} {Color}" : $"{Type} {Race} {Color} {CustomParts}";
 
     public string OwnerName { get; set; }
 

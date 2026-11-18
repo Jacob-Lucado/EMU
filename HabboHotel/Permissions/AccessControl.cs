@@ -263,12 +263,19 @@ public sealed class AccessControl : IAccessControl, IDisposable, IStartable
     public bool RevokeRole(Habbo actor, int targetId, int roleId) =>
         Mutate(actor, targetId, "role.revoke", new { roleId }, (connection, transaction, actorAccess, targetAccess) =>
         {
-            if (!TryGetRole(roleId, out var role) || role.Slug == "default" || role.Weight > actorAccess.Weight) {
+            if (!TryGetRole(roleId, out var role) || role.Slug == "default") {
+                return false;
+            }
+
+            var grantedBy = connection.QuerySingleOrDefault<int?>("SELECT granted_by FROM user_roles WHERE user_id = @targetId AND role_id = @roleId",
+                new { targetId, roleId }, transaction);
+
+            if (!AccessMutationPolicy.CanRevoke(actor.Id, targetId, actorAccess, targetAccess, Read(connection, targetId, transaction, roleId), role, grantedBy == actor.Id)) {
                 return false;
             }
 
             return connection.Execute("DELETE FROM user_roles WHERE user_id = @targetId AND role_id = @roleId", new { targetId, roleId }, transaction) > 0;
-        });
+        }, checkEdit: false);
 
     public bool SetOverride(Habbo actor, int targetId, string key, bool deny, string reason, DateTimeOffset? expiresAt = null) =>
         Mutate(actor, targetId, deny ? "permission.deny" : "permission.grant", new { key, reason, expiresAt }, (connection, transaction, actorAccess, _) =>
@@ -297,7 +304,8 @@ public sealed class AccessControl : IAccessControl, IDisposable, IStartable
             return connection.Execute("DELETE FROM user_permissions WHERE user_id = @targetId AND permission_key = @key", new { targetId, key }, transaction) > 0;
         });
 
-    private bool Mutate(Habbo actor, int targetId, string action, object payload, Func<IDbConnection, IDbTransaction, UserAccess, UserAccess, bool> mutation)
+    private bool Mutate(Habbo actor, int targetId, string action, object payload, Func<IDbConnection, IDbTransaction, UserAccess, UserAccess, bool> mutation,
+        bool checkEdit = true)
     {
         lock (_sync) {
             if (actor.Id == targetId || actor.Id <= 0 || targetId <= 0) {
@@ -317,7 +325,7 @@ public sealed class AccessControl : IAccessControl, IDisposable, IStartable
             var actorAccess = Read(connection, actor.Id, transaction);
             var targetAccess = Read(connection, targetId, transaction);
 
-            if (!AccessMutationPolicy.CanEdit(actor.Id, targetId, actorAccess, targetAccess) || !mutation(connection, transaction, actorAccess, targetAccess)) {
+            if (checkEdit && !AccessMutationPolicy.CanEdit(actor.Id, targetId, actorAccess, targetAccess) || !mutation(connection, transaction, actorAccess, targetAccess)) {
                 return false;
             }
 
@@ -335,12 +343,12 @@ public sealed class AccessControl : IAccessControl, IDisposable, IStartable
     private bool ValidPattern(string pattern) => pattern.Length <= 191 &&
         (pattern == "*" || _registry.Contains(pattern, StringComparer.Ordinal) || pattern.EndsWith(".*", StringComparison.Ordinal) && _registry.Any(key => UserAccess.Matches(pattern, key)));
 
-    private UserAccess Read(IDbConnection connection, int userId, IDbTransaction? transaction = null)
+    private UserAccess Read(IDbConnection connection, int userId, IDbTransaction? transaction = null, int? withoutRole = null)
     {
         var assignments = new List<RoleAssignment> { new(_roles.Values.Single(role => role.Slug == "default")) };
 
         foreach (var row in connection.Query<AssignmentRow>("SELECT role_id AS RoleId, expires_at AS ExpiresAt FROM user_roles WHERE user_id = @userId", new { userId }, transaction)) {
-            if (_roles.TryGetValue(row.RoleId, out var role) && role.Slug != "default") {
+            if (row.RoleId != withoutRole && _roles.TryGetValue(row.RoleId, out var role) && role.Slug != "default") {
                 assignments.Add(new(role, row.ExpiresAt));
             }
         }

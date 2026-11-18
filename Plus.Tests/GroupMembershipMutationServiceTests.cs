@@ -190,14 +190,14 @@ public sealed class GroupMembershipMutationServiceTests
         Task mutation;
 
         lock (group) {
-            mutation = Task.Run(() => operation switch
+            mutation = Task.Factory.StartNew(() => operation switch
             {
                 "accept" => mutations.Accept(owner, group.Id, 8),
                 "decline" => mutations.Decline(owner, group.Id, 8),
                 "give" => mutations.GiveAdmin(owner, group.Id, 8),
                 "take" => mutations.TakeAdmin(owner, group.Id, 8),
                 _ => settings.Update(owner, new(group.Id, 2, 1, true))
-            });
+            }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default).Unwrap();
             Assert.True(found.Wait(TimeSpan.FromSeconds(5)), "Mutation did not resolve the group");
             Volatile.Write(ref removed, true);
         }

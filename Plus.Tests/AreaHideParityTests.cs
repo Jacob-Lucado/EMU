@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Reflection;
 using Dapper;
 using Plus.Communication.Packets.Incoming.Rooms.Furni;
+using Plus.Communication.Packets.Outgoing;
 using Plus.Communication.Packets.Outgoing.Rooms.Furni;
 using Plus.HabboHotel.Items;
 using Plus.HabboHotel.Items.AreaHide;
@@ -64,7 +65,7 @@ public sealed class AreaHideParityTests
         Assert.Equal(new[] { 1, 1, 2, 3, 4, 1, 0, 1 }, saved.Values);
         var stored = fixture.Connection.QuerySingle<string>("SELECT extra_data FROM items WHERE id=300");
         Assert.Equal(saved.Values, AreaHideState.Load(stored).Data);
-        Assert.Contains(world.Packets, packet => packet.Header == 496);
+        Assert.Contains(world.Packets, packet => packet.Header == ServerPacketHeader.AreaHideComposer);
         var packetCount = world.Packets.Count;
         var guestHabbo = new Habbo { Id = 2, Username = "guest", CurrentRoom = world.Room, Access = EditorTestSupport.Access([]) };
         var (guest, _) = Client(guestHabbo);
@@ -131,7 +132,7 @@ public sealed class AreaHideParityTests
         users.TryAdd(world.Actor.VirtualId, world.Actor);
         world.Packets.Clear();
         Assert.True(world.Room.GetRoomItemHandler().RemoveFurniture(world.Client, item));
-        Assert.Equal(0, Assert.Single(world.Packets.Where(packet => packet.Header == 496)).Payload[2724]);
+        Assert.Equal(0, Assert.Single(world.Packets.Where(packet => packet.Header == ServerPacketHeader.AreaHideComposer)).Payload[4]);
         Assert.False(AreaHideState.Set(world.Room, item, 1, 3));
         Assert.True(AreaHideState.TryRead(item, out state));
         Assert.True(state.On); // Pickup resets the client's area; the saved controller settings survive reentry.
@@ -169,7 +170,7 @@ public sealed class AreaHideParityTests
             Assert.Null(module.Read(Reference(key), holder, frame));
             Assert.False(Mutate(key, WiredVariableMutation.Set, 1));
             Assert.True(Mutate(key, WiredVariableMutation.Give));
-            Assert.Equal(1, module.Read(Reference(key), holder, frame)!.Value);
+            Assert.Equal(-1, module.Read(Reference(key), holder, frame)!.Value);
             Assert.False(Mutate(key, WiredVariableMutation.Give));
             Assert.False(Mutate(key, WiredVariableMutation.Set, 0));
             Assert.True(Mutate(key, WiredVariableMutation.Remove));

@@ -20,7 +20,7 @@ public partial class PlacedFurniRoomTests
     [Theory]
     [InlineData("private")]
     [InlineData("public")]
-    public void RecyclerCommitsBeforeAnyLiveRemovalAndDeliversAnUnopenedEcotronBox(string roomType)
+    public void RecyclerCommitsBeforeAnyLiveRemovalAndDeliversAnUnopenedMysteryBox(string roomType)
     {
         var (service, store, inputs, _) = RecyclerFixture();
         _room.Type = roomType;
@@ -36,13 +36,15 @@ public partial class PlacedFurniRoomTests
         service.Recycle(_client, [21, 20]);
         Assert.Equal(new uint[] { 20, 21 }, store.Consumed);
         var box = Assert.Single(Assert.IsType<InventoryComponent>(_client.GetHabbo().Inventory).Furniture.GetItems);
-        Assert.Equal((99u, "ecotron_box", "3-2-2040"), (box.Id, box.Definition.ItemName, box.ExtraData.Serialize()));
-        Assert.Equal(new[] { ServerPacketHeader.FurniListRemoveComposer, ServerPacketHeader.FurniListRemoveComposer,
-            ServerPacketHeader.FurniListAddComposer, ServerPacketHeader.FurniListNotificationComposer,
-            ServerPacketHeader.RecyclerFinishedComposer, ServerPacketHeader.FurniListUpdateComposer }, _client.Sent);
+        Assert.Equal((99u, "matic_box", "2040-02-03"), (box.Id, box.Definition.ItemName, box.ExtraData.Serialize()));
+        Assert.Equal(new[] { ServerPacketHeader.FurniListNotificationComposer, ServerPacketHeader.FurniListRemoveMultipleComposer,
+            ServerPacketHeader.FurniListAddComposer, ServerPacketHeader.RecyclerFinishedComposer }, _client.Sent);
+        var removed = new FlashIncomingPacket { Buffer = _client.Packets.Single(packet => packet.Header == ServerPacketHeader.FurniListRemoveMultipleComposer).Body };
+        Assert.Equal((2, 21, 20), (removed.ReadInt(), removed.ReadInt(), removed.ReadInt()));
+        Assert.False(removed.HasDataRemaining());
         var result = new FlashIncomingPacket { Buffer = _client.Packets.Single(packet => packet.Header == ServerPacketHeader.RecyclerFinishedComposer).Body };
         Assert.Equal(1, result.ReadInt());
-        Assert.Equal(0, result.ReadInt());
+        Assert.Equal(99, result.ReadInt());
         Assert.False(result.HasDataRemaining());
         Assert.All(inputs, item => { Assert.True(item.TryReserve()); item.ReleaseReservation(); });
     }
@@ -162,8 +164,12 @@ public partial class PlacedFurniRoomTests
         Assert.Equal(100u, packet.ReadUInt());
         Assert.Equal(wallReward ? "i" : "s", packet.ReadString());
         Assert.False(packet.ReadBool());
-        Assert.Equal("blue", packet.ReadString());
+        Assert.Equal("", packet.ReadString());
         Assert.False(packet.HasDataRemaining());
+        Assert.Equal(new[] { ServerPacketHeader.FurniListAddComposer, ServerPacketHeader.OpenGiftComposer,
+            ServerPacketHeader.FurniListNotificationComposer, ServerPacketHeader.FurniListAddComposer },
+            _client.Sent.Where(header => header is ServerPacketHeader.FurniListAddComposer or ServerPacketHeader.OpenGiftComposer
+                or ServerPacketHeader.FurniListNotificationComposer or ServerPacketHeader.FurniListUpdateComposer));
         Assert.False(service.TryOpen(_client, box.Id));
         Assert.Equal(1, store.Opens);
     }
@@ -181,6 +187,30 @@ public partial class PlacedFurniRoomTests
     }
 
     [Fact]
+    public void AnEcotronBoxMadeBeforeTheMysteryBoxStillOpensWithItsOldDate()
+    {
+        var (service, store, _, box) = RecyclerFixture(ecotronBox: true);
+        Assert.True(service.TryOpen(_client, box.Id));
+        ExecutorTick();
+        Assert.Equal(1, store.Opens);
+        Assert.Null(_room.GetRoomItemHandler().GetItem(box.Id));
+        Assert.NotNull(Assert.IsType<InventoryComponent>(_client.GetHabbo().Inventory).Furniture.GetItem(100));
+        Assert.Single(_client.Packets, packet => packet.Header == ServerPacketHeader.OpenGiftComposer);
+    }
+
+    [Fact]
+    public void TheFurniMaticStaysClosedWithoutAMysteryBoxDefinition()
+    {
+        var (service, store, _, box) = RecyclerFixture();
+        box.Definition.ItemName = "ecotron_box";
+        box.Definition.SpriteId = 3095;
+        service.GetStatus(_client);
+        service.Recycle(_client, [20, 21]);
+        Assert.Empty(store.Consumed);
+        Assert.Equal(2, new FlashIncomingPacket { Buffer = _client.Packets[0].Body }.ReadInt());
+    }
+
+    [Fact]
     public void FailedForeignAndMalformedEcotronOpeningKeepsRoomAndInventoryUnchanged()
     {
         var (service, store, _, box) = RecyclerFixture();
@@ -191,7 +221,7 @@ public partial class PlacedFurniRoomTests
         box.LegacyDataString = "invalid";
         Assert.True(service.TryOpen(_client, box.Id));
         Assert.Equal(0, store.Opens);
-        box.ExtraData = new Plus.HabboHotel.Items.DataFormat.LegacyDataFormat { Data = "3-2-2040" };
+        box.ExtraData = new Plus.HabboHotel.Items.DataFormat.LegacyDataFormat { Data = "2040-02-03" };
         store.Content = null;
         Assert.True(service.TryOpen(_client, box.Id));
         store.Content = new(102, "blue");
@@ -221,7 +251,7 @@ public partial class PlacedFurniRoomTests
         var habbo = _client.GetHabbo();
         _client.BeforeCapture = header =>
         {
-            if (header == ServerPacketHeader.FurniListRemoveComposer) {
+            if (header == ServerPacketHeader.FurniListNotificationComposer) {
                 Assert.Equal(99u, Assert.Single(Assert.IsType<InventoryComponent>(habbo.Inventory).Furniture.GetItems).Id);
                 typeof(GameClient).GetField("_habbo", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.SetValue(_client, null);
             }
@@ -309,7 +339,8 @@ public partial class PlacedFurniRoomTests
         Assert.NotNull(Assert.IsType<InventoryComponent>(_client.GetHabbo().Inventory).Furniture.GetItem(100));
     }
 
-    private (RecyclerService Service, RecyclerRecordingStore Store, InventoryItem[] Inputs, Item Box) RecyclerFixture(bool v2 = false, bool wallReward = false, bool ambiguousBox = false)
+    private (RecyclerService Service, RecyclerRecordingStore Store, InventoryItem[] Inputs, Item Box) RecyclerFixture(bool v2 = false, bool wallReward = false, bool ambiguousBox = false,
+        bool ecotronBox = false)
     {
         var habbo = _client.GetHabbo();
         habbo.Client = _client;
@@ -319,9 +350,9 @@ public partial class PlacedFurniRoomTests
 
         var box = Furni(10, InteractionType.None, WiredBoxType.None);
         box.Definition.Id = 100;
-        box.Definition.ItemName = "ecotron_box";
-        box.Definition.SpriteId = 3095;
-        box.ExtraData = new Plus.HabboHotel.Items.DataFormat.LegacyDataFormat { Data = "3-2-2040" };
+        box.Definition.ItemName = ecotronBox ? "ecotron_box" : "matic_box";
+        box.Definition.SpriteId = ecotronBox ? 3095 : 4692;
+        box.ExtraData = new Plus.HabboHotel.Items.DataFormat.LegacyDataFormat { Data = ecotronBox ? "3-2-2040" : "2040-02-03" };
         Assert.True(_room.GetRoomItemHandler().SetFloorItem(null!, box, 2, 2, 0, true, false, false));
         var input = new ItemDefinition { Id = 101, ItemName = "input", SpriteId = 41, AllowEcotronRecycle = true };
         var output = new ItemDefinition
@@ -342,7 +373,11 @@ public partial class PlacedFurniRoomTests
         var data = new RecyclerDefinitions([box.Definition, input, output]);
 
         if (ambiguousBox) {
-            data.Items.Add(103, new ItemDefinition { Id = 103, ItemName = "ecotron_box", SpriteId = 3095 });
+            data.Items.Add(103, new ItemDefinition { Id = 103, ItemName = "matic_box", SpriteId = 4692 });
+        }
+
+        if (ecotronBox) {
+            data.Items.Add(104, new ItemDefinition { Id = 104, ItemName = "matic_box", SpriteId = 4692 });
         }
 
         var service = new RecyclerService(store, data, _interactionClock, new RecyclerTestRandom([]), TestLogging.For<RecyclerService>(), new RecyclerStyles());
@@ -457,6 +492,19 @@ public partial class PlacedFurniRoomTests
     }
 
     [Fact]
+    public void PaidRecyclingReportsTheDucketChargeAfterTheBoxAndBeforeTheResult()
+    {
+        var (service, store, _, _) = RecyclerFixture();
+        _client.GetHabbo().Duckets = 150;
+        store.Configuration = store.Configuration with { CostDuckets = 10 };
+        store.PaidBalance = 140;
+        service.Recycle(_client, [20, 21]);
+        Assert.Equal(new[] { ServerPacketHeader.FurniListNotificationComposer, ServerPacketHeader.FurniListRemoveMultipleComposer,
+            ServerPacketHeader.FurniListAddComposer, ServerPacketHeader.HabboActivityPointNotificationComposer,
+            ServerPacketHeader.RecyclerFinishedComposer }, _client.Sent);
+    }
+
+    [Fact]
     public void FreeRecyclingDoesNotWriteTheWallet()
     {
         var (service, store, _, _) = RecyclerFixture();
@@ -551,7 +599,7 @@ public partial class PlacedFurniRoomTests
             BeforeCommit?.Invoke();
             Consumed = inputs.Select(input => input.Id).ToArray();
 
-            return new(99, "3-2-2040", PaidBalance);
+            return new(99, "2040-02-03", PaidBalance);
         }
         public void SaveWallet(int userId, int credits, IReadOnlyList<KeyValuePair<int, int>> currencies)
         {

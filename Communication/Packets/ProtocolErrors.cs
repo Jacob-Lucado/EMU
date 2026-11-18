@@ -90,7 +90,9 @@ public enum IgnoreStatus
 public enum PetPackageNameError
 {
     None = 0,
-    InvalidName = 1
+    TooLong = 1,
+    TooShort = 2,
+    InvalidCharacters = 3
 }
 
 public enum BullyReportResult

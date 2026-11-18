@@ -76,7 +76,7 @@ public class WiredResetDatabaseTests
         var (room, item) = PlacedVariable(admin);
         var database = new TestDatabase();
         var before = new WiredRoomVariables(room, database, new FixedTimeProvider(DateTimeOffset.FromUnixTimeMilliseconds(1000)));
-        Save(before, item, 7);
+        Save(before, item);
         Assert.True(before.Module.SaveGlobalValue(item.Id, 42));
         Assert.Equal(42, GlobalValue(admin, item.Id));
 
@@ -88,8 +88,8 @@ public class WiredResetDatabaseTests
 
         Assert.Null(new WiredConfigurationStore(database).Load(item.Id, item.Definition.WiredDescriptor!));
         var after = new WiredRoomVariables(room, database, new FixedTimeProvider(DateTimeOffset.FromUnixTimeMilliseconds(2000)));
-        Save(after, item, 3);
-        Assert.Equal(3, GlobalValue(admin, item.Id));
+        Save(after, item);
+        Assert.Equal(0, GlobalValue(admin, item.Id));
         Assert.True(after.Module.SaveGlobalValue(item.Id, 5));
         Assert.Equal(5, GlobalValue(admin, item.Id));
     }
@@ -116,11 +116,13 @@ public class WiredResetDatabaseTests
         Assert.Equal(0, Count(admin, "wired_variable_values", "definition_id", world.Definition));
     }
 
-    private static void Save(WiredRoomVariables variables, Item item, int initial)
+    private static void Save(WiredRoomVariables variables, Item item)
     {
         var box = Assert.IsType<WiredVariableDefinitionBox>(variables.CreateBox(item));
         Assert.False(box.HasPersistedConfiguration);
-        Assert.True(box.TryValidateConfiguration(new WiredConfiguration { IntParams = [10, initial], Text = "reset_probe" }, out var validated, out _));
+        var native = WiredNativeEditorProjection.DefaultNative(box.Descriptor) with { OwnedIntParams = [10], Text = "reset_probe" };
+        Assert.True(WiredNativeEditorProjection.TryCompile(item.Id, box.Descriptor, native, out var proposed));
+        Assert.True(box.TryValidateConfiguration(proposed, out var validated, out _));
         box.PersistConfiguration(validated);
         box.ApplyConfiguration(validated);
         variables.ConfigurationSaved(box);

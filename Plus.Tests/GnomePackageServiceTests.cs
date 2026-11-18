@@ -1,6 +1,8 @@
+using System.Buffers.Binary;
 using System.Collections.Concurrent;
 using System.Data;
 using System.Reflection;
+using System.Text;
 using Dapper;
 using Microsoft.Extensions.Logging.Abstractions;
 using MySqlConnector;
@@ -16,6 +18,8 @@ using Plus.HabboHotel.Items;
 using Plus.HabboHotel.Items.DataFormat;
 using Plus.HabboHotel.Rooms;
 using Plus.HabboHotel.Rooms.AI;
+using Plus.HabboHotel.Rooms.AI.Types;
+using Plus.HabboHotel.Rooms.Chat.Pets.Locale;
 using Plus.HabboHotel.Rooms.PathFinding;
 using Plus.HabboHotel.Users;
 using Plus.HabboHotel.Users.Inventory;
@@ -70,15 +74,17 @@ public sealed class GnomePackageServiceTests
     }
 
     [Theory]
-    [InlineData("")]
-    [InlineData("bad name!")]
-    [InlineData("abcdefghijklmnopq")]
-    public void InvalidNameRepliesWithoutConsumingPackage(string name)
+    [InlineData("", 2, "")]
+    [InlineData("bad name!", 3, " ")]
+    [InlineData("Rx@!#", 3, "#")]
+    [InlineData("a#b#", 3, "#")]
+    [InlineData("abcdefghijklmnopq", 1, "16")]
+    public void InvalidNameRepliesWithHabbosReasonWithoutConsumingPackage(string name, int status, string info)
     {
         var world = World();
         world.Service.Open(world.Room, world.Client, 7, name);
         Assert.Empty(world.Store.Requests);
-        Assert.Single(world.Packets);
+        Assert.Equal(Bytes(7, status, info), Assert.Single(world.Packets).Payload);
         Assert.Same(world.Item, world.Room.GetRoomItemHandler().GetItem(7));
     }
 
@@ -137,10 +143,10 @@ public sealed class GnomePackageServiceTests
         var (client, packets) = HabbiconTestSupport.Client(new Habbo { Id = 1 });
 
         client.Send(new CheckGnomeNameComposer(7, "Smokey", PetPackageNameError.None));
-        client.Send(new CheckGnomeNameComposer(7, "bad name!", PetPackageNameError.InvalidName));
+        client.Send(new CheckGnomeNameComposer(7, "#", PetPackageNameError.InvalidCharacters));
 
         Assert.Equal(Bytes(7, 0, ""), packets[0].Payload);
-        Assert.Equal(Bytes(7, 1, "bad name!"), packets[1].Payload);
+        Assert.Equal(Bytes(7, 3, "#"), packets[1].Payload);
     }
 
     [Theory]
@@ -184,6 +190,56 @@ public sealed class GnomePackageServiceTests
         Assert.DoesNotContain(world.Packets, packet => packet.Header == ServerPacketHeader.FurniListNotificationComposer);
     }
 
+    [Theory]
+    [InlineData("velociraptor_egg", 34, 0, 19)]
+    [InlineData("pterosaur_egg", 33, 0, 20)]
+    [InlineData("cowbox", 35, 1, 20)]
+    [InlineData("cowbox_gold", 35, 0, 0)]
+    public void EggsAndBoxesHatchTheirPetInARandomBreedAndLeaveNoFurni(string itemName, int type, int firstBreed, int lastBreed)
+    {
+        var world = World(hatchling: itemName);
+
+        world.Service.Open(world.Room, world.Client, 7, "Rexo");
+
+        var request = Assert.Single(world.Store.PetRequests);
+        Assert.Equal((type, "ffffff", (uint?)null, 0d), (request.Figure.Type, request.Figure.Colour, request.FurniBaseItem, request.PetZ));
+        Assert.InRange(request.Figure.Palette, firstBreed, lastBreed);
+        Assert.Null(world.Room.GetRoomItemHandler().GetItem(7));
+        Assert.Null(world.Room.GetRoomItemHandler().GetItem(13));
+        Assert.True(world.Room.GetRoomUserManager().TryGetPet(12, out var actor));
+        Assert.Equal(("Rexo", type), (Assert.IsType<Pet>(actor.PetData).Name, Assert.IsType<Pet>(actor.PetData).Type));
+        var result = world.Packets.FindLastIndex(packet => packet.Header == ServerPacketHeader.CheckGnomeNameComposer);
+        Assert.Equal(Bytes(7, 0, ""), world.Packets[result].Payload);
+        Assert.DoesNotContain(world.Packets, packet => packet.Header == ServerPacketHeader.FurniListNotificationComposer);
+    }
+
+    [Fact]
+    public void AnEggShowsNoPetUntilItHatchesButAPackageShowsItsFigure()
+    {
+        var egg = PetPackage.Hatchling("velociraptor_egg");
+
+        Assert.NotNull(egg);
+        Assert.Null(egg.FigureToShow(""));
+        Assert.Equal(new PetPackageFigure(1, 0, "ABABAB"), new PetPackage(1, "newbie_nest").FigureToShow("1 0 ABABAB"));
+        Assert.Null(PetPackage.Hatchling("newbie_cat_package"));
+    }
+
+    [Fact]
+    public void AnOpenedPetPackageGreetsItsOwnerAfterTheResult()
+    {
+        var world = World(package: true, greeting: "*wags tail at %owner%*");
+        var owner = new RoomUser(1, world.Room.RoomId, 100, world.Room, world.Client, TestChatEmotions.Unused, new TestRewardProgress());
+        var users = (ConcurrentDictionary<int, RoomUser>)typeof(RoomUserManager).GetField("_users", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(world.Room.GetRoomUserManager())!;
+        users.TryAdd(owner.VirtualId, owner);
+
+        world.Service.Open(world.Room, world.Client, 7, "Smokey");
+
+        var result = world.Packets.FindLastIndex(packet => packet.Header == ServerPacketHeader.CheckGnomeNameComposer);
+        var chat = world.Packets.FindIndex(packet => packet.Header == ServerPacketHeader.ChatComposer);
+        Assert.InRange(result, 0, chat - 1);
+        Assert.Equal("*wags tail at owner*", ChatText(world.Packets[chat].Payload));
+    }
+
     [Fact]
     public void NestKeepsTheStoredHeightOfARaisedPackage()
     {
@@ -219,7 +275,7 @@ public sealed class GnomePackageServiceTests
         world.Service.Open(world.Room, world.Client, 7, "bad name!");
 
         Assert.Empty(world.Store.PetRequests);
-        Assert.Equal(Bytes(7, 1, "bad name!"), Assert.Single(world.Packets).Payload);
+        Assert.Equal(Bytes(7, 3, " "), Assert.Single(world.Packets).Payload);
         Assert.Same(world.Item, world.Room.GetRoomItemHandler().GetItem(7));
     }
 
@@ -325,14 +381,15 @@ public sealed class GnomePackageServiceTests
         }
     }
 
-    private static Fixture World(bool temporary = false, bool package = false, bool withNest = true, int nestWidth = 1, IBotAiFactory? botAi = null)
+    private static Fixture World(bool temporary = false, bool package = false, bool withNest = true, int nestWidth = 1, IBotAiFactory? botAi = null, string? greeting = null, string? hatchling = null)
     {
         var model = new RoomModel("gnome-test", 0, 0, 0, 0, "000\r000\r000", 0, 0, false);
         var room = new Room(new RoomData { Id = 42, Model = model }, [], TestLogging.Navigation, TestLogging.Logger, TestRoomAchievements.Unused, TestRoomOwners.Unused);
         Set(room, "_interactionClock", TimeProvider.System);
         Set(room, "_roomItemHandling", new RoomItemHandling(room, TestRoomItemStore.Instance, TestRoomItemMetadataStore.Instance, TestGameClientManager.Empty, TestLanguageManager.RoomItems, TestItemRuntime.Interactors, TestItemRuntime.Travel, TestItemRuntime.Rewards));
         Set(room, "_gamemap", new Gamemap(room, model, TestLogging.Navigation, TestRoomSettings.Empty, TestGroupManager.Empty, TestNavigationDatabase.Instance, TestNavigationRewards.Instance));
-        Set(room, "_roomUserManager", new RoomUserManager(room, TestRoomUserStore.Instance, TimeProvider.System, new TestRewardProgress(), TestChatEmotions.Unused, botAi ?? TestBotAiFactory.Inert, TestGameClientManager.Empty, TestItemRuntime.Travel, TestItemRuntime.Settings));
+        var bots = greeting == null ? botAi ?? TestBotAiFactory.Inert : new TestBotAiFactory((_, virtualId) => new PetBot(virtualId, new GreetingLocale(greeting), null!));
+        Set(room, "_roomUserManager", new RoomUserManager(room, TestRoomUserStore.Instance, TimeProvider.System, new TestRewardProgress(), TestChatEmotions.Unused, bots, TestGameClientManager.Empty, TestItemRuntime.Travel, TestItemRuntime.Settings));
         Set(room, "_userSnapshots", CatalogSnapshotTestSupport.Proxy<IRoomUserSnapshotService>((_, _) => null));
         var item = new Item
         {
@@ -341,7 +398,9 @@ public sealed class GnomePackageServiceTests
             OwnerId = 1,
             RoomId = 42,
             IsTemporary = temporary,
-            Definition = package
+            Definition = hatchling != null
+                ? new() { Id = 100, ItemName = hatchling, Type = ItemType.Floor, InteractionType = InteractionType.None, PetPackage = PetPackage.Hatchling(hatchling) }
+                : package
                 ? new() { Id = 100, ItemName = "newbie_cat_package", Type = ItemType.Floor, InteractionType = InteractionType.None, PetPackage = new(1, "newbie_nest") }
                 : new() { Id = 100, Type = ItemType.Floor, InteractionType = InteractionType.GnomeBox },
             ExtraData = new LegacyDataFormat { Data = package ? "1 0 ABABAB" : "" }
@@ -383,6 +442,13 @@ public sealed class GnomePackageServiceTests
         public void Open(Room room, GameClient session, uint itemId, string petName) => Request = (itemId, petName);
     }
     private static byte[] Bytes(params object[] values) => HabbiconTestSupport.Incoming(values).Buffer.ToArray();
+    private static string ChatText(byte[] payload) => Encoding.UTF8.GetString(payload, 6, BinaryPrimitives.ReadUInt16BigEndian(payload.AsSpan(4, 2)));
+
+    private sealed class GreetingLocale(string line) : IPetLocale
+    {
+        public void Init() { }
+        public string[] GetValue(string key) => key.StartsWith("welcome.speech.pet", StringComparison.Ordinal) ? [line] : [];
+    }
 
     private sealed class RecordingStore : IGnomePackageStore
     {
@@ -395,7 +461,7 @@ public sealed class GnomePackageServiceTests
 
             return Fail ? null : new PetPackageOpening(new Pet(12, request.OwnerId, request.RoomId, request.Name, request.Figure.Type,
                 request.Figure.Palette.ToString(), request.Figure.Colour, 0, 100, 100, 0, request.CreatedAt, request.X, request.Y, request.PetZ,
-                0, 0, 0, -1, "-1", request.OwnerName), 13);
+                0, 0, 0, -1, "-1", request.OwnerName), request.FurniBaseItem == null ? null : 13);
         }
 
         public Action<GnomePackageRequest>? Before;

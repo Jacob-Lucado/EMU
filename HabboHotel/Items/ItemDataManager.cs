@@ -104,7 +104,8 @@ public class ItemDataManager : IItemDataManager, IStartable
                         DefaultDirection = row.Table.Columns.Contains("default_dir") && row["default_dir"] is not DBNull ? Convert.ToInt32(row["default_dir"], CultureInfo.InvariantCulture) : 0,
                         FigureSetIds = ReadFigureSetIds(row.Table.Columns.Contains("custom_params") ? row["custom_params"] : null),
                         BreedingPetType = ReadBreedingPetType(Convert.ToString(row["item_name"]), row.Table.Columns.Contains("custom_params") ? row["custom_params"] : null),
-                        PetPackage = ReadPetPackage(row.Table.Columns.Contains("custom_params") ? row["custom_params"] : null),
+                        PetPackage = ReadPetPackage(row.Table.Columns.Contains("custom_params") ? row["custom_params"] : null)
+                                     ?? PetPackage.Hatchling(Convert.ToString(row["item_name"]) ?? ""),
                         Revision = row.Table.Columns.Contains("revision") && row["revision"] is not DBNull ? Convert.ToInt32(row["revision"], CultureInfo.InvariantCulture) : 0,
                         CustomParams = row.Table.Columns.Contains("custom_params") ? Convert.ToString(row["custom_params"], CultureInfo.InvariantCulture) ?? "" : "",
                         SpecialType = row.Table.Columns.Contains("special_type") && row["special_type"] is not DBNull ? Convert.ToInt32(row["special_type"], CultureInfo.InvariantCulture) : 1,

@@ -1,5 +1,6 @@
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Items;
+using Plus.HabboHotel.Quests;
 using Plus.HabboHotel.Rooms.AI.Speech;
 using Plus.HabboHotel.Users.Inventory.Furniture;
 using Plus.Utilities.DependencyInjection;
@@ -25,7 +26,8 @@ public interface IMonsterPlantSeedService
     bool TryPlant(Room room, GameClient session, uint itemId);
 }
 
-public sealed class MonsterPlantSeedService(IMonsterPlantStore store, IMonsterPlantGenetics genetics, TimeProvider clock)
+public sealed class MonsterPlantSeedService(IMonsterPlantStore store, IMonsterPlantGenetics genetics, TimeProvider clock,
+    IRewardTrackManager rewards)
     : IMonsterPlantSeedService
 {
     public bool TryPlant(Room room, GameClient session, uint itemId)
@@ -54,6 +56,7 @@ public sealed class MonsterPlantSeedService(IMonsterPlantStore store, IMonsterPl
             }
 
             room.GetRoomItemHandler().RemoveFurniture(session, item.Id);
+            rewards.Progress(session, RewardTrackActions.PlantMonsterPlant);
             var speeches = new List<RandomSpeech>();
             room.GetRoomUserManager().DeployBot(new(pet.PetId, pet.RoomId, "pet", "stand", pet.Name, "", pet.Look,
                 pet.X, pet.Y, pet.Z, 0, 0, 0, 0, 0, ref speeches, "", 0, pet.OwnerId, false, 0, false, 0), pet);

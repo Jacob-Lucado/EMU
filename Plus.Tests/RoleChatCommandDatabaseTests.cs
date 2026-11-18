@@ -92,11 +92,10 @@ public sealed partial class AccessControlDatabaseTests
     }
 
     [AccessControlDatabaseTheory]
-    [InlineData(true, 200)]
     [InlineData(true, 300)]
     [InlineData(false, 200)]
     [InlineData(false, 300)]
-    public void RoleCommandsRejectEqualOrHigherWeightRoles(bool assign, int weight)
+    public void RoleCommandsRejectHigherWeightRolesAndRevokingAnEqualWeightRole(bool assign, int weight)
     {
         using var connection = _database.Connection();
         connection.Execute("UPDATE roles SET weight = @weight WHERE id = @LimitedRole", new { weight, LimitedRole });
@@ -148,8 +147,8 @@ public sealed partial class AccessControlDatabaseTests
         var reply = RunRoleCommand(assign, "acl_target", "missing-role");
         Assert.Contains("Unknown role", reply);
         Assert.Contains("acl_limited", reply);
-        Assert.DoesNotContain("acl_peer", reply);
-        Assert.DoesNotContain("acl_actor", reply);
+        Assert.Contains("acl_peer", reply);
+        Assert.Contains("acl_actor", reply);
         Assert.DoesNotContain("default", reply);
         using var connection = _database.Connection();
         connection.Execute("INSERT INTO user_permissions (user_id, permission_key, effect) VALUES (@Actor, 'camera.use', 'deny')", new { Actor });

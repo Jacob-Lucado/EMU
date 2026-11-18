@@ -78,6 +78,12 @@ public partial class PlacedFurniRoomTests
     {
         public List<(int PetId, uint ItemId, uint RoomId)> Consumed { get; } = [];
         public void UpdatePet(int petId, string column, object value) { }
-        public void ConsumeItem(int petId, HorseStyle style, uint itemId, uint roomId, int ownerId) => Consumed.Add((petId, itemId, roomId));
+        public Item RemoveSaddle(int petId, int saddle, SaddleRefund refund) => throw new NotSupportedException();
+        public Item? ConsumeItem(int petId, HorseStyle style, uint itemId, uint roomId, int ownerId, int previousSaddle, SaddleRefund? refund)
+        {
+            Consumed.Add((petId, itemId, roomId));
+
+            return null;
+        }
     }
 }

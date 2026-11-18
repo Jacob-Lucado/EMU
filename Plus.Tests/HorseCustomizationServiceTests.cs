@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Items;
 using Plus.HabboHotel.Rooms;
 using Plus.HabboHotel.Rooms.AI;
 using Plus.HabboHotel.Users;
@@ -86,11 +87,14 @@ public sealed class HorseCustomizationServiceTests
 
             Updates.Add((petId, column, value));
         }
-        public void ConsumeItem(int petId, HorseStyle style, uint itemId, uint roomId, int ownerId)
+        public Item RemoveSaddle(int petId, int saddle, SaddleRefund refund) => throw new NotSupportedException();
+        public Item? ConsumeItem(int petId, HorseStyle style, uint itemId, uint roomId, int ownerId, int previousSaddle, SaddleRefund? refund)
         {
             if (Fail) {
                 throw new InvalidOperationException("forced failure");
             }
+
+            return null;
         }
     }
 }

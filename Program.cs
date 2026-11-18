@@ -30,6 +30,10 @@ public static class Program
 
     public static async Task Main(string[] args)
     {
+        if (args is ["--check-runtime"]) {
+            return;
+        }
+
         if (args is ["--generate-rsa-key", .. var keyArgs]) {
             Environment.Exit(GenerateRsaKey(keyArgs));
 

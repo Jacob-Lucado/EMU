@@ -42,6 +42,30 @@ public sealed class ItemRedemptionServiceTests
     }
 
     [Fact]
+    public void NonRedeemableCreditFurniStaysAndPaysNothing()
+    {
+        var (room, client, sent, item) = Context(InteractionType.Exchange, 100);
+        item.Definition.ItemName = "CFC_100_coin_gold";
+        var store = new Store();
+
+        Service(store).RedeemCredits(room, client, item.Id);
+
+        Assert.Equal(0, client.GetHabbo().Credits);
+        Assert.Equal(0, store.ExchangeDeletes);
+        Assert.Same(item, room.GetRoomItemHandler().GetItem(item.Id));
+        Assert.Empty(sent);
+    }
+
+    [Theory]
+    [InlineData("CF_10_coin_gold", InteractionType.Exchange, true)]
+    [InlineData("CF_diamond_10", InteractionType.Exchange, true)]
+    [InlineData("CFC_10_coin_bronze", InteractionType.Exchange, false)]
+    [InlineData("cfc_500_goldbar", InteractionType.Exchange, false)]
+    [InlineData("chair_basic", InteractionType.None, false)]
+    public void OnlyRedeemableCreditFurniConvertToCredits(string name, InteractionType type, bool redeemable) =>
+        Assert.Equal(redeemable, new ItemDefinition { ItemName = name, InteractionType = type, BehaviourData = 10 }.RedeemableForCredits);
+
+    [Fact]
     public void CreditDeleteFailureLeavesWalletFurnitureAndPacketsUntouched()
     {
         var (room, client, sent, item) = Context(InteractionType.Exchange, 10);

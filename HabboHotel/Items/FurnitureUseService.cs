@@ -225,6 +225,9 @@ public sealed class FurnitureUseService(IFurnitureUseStore store, IQuestManager 
         if (item.Definition.InteractionType == InteractionType.GnomeBox && item.OwnerId == habbo.Id) {
             session.Send(new GnomeBoxComposer(item.Id));
         }
+        else if (item.Definition is { InteractionType: InteractionType.None, PetPackage: { } package } && item.OwnerId == habbo.Id) {
+            session.Send(new GnomeBoxComposer(item.Id, PetPackageFigure.Of(package, item.LegacyDataString)));
+        }
 
         // Using a Wired chest only asks the client to open it (WiredChestOpen); it is no state change.
         var toggle = !Plus.HabboHotel.Items.Wired.Chests.WiredChestFurniture.IsChest(item.Definition);

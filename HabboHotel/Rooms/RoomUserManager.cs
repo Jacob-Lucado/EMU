@@ -19,6 +19,7 @@ using Plus.HabboHotel.Rooms.AI.Speech;
 using Plus.HabboHotel.Rooms.Chat.Emotions;
 using Plus.Core.FigureData;
 using Plus.HabboHotel.Rooms.Games.Teams;
+using Plus.HabboHotel.Rooms.AI.MonsterPlants;
 using Plus.HabboHotel.Rooms.PathFinding;
 using Plus.HabboHotel.Rooms.Trading;
 using Plus.Utilities;
@@ -197,7 +198,7 @@ public partial class RoomUserManager
         }
 
         user.BotData = bot;
-        user.BotAi = _botAiFactory.Create(bot.AiType, user.VirtualId);
+        user.BotAi = pet?.Type == MonsterPlant.PetType ? new MonsterPlantBot(_clock) : _botAiFactory.Create(bot.AiType, user.VirtualId);
 
         if (user.IsPet) {
             user.BotAi.Init(bot.BotId, user.VirtualId, _room.RoomId, user, _room);
@@ -578,6 +579,10 @@ public partial class RoomUserManager
                             teamEffects.CurrentEffect = 0;
                         }
                     }
+                }
+
+                if (user.RoomEffect != 0 && session.GetHabbo().Effects is { } roomEffects && roomEffects.CurrentEffect == user.RoomEffect) {
+                    roomEffects.CurrentEffect = 0;
                 }
 
                 // A football gate outfit belongs to its room: the user's own figure is given back on leaving.

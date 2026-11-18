@@ -30,6 +30,25 @@ public partial class PlacedFurniRoomTests
     }
 
     [Fact]
+    public void TogglingAGrownPlantUpdatesItsOwnPermissionAndKeepsItsBreedingState()
+    {
+        LegacyRider();
+        var user = LegacyHorse(2, 1);
+        var pet = user.PetData!;
+        var now = DateTimeOffset.UtcNow;
+        pet.Plant = new(pet.PetId, 1, now.AddDays(-3), now.AddDays(1), true, false);
+        var store = new RecordingBreedingStore();
+        _client.Packets.Clear();
+
+        new PetBreedingPermissionService(store).Toggle(_room, _client, pet.PetId);
+
+        Assert.True(pet.Plant.BreedingPermission);
+        var status = Assert.Single(_client.Packets, packet => packet.Header == ServerPacketHeader.PetStatusUpdateComposer);
+        Assert.Equal(1, status.Body[8]);
+        Assert.Equal(1, status.Body[11]);
+    }
+
+    [Fact]
     public void TogglingAgainTakesThePermissionBack()
     {
         LegacyRider();

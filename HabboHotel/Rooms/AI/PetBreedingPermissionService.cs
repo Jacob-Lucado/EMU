@@ -38,6 +38,6 @@ public sealed class PetBreedingPermissionService(IPetBreedingPermissionStore sto
         var allowed = !data.AllowBreeding;
         store.Save(data.PetId, allowed);
         data.AllowBreeding = allowed;
-        room.SendPacket(new PetStatusUpdateComposer(pet.VirtualId, data.PetId, allowed));
+        room.SendPacket(new PetStatusUpdateComposer(pet.VirtualId, data.PetId, false, false, false, allowed));
     }
 }

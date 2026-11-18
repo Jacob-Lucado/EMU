@@ -31,6 +31,6 @@ public sealed class PetInventoryComposer(PetInventorySnapshot data) : IServerPac
         }
 
         packet.WriteInteger(pet.Level);
-        packet.WriteInteger(-1);
+        packet.WriteInteger(pet.Rarity);
     }
 }

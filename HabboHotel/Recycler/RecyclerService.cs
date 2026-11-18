@@ -188,18 +188,15 @@ public sealed class RecyclerService(IRecyclerStore store, IItemDataManager defin
 
                     var snapshot = InventoryItemSnapshot.Capture(reward);
 
+                    session.Send(new FurniListNotificationComposer(reward.Id, 1));
+                    session.Send(new FurniListRemoveMultipleComposer(itemIds));
+                    session.Send(new FurniListAddComposer(snapshot));
+
                     if (committed.Duckets is not null) {
                         session.Send(new HabboActivityPointNotificationComposer(habbo.Duckets, -configuration.CostDuckets));
                     }
 
-                    foreach (var item in reserved) {
-                        session.Send(new FurniListRemoveComposer(item.Id));
-                    }
-
-                    session.Send(new FurniListAddComposer(snapshot));
-                    session.Send(new FurniListNotificationComposer(reward.Id, 1));
-                    session.Send(new RecyclerFinishedComposer(1, 0));
-                    session.Send(new FurniListUpdateComposer());
+                    session.Send(new RecyclerFinishedComposer(1, (int)reward.Id));
                 }
                 finally {
                     foreach (var item in reserved) {

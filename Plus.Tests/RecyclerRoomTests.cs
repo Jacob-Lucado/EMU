@@ -37,12 +37,14 @@ public partial class PlacedFurniRoomTests
         Assert.Equal(new uint[] { 20, 21 }, store.Consumed);
         var box = Assert.Single(Assert.IsType<InventoryComponent>(_client.GetHabbo().Inventory).Furniture.GetItems);
         Assert.Equal((99u, "ecotron_box", "3-2-2040"), (box.Id, box.Definition.ItemName, box.ExtraData.Serialize()));
-        Assert.Equal(new[] { ServerPacketHeader.FurniListRemoveComposer, ServerPacketHeader.FurniListRemoveComposer,
-            ServerPacketHeader.FurniListAddComposer, ServerPacketHeader.FurniListNotificationComposer,
-            ServerPacketHeader.RecyclerFinishedComposer, ServerPacketHeader.FurniListUpdateComposer }, _client.Sent);
+        Assert.Equal(new[] { ServerPacketHeader.FurniListNotificationComposer, ServerPacketHeader.FurniListRemoveMultipleComposer,
+            ServerPacketHeader.FurniListAddComposer, ServerPacketHeader.RecyclerFinishedComposer }, _client.Sent);
+        var removed = new FlashIncomingPacket { Buffer = _client.Packets.Single(packet => packet.Header == ServerPacketHeader.FurniListRemoveMultipleComposer).Body };
+        Assert.Equal((2, 21, 20), (removed.ReadInt(), removed.ReadInt(), removed.ReadInt()));
+        Assert.False(removed.HasDataRemaining());
         var result = new FlashIncomingPacket { Buffer = _client.Packets.Single(packet => packet.Header == ServerPacketHeader.RecyclerFinishedComposer).Body };
         Assert.Equal(1, result.ReadInt());
-        Assert.Equal(0, result.ReadInt());
+        Assert.Equal(99, result.ReadInt());
         Assert.False(result.HasDataRemaining());
         Assert.All(inputs, item => { Assert.True(item.TryReserve()); item.ReleaseReservation(); });
     }
@@ -221,7 +223,7 @@ public partial class PlacedFurniRoomTests
         var habbo = _client.GetHabbo();
         _client.BeforeCapture = header =>
         {
-            if (header == ServerPacketHeader.FurniListRemoveComposer) {
+            if (header == ServerPacketHeader.FurniListNotificationComposer) {
                 Assert.Equal(99u, Assert.Single(Assert.IsType<InventoryComponent>(habbo.Inventory).Furniture.GetItems).Id);
                 typeof(GameClient).GetField("_habbo", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.SetValue(_client, null);
             }
@@ -454,6 +456,19 @@ public partial class PlacedFurniRoomTests
         Assert.Equal(new KeyValuePair<int, int>[] { new(0, 150), new(5, 7) }, store.SavedWallet.Value.Currencies);
         Assert.Equal(140, habbo.Duckets);
         Assert.Equal(99u, Assert.Single(habbo.Inventory!.Furniture.GetItems).Id);
+    }
+
+    [Fact]
+    public void PaidRecyclingReportsTheDucketChargeAfterTheBoxAndBeforeTheResult()
+    {
+        var (service, store, _, _) = RecyclerFixture();
+        _client.GetHabbo().Duckets = 150;
+        store.Configuration = store.Configuration with { CostDuckets = 10 };
+        store.PaidBalance = 140;
+        service.Recycle(_client, [20, 21]);
+        Assert.Equal(new[] { ServerPacketHeader.FurniListNotificationComposer, ServerPacketHeader.FurniListRemoveMultipleComposer,
+            ServerPacketHeader.FurniListAddComposer, ServerPacketHeader.HabboActivityPointNotificationComposer,
+            ServerPacketHeader.RecyclerFinishedComposer }, _client.Sent);
     }
 
     [Fact]

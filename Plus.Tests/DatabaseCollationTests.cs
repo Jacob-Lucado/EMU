@@ -71,21 +71,38 @@ public sealed class DatabaseCollationTests
         });
     }
 
-    // utf8mb4_unicode_ci treats 'ß' and 'ss' as equal and utf8mb4_general_ci does not, so a unique key can stop the run.
     [SchemaMigrationDatabaseFact]
-    public async Task ARunThatStopsHalfwayRestoresTheForeignKeysWhenItRunsAgain()
+    public async Task AUniqueCollisionLeavesDataAndForeignKeysInPlace()
     {
         await InDatabase("CHARACTER SET latin1", (_, _, connection) =>
         {
             CreateDriftedTables(connection);
-            connection.Execute("CREATE TABLE names (name VARCHAR(10) NOT NULL UNIQUE) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci; " +
-                               "INSERT INTO names VALUES ('ß'), ('ss')");
+            connection.Execute("CREATE TABLE names (site INT, name VARCHAR(20), UNIQUE (site, name(2))) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci; " +
+                               "INSERT INTO names VALUES (1, 'ß'), (1, 'ssuffix'), (NULL, 'a'), (NULL, 'a')");
 
             Assert.ThrowsAny<MySqlException>(() => Apply(connection));
-            connection.Execute("DELETE FROM names WHERE name = 'ss'");
+            Assert.Equal(4, connection.ExecuteScalar<int>("SELECT COUNT(*) FROM names"));
+            Assert.Equal("latin1_swedish_ci", DatabaseCollation(connection));
+            Assert.ThrowsAny<MySqlException>(() => connection.Execute("INSERT INTO child VALUES (2, 'missing')"));
+
+            connection.Execute("DELETE FROM names WHERE name = 'ssuffix'");
+            Apply(connection);
+            Assert.Empty(OtherCollations(connection));
+        });
+    }
+
+    [SchemaMigrationDatabaseFact]
+    public async Task RestoringAKeyValidatesExistingChildRowsAndCanBeRetried()
+    {
+        await InDatabase("CHARACTER SET latin1", (_, _, connection) =>
+        {
+            CreateDriftedTables(connection);
+            connection.Execute("INSERT INTO parent VALUES ('s', 'parent'); INSERT INTO child VALUES (3, 'ß')");
+
+            Assert.ThrowsAny<MySqlException>(() => Apply(connection));
+            connection.Execute("UPDATE child SET parent_code = 's' WHERE id = 3");
             Apply(connection);
 
-            Assert.Empty(OtherCollations(connection));
             Assert.Equal(new[] { "fk_child_parent", "fk_pair" }, connection.Query<string>(
                 "SELECT CONSTRAINT_NAME FROM information_schema.REFERENTIAL_CONSTRAINTS WHERE CONSTRAINT_SCHEMA = DATABASE() ORDER BY 1"));
             Assert.ThrowsAny<MySqlException>(() => connection.Execute("INSERT INTO child VALUES (2, 'missing')"));

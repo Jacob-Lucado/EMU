@@ -122,6 +122,7 @@ public partial class PlacedFurniRoomTests
         Assert.Null(_room.GetRoomItemHandler().GetItem(70));
         Assert.Contains(_client.Packets, packet => packet.Header == ServerPacketHeader.ObjectRemoveComposer);
         Assert.Empty(store.Deleted);
+        store.FailNextDelete = true;
         _room.GetRoomItemHandler().Dispose();
         Assert.Equal([(70u, RoomId)], store.Deleted);
         Assert.Equal(20 + 5 * 38, pet.Energy);
@@ -142,6 +143,31 @@ public partial class PlacedFurniRoomTests
 
         Assert.Equal("0", food.LegacyDataString);
         Assert.Equal(17_600, pet.Experience);
+    }
+
+    [Fact]
+    public void TemporaryFoodCannotGiveExperience()
+    {
+        var owner = LegacyRider();
+        var pet = CommandPet(15, 17_600, 420);
+        var user = PetUser(pet);
+        var definition = Furni(70, InteractionType.None, WiredBoxType.None).Definition;
+        definition.ItemName = "petfood1";
+        definition.CustomParams = "375,10,0";
+        definition.Walkable = true;
+        var food = new Item {
+            Id = TemporaryItemIds.First, OwnerId = 7, RoomId = RoomId, IsTemporary = true,
+            Definition = definition, GetX = 3, GetY = 3, ExtraData = new LegacyDataFormat { Data = "4" }
+        };
+        _room.GetRoomItemHandler().LoadFurniture([food]);
+        var ai = CommandBot(user, PetCommandSet.Eat);
+        ai.OnUserSay(owner, "horse eat");
+
+        ArriveAt(ai, user, 3, 3);
+
+        Assert.Equal(17_600, pet.Experience);
+        Assert.Equal("4", food.LegacyDataString);
+        Assert.Same(food, _room.GetRoomItemHandler().GetItem(food.Id));
     }
 
     [Fact]
@@ -249,6 +275,11 @@ public partial class PlacedFurniRoomTests
         return store;
     }
 
+    private sealed class TemporaryStoreFailure : System.Data.Common.DbException
+    {
+        public override bool IsTransient => true;
+    }
+
     private sealed class DeletingItemStore : IRoomItemStore
     {
         public List<(uint ItemId, uint RoomId)> Deleted { get; } = [];
@@ -258,6 +289,17 @@ public partial class PlacedFurniRoomTests
         public void SaveMoved(IReadOnlyList<RoomItemSave> items) { }
         public void PlaceFloor(uint itemId, uint roomId, int x, int y, double z, int rotation) { }
         public void PlaceWall(uint itemId, uint roomId, int x, int y, double z, int rotation, string wallPosition) { }
-        public void DeleteConsumed(uint roomId, IReadOnlyCollection<uint> itemIds) => Deleted.AddRange(itemIds.Select(id => (id, roomId)));
+        public bool FailNextDelete { get; set; }
+
+        public void DeleteConsumed(uint roomId, IReadOnlyCollection<uint> itemIds)
+        {
+            if (FailNextDelete) {
+                FailNextDelete = false;
+
+                throw new TemporaryStoreFailure();
+            }
+
+            Deleted.AddRange(itemIds.Select(id => (id, roomId)));
+        }
     }
 }

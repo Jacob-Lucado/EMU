@@ -518,17 +518,18 @@ public partial class RoomItemHandling
     }
 
     // announcing runs once the item has left the room, just before the clients hear about it.
-    public bool RemoveFurniture(GameClient session, Item item, Action? announcing = null)
+    // pickerId is the user the clients show taking the item (its owner unless given); -1 names nobody.
+    public bool RemoveFurniture(GameClient session, Item item, Action? announcing = null, int? pickerId = null)
     {
         if (item.ExtraData is not Plus.HabboHotel.Items.DataFormat.HighscoreDataFormat) {
-            return RemoveFurniture(session, item, null, announcing);
+            return RemoveFurniture(session, item, null, announcing, pickerId);
         }
 
         if (!TryReserveTransfers([item], out var transfer)) {
             return false;
         }
 
-        var removed = RemoveFurniture(session, item, transfer, announcing);
+        var removed = RemoveFurniture(session, item, transfer, announcing, pickerId);
 
         if (removed) {
             CompleteTransfer(transfer!, item);
@@ -540,7 +541,7 @@ public partial class RoomItemHandling
         return removed;
     }
 
-    internal bool RemoveFurniture(GameClient session, Item item, RoomItemTransfer? transfer, Action? announcing = null)
+    internal bool RemoveFurniture(GameClient session, Item item, RoomItemTransfer? transfer, Action? announcing = null, int? pickerId = null)
     {
         if (item.IsTemporary || !ReferenceEquals(GetItem(item.Id), item)) {
             return false;
@@ -569,7 +570,7 @@ public partial class RoomItemHandling
             item.UpdateNeeded = false;
         }
 
-        return RemoveRoomItemCore(item, true, announcing);
+        return RemoveRoomItemCore(item, true, announcing, pickerId);
     }
 
     /// <summary>Takes a used-up furni out of the room and deletes it, as when a pet eats the last bite of its food.</summary>
@@ -589,7 +590,7 @@ public partial class RoomItemHandling
     private bool RemoveRoomItem(Item item) => RemoveRoomItemCore(item, true);
 
     // Remove Temporary Furni sends its own batch, so its removals are not announced one by one.
-    private bool RemoveRoomItemCore(Item item, bool announce, Action? announcing = null)
+    private bool RemoveRoomItemCore(Item item, bool announce, Action? announcing = null, int? pickerId = null)
     {
         var inputs = _room.GetGameMap().Navigation?.Inputs;
 
@@ -616,10 +617,10 @@ public partial class RoomItemHandling
         var neverSent = item.IsFloorItem && FurniVisibility.ForgetRemoved(_room, item);
 
         if (announce && item.IsFloorItem && !neverSent) {
-            _room.SendPacket(new ObjectRemoveComposer(item.Id, item.IsTemporary, item.UserId));
+            _room.SendPacket(new ObjectRemoveComposer(item.Id, item.IsTemporary, pickerId ?? item.UserId));
         }
         else if (announce && item.IsWallItem) {
-            _room.SendPacket(new ItemRemoveComposer(item.Id, item.UserId));
+            _room.SendPacket(new ItemRemoveComposer(item.Id, pickerId ?? item.UserId));
         }
 
         if (item.IsFloorItem || item.IsTemporary) {
@@ -1288,6 +1289,25 @@ public partial class RoomItemHandling
         }
     }
 
+    // A pet package opening has already stored the replacement's room, height and rotation.
+    internal void PublishStoredFloorItem(Item item)
+    {
+        var map = _room.GetGameMap();
+
+        lock (map.PlacementSync) {
+            if (!AdmitFloorItem(item)) {
+                return;
+            }
+
+            map.AddItemToMap(item, handleGameItem: false);
+            _restorePoint[item.Id] = RestorePoint(item);
+        }
+
+        map.AddItemEffects(item);
+        _room.GetWired()?.AttachRoomItem(item);
+        _room.SendObject(item);
+    }
+
     // Admission serializes membership and record publication with pickup. Only
     // that transaction shares NavSync; callbacks do not.
     internal bool AdmitFloorItem(Item item)
@@ -1500,10 +1520,22 @@ public partial class RoomItemHandling
 
     public void Dispose()
     {
+        uint[] consumed;
+
         lock (_payloadGate) {
-            if (_consumedItems.Count > 0) {
-                _store.DeleteConsumed(_room.RoomId, _consumedItems);
-                _consumedItems.Clear();
+            consumed = _consumedItems.ToArray();
+        }
+
+        if (consumed.Length > 0) {
+            try {
+                _store.DeleteConsumed(_room.RoomId, consumed);
+            }
+            catch (System.Data.Common.DbException error) when (error.IsTransient) {
+                _store.DeleteConsumed(_room.RoomId, consumed);
+            }
+
+            lock (_payloadGate) {
+                _consumedItems.ExceptWith(consumed);
             }
         }
 

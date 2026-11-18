@@ -99,6 +99,12 @@ public class RoomUser
     public int RotHead; //byte
 
     public bool SetStep;
+
+    /// <summary>The effect a vending machine gave this user. It starts on the user's next step and stays until then.</summary>
+    public int PendingVendingEffect;
+
+    /// <summary>The effect this user got in this room from a vending machine or from the effects inventory. It ends when the user leaves the room.</summary>
+    public int RoomEffect;
     public int SetX; //byte
     public int SetY; //byte
     public double SetZ;
@@ -827,6 +833,7 @@ public class RoomUser
 
     public void ApplyEffect(int effectId)
     {
+        RoomEffect = 0;
         var room = GetRoom();
 
         if (room == null) {

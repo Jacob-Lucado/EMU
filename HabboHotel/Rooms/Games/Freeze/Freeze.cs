@@ -103,7 +103,7 @@ public class Freeze
                 _room.SendPacket(new ActionComposer(user.VirtualId, 1));
             }
 
-            if (ExitTeleports.Count > 0) {
+            if (ExitTeleports.Count > 0 && user.FreezeExitTicks == 0) {
                 var tile = _freezeTiles.Values.Where(x => x.GetX == user.X && x.GetY == user.Y).FirstOrDefault();
 
                 if (tile != null) {
@@ -164,13 +164,23 @@ public class Freeze
 
     public void CycleUser(RoomUser user)
     {
+        if (user.FreezeExitTicks > 0) {
+            LeaveField(user);
+        }
+
         if (user.Freezed) {
             user.FreezeCounter++;
 
             if (user.FreezeCounter > 10) {
                 user.Freezed = false;
                 user.FreezeCounter = 0;
-                ActivateShield(user);
+
+                if (GameIsStarted && user.FreezeLives <= 0 && user.Team != Team.None) {
+                    Eliminate(user);
+                }
+                else {
+                    ActivateShield(user);
+                }
             }
         }
 
@@ -182,6 +192,37 @@ public class Freeze
                 user.ShieldCounter = 10;
                 user.ApplyEffect(Convert.ToInt32(user.Team) + 39);
             }
+        }
+    }
+
+    // A player whose last life is gone leaves the team when that freeze ends. The game ends there when one team is left.
+    private void Eliminate(RoomUser user)
+    {
+        var teams = _room.GetTeamManagerForFreeze();
+        user.GetClient()?.Send(new YouArePlayingGameComposer(false));
+        _room.GetGameManager().AddPointToTeam(user.Team, -10);
+        teams.OnUserLeave(user);
+        user.Team = Team.None;
+        user.ApplyEffect(4);
+        user.FreezeExitTicks = 1;
+
+        if (new[] { teams.RedTeam, teams.GreenTeam, teams.BlueTeam, teams.YellowTeam }.Count(team => team.Count > 0) <= 1) {
+            StopGame();
+        }
+    }
+
+    // A player sent off the field moves to an exit four room ticks after the effect, and the effect ends three ticks later.
+    private void LeaveField(RoomUser user)
+    {
+        user.FreezeExitTicks++;
+
+        if (user.FreezeExitTicks == 5 && ExitTeleports.Count > 0) {
+            _room.GetGameMap().TeleportToItem(user, GetRandomExitTile());
+            user.UpdateNeeded = true;
+        }
+        else if (user.FreezeExitTicks == 8) {
+            user.FreezeExitTicks = 0;
+            user.ApplyEffect(0);
         }
     }
 
@@ -467,42 +508,6 @@ public class Freeze
         user.Freezed = true;
         user.FreezeCounter = 0;
         user.FreezeLives--;
-
-        if (user.FreezeLives <= 0) {
-            user.GetClient().Send(new GamePlayerValueComposer(user.VirtualId, user.FreezeLives));
-            user.ApplyEffect(-1);
-            _room.GetGameManager().AddPointToTeam(user.Team, -10);
-            var t = _room.GetTeamManagerForFreeze();
-            t.OnUserLeave(user);
-            user.Team = Team.None;
-
-            if (ExitTeleports.Count > 0) {
-                _room.GetGameMap().TeleportToItem(user, GetRandomExitTile());
-            }
-
-            user.Freezed = false;
-            user.SetStep = false;
-            user.IsWalking = false;
-            user.UpdateNeeded = true;
-
-            if (t.BlueTeam.Count <= 0 && t.RedTeam.Count <= 0 && t.GreenTeam.Count <= 0 && t.YellowTeam.Count > 0) {
-                StopGame(); // yellow team win
-            }
-            else if (t.BlueTeam.Count > 0 && t.RedTeam.Count <= 0 && t.GreenTeam.Count <= 0 &&
-                     t.YellowTeam.Count <= 0) {
-                StopGame(); // blue team win
-            }
-            else if (t.BlueTeam.Count <= 0 && t.RedTeam.Count > 0 && t.GreenTeam.Count <= 0 &&
-                     t.YellowTeam.Count <= 0) {
-                StopGame(); // red team win
-            }
-            else if (t.BlueTeam.Count <= 0 && t.RedTeam.Count <= 0 && t.GreenTeam.Count > 0 &&
-                     t.YellowTeam.Count <= 0) {
-                StopGame(); // green team win
-            }
-
-            return;
-        }
 
         _room.GetGameManager().AddPointToTeam(user.Team, -10);
         user.ApplyEffect(12, delay);

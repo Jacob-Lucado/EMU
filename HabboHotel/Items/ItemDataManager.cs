@@ -99,6 +99,7 @@ public class ItemDataManager : IItemDataManager, IStartable
                         EffectId = Convert.ToInt32(row["effect_id"]),
                         IsRare = FurnitureNumbers.BooleanFromCell(row["is_rare"]),
                         ExtraRot = FurnitureNumbers.BooleanFromCell(row["extra_rot"]),
+                        FurniLine = row.Table.Columns.Contains("furni_line") ? Convert.ToString(row["furni_line"], CultureInfo.InvariantCulture) ?? "" : "",
                         Directions = FurnitureDirections.For(Convert.ToString(row["item_name"])),
                         DefaultDirection = row.Table.Columns.Contains("default_dir") && row["default_dir"] is not DBNull ? Convert.ToInt32(row["default_dir"], CultureInfo.InvariantCulture) : 0,
                         FigureSetIds = ReadFigureSetIds(row.Table.Columns.Contains("custom_params") ? row["custom_params"] : null),

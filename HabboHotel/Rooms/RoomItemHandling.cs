@@ -160,6 +160,7 @@ public partial class RoomItemHandling
         return true;
     }
 
+    private readonly HashSet<uint> _consumedItems = [];
     private readonly ConcurrentDictionary<uint, Item> _movedItems;
     private readonly ConcurrentDictionary<uint, Item> _rollers;
     private readonly Room _room;
@@ -219,6 +220,23 @@ public partial class RoomItemHandling
         }
 
         return null;
+    }
+
+    internal Item? FindNearestFloor(Point position, Func<Item, bool> matches)
+    {
+        Item? nearest = null;
+        var distance = int.MaxValue;
+
+        foreach (var (_, item) in _floorItems) {
+            var nextDistance = Math.Abs(item.GetX - position.X) + Math.Abs(item.GetY - position.Y);
+
+            if (nextDistance < distance && matches(item)) {
+                nearest = item;
+                distance = nextDistance;
+            }
+        }
+
+        return nearest;
     }
 
     public ICollection<Item> GetWall => _wallItems.Values;
@@ -553,6 +571,21 @@ public partial class RoomItemHandling
         }
 
         return RemoveRoomItemCore(item, true, announcing, pickerId);
+    }
+
+    /// <summary>Takes a used-up furni out of the room and deletes it, as when a pet eats the last bite of its food.</summary>
+    public bool DeleteFurniture(Item item)
+    {
+        if (item.IsTemporary || !ReferenceEquals(GetItem(item.Id), item)) {
+            return false;
+        }
+
+        return RemoveRoomItemCore(item, true, () =>
+        {
+            lock (_payloadGate) {
+                _consumedItems.Add(item.Id);
+            }
+        });
     }
 
     private bool RemoveRoomItem(Item item) => RemoveRoomItemCore(item, true);
@@ -1488,6 +1521,25 @@ public partial class RoomItemHandling
 
     public void Dispose()
     {
+        uint[] consumed;
+
+        lock (_payloadGate) {
+            consumed = _consumedItems.ToArray();
+        }
+
+        if (consumed.Length > 0) {
+            try {
+                _store.DeleteConsumed(_room.RoomId, consumed);
+            }
+            catch (System.Data.Common.DbException error) when (error.IsTransient) {
+                _store.DeleteConsumed(_room.RoomId, consumed);
+            }
+
+            lock (_payloadGate) {
+                _consumedItems.ExceptWith(consumed);
+            }
+        }
+
         SaveFurniture();
 
         if (_restoreOnDispose) {

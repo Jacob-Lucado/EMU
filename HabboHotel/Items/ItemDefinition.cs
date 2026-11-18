@@ -14,6 +14,9 @@ public class ItemDefinition
     /// <summary>The name Habbo's furnidata gives the furni; empty when the row has none.</summary>
     public string FurniName { get; set; } = string.Empty;
 
+    /// <summary>The Habbo furnidata furniline, as in "pet_food".</summary>
+    public string FurniLine { get; set; } = string.Empty;
+
     /// <summary>The name a player sees: the furnidata name, or the public name when there is none.</summary>
     public string DisplayName => FurniName.Length > 0 ? FurniName : PublicName;
     public ItemType Type { get; set; }

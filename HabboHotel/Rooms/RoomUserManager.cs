@@ -580,6 +580,10 @@ public partial class RoomUserManager
                     }
                 }
 
+                if (user.RoomEffect != 0 && session.GetHabbo().Effects is { } roomEffects && roomEffects.CurrentEffect == user.RoomEffect) {
+                    roomEffects.CurrentEffect = 0;
+                }
+
                 // A football gate outfit belongs to its room: the user's own figure is given back on leaving.
                 if (user.FootballGateOutfit is { } outfit && outfit.BaseLook == session.GetHabbo().Look) {
                     user.FootballGateOutfit = null;

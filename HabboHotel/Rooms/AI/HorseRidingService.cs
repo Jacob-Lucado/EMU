@@ -31,6 +31,10 @@ public sealed class HorseRidingService(IPetLocale petLocale, IItemDataManager? i
             return;
         }
 
+        if (mount && pet.PetData.Saddle <= 0) {
+            return;
+        }
+
         if (!MayRide(session, user, pet)) {
             return;
         }

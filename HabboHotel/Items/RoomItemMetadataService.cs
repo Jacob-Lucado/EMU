@@ -296,7 +296,7 @@ public sealed class RoomItemMetadataService(IRoomItemMetadataStore store, IFigur
 
         var data = new MapDataFormat(pairs);
         var serialized = data.Serialize();
-        room.GetRoomItemHandler().SetFloorItemData(session, item, data, () => store.SetBrandingData(item.Id, room.Id, serialized));
+        room.GetRoomItemHandler().PersistFurnitureData(item, data, () => store.SetBrandingData(item.Id, room.Id, serialized));
     }
 
     public void SetToner(Room room, GameClient session, TonerSettingsRequest request)

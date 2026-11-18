@@ -21,7 +21,11 @@ SET @recycler_furni_complete = (
     SELECT COUNT(*) FROM recycler_habbo_prizes p
     WHERE p.chat_style_id IS NULL AND NOT EXISTS (
         SELECT 1 FROM furniture f WHERE BINARY f.item_name = BINARY p.item_name AND f.type IN ('s', 'i') AND f.sprite_id > 0)) = 0;
-SET @recycler_seed = @recycler_untouched AND @recycler_furni_complete;
+-- Remember that this migration owns the seed if startup stops between inserts.
+CREATE TABLE IF NOT EXISTS migration_150_recycler_seed (id INT NOT NULL PRIMARY KEY) ENGINE=InnoDB;
+INSERT IGNORE INTO migration_150_recycler_seed(id)
+SELECT 1 FROM DUAL WHERE @recycler_untouched AND @recycler_furni_complete;
+SET @recycler_seed = EXISTS (SELECT 1 FROM migration_150_recycler_seed WHERE id = 1);
 
 -- A new settings row, and a machine nobody set up, start with Habbo's 8 slots. A hotel's own setup keeps its slot count.
 ALTER TABLE recycler_settings ALTER COLUMN slots SET DEFAULT 8;
@@ -31,16 +35,19 @@ UPDATE recycler_settings SET slots = 8 WHERE id = 1 AND slots = 5 AND @recycler_
 INSERT IGNORE INTO room_chat_styles(id, enabled, requires_hc, requires_ownership)
 SELECT 10001, TRUE, FALSE, TRUE FROM DUAL WHERE @recycler_seed;
 
-INSERT INTO recycler_levels(level, chance) SELECT level, chance FROM recycler_habbo_levels WHERE @recycler_seed;
+INSERT INTO recycler_levels(level, chance) SELECT level, chance FROM recycler_habbo_levels WHERE @recycler_seed
+ON DUPLICATE KEY UPDATE chance = recycler_levels.chance;
 
 INSERT INTO recycler_prizes(level, item_id)
 SELECT p.level, MIN(f.id) FROM recycler_habbo_prizes p
 JOIN furniture f ON BINARY f.item_name = BINARY p.item_name AND f.type IN ('s', 'i') AND f.sprite_id > 0
 WHERE @recycler_seed AND p.chat_style_id IS NULL
-GROUP BY p.level, p.item_name;
+GROUP BY p.level, p.item_name
+ON DUPLICATE KEY UPDATE id = recycler_prizes.id;
 
 INSERT INTO recycler_prizes(level, item_id, chat_style_id)
-SELECT level, NULL, chat_style_id FROM recycler_habbo_prizes WHERE @recycler_seed AND chat_style_id IS NOT NULL;
+SELECT level, NULL, chat_style_id FROM recycler_habbo_prizes WHERE @recycler_seed AND chat_style_id IS NOT NULL
+ON DUPLICATE KEY UPDATE id = recycler_prizes.id;
 
 INSERT INTO recycler_settings(id, enabled, slots, cooldown_seconds, cost_duckets)
 SELECT 1, TRUE, 8, 10, 10 FROM DUAL WHERE @recycler_seed
@@ -48,3 +55,4 @@ ON DUPLICATE KEY UPDATE enabled = TRUE, slots = 8, cooldown_seconds = 10, cost_d
 
 DROP TEMPORARY TABLE recycler_habbo_prizes;
 DROP TEMPORARY TABLE recycler_habbo_levels;
+DROP TABLE migration_150_recycler_seed;

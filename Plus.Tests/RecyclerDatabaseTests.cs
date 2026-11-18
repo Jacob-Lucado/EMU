@@ -712,6 +712,36 @@ public sealed class RecyclerDatabaseTests
     }
 
     [RecyclerDatabaseFact]
+    public void AnInterruptedPrizeImportCanResumeOnTheNextStartup()
+    {
+        using var fixture = new Fixture();
+        ResetToUntouchedRecycler(fixture);
+        AddHabboPrizeFurniture(fixture);
+        fixture.Connection.Execute("""
+            CREATE TRIGGER reject_chat_prize BEFORE INSERT ON recycler_prizes FOR EACH ROW
+            BEGIN
+                IF NEW.chat_style_id IS NOT NULL THEN
+                    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='prize import interrupted';
+                END IF;
+            END;
+            """);
+        using (var startup = new MySqlConnection(fixture.ConnectionString)) {
+            startup.Open();
+            Assert.Throws<MySqlException>(() => startup.Execute(HabboDefaultsMigration));
+        }
+
+        fixture.Connection.Execute("DROP TRIGGER reject_chat_prize");
+        fixture.Connection.Execute(HabboDefaultsMigration);
+
+        var config = fixture.Store.Load();
+        Assert.True(config.Enabled);
+        Assert.NotNull(RecyclerPrizeDistribution.Build(config));
+        Assert.Contains(config.Levels.SelectMany(level => level.Prizes), prize => prize.ChatStyleId > 0);
+        Assert.All(config.Levels, level => Assert.Equal(level.Prizes.Length,
+            level.Prizes.Select(prize => (prize.ItemId, prize.ChatStyleId)).Distinct().Count()));
+    }
+
+    [RecyclerDatabaseFact]
     public void RunningTheHabboDefaultsTwiceChangesNothingTheSecondTime()
     {
         using var fixture = new Fixture();

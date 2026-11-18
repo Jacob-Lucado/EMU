@@ -191,7 +191,7 @@ public class Pet
 
         if (client != null) {
             client.Send(new PetLevelNotificationComposer(PetId, Name, Level, Look));
-            client.Send(new PetTrainingPanelComposer(PetId, Level));
+            client.Send(new PetTrainingPanelComposer(this));
             _rewards!.Progress(client, RewardTrackActions.PetLevel, gained);
         }
 
@@ -216,11 +216,12 @@ public class Pet
             return;
         }
 
-        Energy -= Random.Shared.Next(4, 16);
+        SpendEnergy(5);
+    }
 
-        if (Energy < 0) {
-            Energy = 1;
-        }
+    public void SpendEnergy(int amount)
+    {
+        Energy = Math.Max(0, Energy - amount);
 
         if (DbState != PetDatabaseUpdateState.NeedsInsert) {
             DbState = PetDatabaseUpdateState.NeedsUpdate;

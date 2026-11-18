@@ -112,7 +112,7 @@ public class BotDomainDependencyTests
     private sealed class Commands : IPetCommandManager
     {
         public void Init() { }
-        public int TryInvoke(string input) => input == "sit" ? 3 : 0;
+        public int TryInvoke(string input) => input == "sit" ? 1 : -1;
     }
     private sealed class Filter : IWordFilterManager
     {

@@ -67,11 +67,11 @@ public sealed class PetInformationService(TimeProvider clock) : IPetInformationS
             return;
         }
 
-        if (pet.RoomId != room.RoomId || pet.PetData == null) {
+        if (pet.RoomId != room.RoomId || pet.PetData == null || pet.PetData.OwnerId != session.GetHabbo().Id) {
             return;
         }
 
-        session.Send(new PetTrainingPanelComposer(pet.PetData.PetId, pet.PetData.Level));
+        session.Send(new PetTrainingPanelComposer(pet.PetData));
     }
 
     public PetInformationSnapshot Capture(Pet pet)

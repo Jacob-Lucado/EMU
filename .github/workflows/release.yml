@@ -71,6 +71,7 @@ jobs:
           for rid in linux-x64 linux-arm64; do
             tar -C "out/$rid" --owner=0 --group=0 -czf "dist/plusemu-$rid.tar.gz" .
           done
+          printf '%s\r\n' '@"%~dp0Plus Emulator.exe" --check-runtime' > out/win-x64/check-runtime.cmd
           (cd out/win-x64 && zip -qr ../../dist/plusemu-win-x64.zip .)
           (cd dist && sha256sum * > SHA256SUMS)
 

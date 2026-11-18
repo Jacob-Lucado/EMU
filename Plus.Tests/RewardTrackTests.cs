@@ -57,6 +57,41 @@ public class RewardTrackTests
     }
 
     [Fact]
+    public void WiredScoreAddsInAddModeAndRaisesToTheScoreInSetMode()
+    {
+        var track = ChatTrack();
+        var task = track.Tasks[0];
+        var state = new UserRewardTrackState(track.Id, 0, false);
+
+        var added = RewardTrackRules.PlanScore(track, state, task, 5, addToExisting: true);
+        Assert.Equal((true, 5, 10), (added.Changed, added.Count, added.PointsGranted));
+        state.Apply(added);
+
+        var set = RewardTrackRules.PlanScore(track, state, task, 25, addToExisting: false);
+        Assert.Equal((true, 25, 20), (set.Changed, set.Count, set.PointsGranted));
+        state.Apply(set);
+
+        var again = RewardTrackRules.PlanScore(track, state, task, 25, addToExisting: true);
+        Assert.Equal((true, 50, 0), (again.Changed, again.Count, again.PointsGranted));
+    }
+
+    [Fact]
+    public void WiredSetModeNeverLowersProgress()
+    {
+        var track = ChatTrack();
+        var task = track.Tasks[0];
+        var state = new UserRewardTrackState(track.Id, 0, false);
+        state.Apply(RewardTrackRules.PlanScore(track, state, task, 25, addToExisting: false));
+
+        var lower = RewardTrackRules.PlanScore(track, state, task, 5, addToExisting: false);
+        var same = RewardTrackRules.PlanScore(track, state, task, 25, addToExisting: false);
+
+        Assert.False(lower.Changed);
+        Assert.False(same.Changed);
+        Assert.Equal(25, state.ProgressOf(task.Id));
+    }
+
+    [Fact]
     public void ProgressStopsAtTheLastLevel()
     {
         var track = ChatTrack();
@@ -110,6 +145,7 @@ public class RewardTrackTests
         Assert.Equal(new RewardTrackCurrencyGrant(5, 25), RewardTrackRules.Grant(Prize(8, "5", "", 25)));
         Assert.Equal(new RewardTrackCurrencyGrant(104, 100), RewardTrackRules.Grant(Prize(8, "104", "", 100)));
         Assert.Equal(new RewardTrackCurrencyGrant(-1, 5), RewardTrackRules.Grant(Prize(8, "-1", "", 5)));
+        Assert.Equal(new RewardTrackHabbiconGrant(32), RewardTrackRules.Grant(Prize(12, "32", "", 1)));
     }
 
     [Fact]
@@ -133,6 +169,8 @@ public class RewardTrackTests
     [InlineData(8, "-2", "", 5)]
     [InlineData(8, "duckets", "", 5)]
     [InlineData(4, " ", "", 1)]
+    [InlineData(12, "abc", "", 1)]
+    [InlineData(12, "0", "", 1)]
     public void PrizesTheServerCannotGrantAreUnknown(int productType, string rewardType, string extraParams, int amount)
     {
         var track = ChatTrack();

@@ -13,6 +13,9 @@ internal sealed class TestRewardProgress(Action<GameClient, string, int>? before
         beforeProgress?.Invoke(session, actionType, amount);
         Calls.Add((session, actionType, amount));
     }
+    public List<(GameClient Session, string TrackId, string TaskId, int Score, bool AddToExisting)> WiredCalls { get; } = [];
+    public void ProgressWiredTask(GameClient session, string trackId, string taskId, int score, bool addToExisting) =>
+        WiredCalls.Add((session, trackId, taskId, score, addToExisting));
     public void SendTracks(GameClient session) => throw new NotSupportedException();
     public Task Claim(GameClient session, string trackId, string prizeId) => throw new NotSupportedException();
     public void PurchasePremium(GameClient session, string trackId) => throw new NotSupportedException();

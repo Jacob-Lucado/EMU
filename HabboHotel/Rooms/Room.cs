@@ -62,6 +62,11 @@ public class Room
     internal int CycleSlot;
     private object? _navigationSync;
     internal object NavigationSync => LazyInitializer.EnsureInitialized(ref _navigationSync);
+    // Only the entrant count and the idle close are decided under this lock, so a room tick may take it while it holds NavigationSync.
+    private object? _entrySync;
+    private object EntrySync => LazyInitializer.EnsureInitialized(ref _entrySync);
+    private int _entrants;
+    private bool _closingIdle;
     public bool RoomMuted;
 
     public TeamManager Teambanzai;
@@ -528,6 +533,27 @@ public class Room
     // An empty room unloads after about 33 seconds: 66 cycles of 500 ms.
     private const int IdleCyclesBeforeUnload = 66;
 
+    // A user entering keeps the room open until the entry ends, so the idle unload never closes the room under them.
+    internal bool TryBeginEntry()
+    {
+        lock (EntrySync) {
+            if (_closingIdle || MDisposed) {
+                return false;
+            }
+
+            _entrants++;
+
+            return true;
+        }
+    }
+
+    internal void EndEntry()
+    {
+        lock (EntrySync) {
+            _entrants--;
+        }
+    }
+
     private bool KeepRoomActive()
     {
         if (GetRoomUserManager().GetRoomUsers().Count == 0) {
@@ -543,6 +569,14 @@ public class Room
 
         if (IdleTime < IdleCyclesBeforeUnload || HasActivePromotion) {
             return true;
+        }
+
+        lock (EntrySync) {
+            if (_entrants > 0 || UserCount > 0) {
+                return true;
+            }
+
+            _closingIdle = true;
         }
 
         _rooms.UnloadRoom(Id);
@@ -949,9 +983,10 @@ public class Room
     }
 
     // Clients whose revision does not map the data composer get the full update instead; the mapping is checked before anything is sent to a client.
-    internal void SendObjectData(Item item, string data, bool batch)
+    internal void SendObjectData(Item item, string data, bool batch) => SendObjectData(item, FurnitureWireData.ForState(item.ExtraData, data), batch);
+
+    internal void SendObjectData(Item item, FurnitureDataSnapshot wire, bool batch)
     {
-        var wire = FurnitureWireData.ForState(item.ExtraData, data);
         IServerPacket packet = batch ? new ObjectsDataUpdateComposer([(item.Id, wire)]) : new ObjectDataUpdateComposer(item.Id, wire);
 
         try {

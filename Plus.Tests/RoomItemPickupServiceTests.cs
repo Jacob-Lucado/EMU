@@ -238,6 +238,36 @@ public class RoomItemPickupStoreTests
         }
     }
 
+    [RoomComponentDatabaseFact]
+    public void APickedUpTonerKeepsItsStoredData()
+    {
+        var root = Environment.GetEnvironmentVariable("ROOM_COMPONENT_DATABASE")!;
+        using var server = new MySqlConnection(root);
+        server.Open();
+        var schema = "pickup_toner_" + Guid.NewGuid().ToString("N");
+        server.Execute($"CREATE DATABASE `{schema}`");
+
+        try {
+            var builder = new MySqlConnectionStringBuilder(root) { Database = schema };
+            using var connection = new MySqlConnection(builder.ConnectionString);
+            connection.Open();
+            connection.Execute("""
+                CREATE TABLE items(id INT PRIMARY KEY, room_id INT NOT NULL, user_id INT NOT NULL, base_item INT UNSIGNED NOT NULL DEFAULT 0, extra_data TEXT NOT NULL);
+                CREATE TABLE room_items_toner(id INT PRIMARY KEY, enabled BOOL, data1 INT, data2 INT, data3 INT);
+                INSERT INTO items(id,room_id,user_id,extra_data) VALUES(31,42,99,'1\n255\n0\n255');
+                INSERT INTO room_items_toner VALUES(31,TRUE,255,0,255);
+                """);
+
+            Assert.True(new RoomItemPickupStore(new PickupDatabase(builder.ConnectionString)).PickUp(new(31, 42, 99, 99, InteractionType.Toner, false)));
+
+            Assert.Equal((1, 255, 0, 255), connection.QuerySingle<(int, int, int, int)>("SELECT enabled,data1,data2,data3 FROM room_items_toner WHERE id=31"));
+            Assert.Equal("1\n255\n0\n255", connection.ExecuteScalar<string>("SELECT extra_data FROM items WHERE id=31"));
+        }
+        finally {
+            server.Execute($"DROP DATABASE `{schema}`");
+        }
+    }
+
     private sealed class PickupDatabase(string connectionString) : IDatabase
     {
         public bool IsConnected() => true;

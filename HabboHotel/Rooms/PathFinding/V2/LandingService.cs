@@ -20,7 +20,7 @@ internal sealed class LandingService(Room room, RoomNavigation navigation, Movem
         SetLandingPosition(actor, landing);
 
         if (surface.Tile == navigation.Grid.DoorTile && !actor.IsBot && room.Behavior.LeaveOnDoorTile) {
-            room.GetRoomUserManager().RemoveUserFromRoom(actor.GetClient(), true);
+            room.GetRoomUserManager().RemoveUserFromRoom(actor.GetClient(), true, closeReason: RoomUserManager.HotelViewCloseReason);
 
             return;
         }

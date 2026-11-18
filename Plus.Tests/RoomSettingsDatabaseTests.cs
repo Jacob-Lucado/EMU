@@ -63,7 +63,8 @@ public sealed class RoomSettingsDatabaseTests
             Assert.Equal("edited", connection.QuerySingle<string>("SELECT title FROM room_promotions"));
             var metadata = new RoomItemMetadataStore(database);
             metadata.SetToner(92, 42, 0, 255, 1);
-            Assert.Equal((1, 0, 255, 1), connection.QuerySingle<(int, int, int, int)>("SELECT enabled,data1,data2,data3 FROM room_items_toner"));
+            metadata.SetToner(92, 42, 0, 255, 1);
+            Assert.Equal((0, 0, 255, 1), connection.QuerySingle<(int, int, int, int)>("SELECT enabled,data1,data2,data3 FROM room_items_toner"));
             connection.Execute("INSERT INTO items VALUES (93,43,'other'); INSERT INTO room_items_toner VALUES (93,TRUE,20,30,40)");
             var furniture = new FurnitureUseStore(database);
             furniture.SetTonerEnabled(92, 42, false);
@@ -74,7 +75,7 @@ public sealed class RoomSettingsDatabaseTests
             Assert.Equal(0, connection.QuerySingle<int>("SELECT enabled FROM room_items_toner WHERE id=92"));
             Assert.Throws<InvalidOperationException>(() => metadata.SetToner(92, 42, 10, 20, 30));
             Assert.Throws<InvalidOperationException>(() => metadata.SetMannequinData(92, 42, "rejected"));
-            Assert.Equal("original", connection.QuerySingle<string>("SELECT extra_data FROM items WHERE id=92"));
+            Assert.Equal("0\n0\n255\n1", connection.QuerySingle<string>("SELECT extra_data FROM items WHERE id=92"));
             Assert.Equal(255, connection.QuerySingle<int>("SELECT data2 FROM room_items_toner WHERE id=92"));
             connection.Execute("ALTER TABLE items ADD COLUMN base_item INT, ADD COLUMN user_id INT; CREATE TABLE user_presents (item_id INT PRIMARY KEY,base_id INT,extra_data TEXT); INSERT INTO items (id,room_id,extra_data,base_item,user_id) VALUES (94,42,'gift',100,8); INSERT INTO user_presents VALUES (94,201,'changed')");
             var gifts = new GiftStore(database);

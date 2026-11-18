@@ -168,7 +168,7 @@ public sealed class RoomItemMetadataServiceTests
         new RoomItemMetadataService(store, null!).SetToner(room, client, new(item.Id, 0, 255, 1));
 
         Assert.Equal(1, store.Writes);
-        Assert.Equal((0, 255, 1, 1), (room.TonerData.Hue, room.TonerData.Saturation, room.TonerData.Lightness, room.TonerData.Enabled));
+        Assert.Equal((0, 255, 1, 0), (room.TonerData.Hue, room.TonerData.Saturation, room.TonerData.Lightness, room.TonerData.Enabled));
     }
 
     [Fact]

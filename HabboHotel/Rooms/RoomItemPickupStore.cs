@@ -70,9 +70,6 @@ public sealed class RoomItemPickupStore(IDatabase database) : IRoomItemPickupSto
         if (request.Type == InteractionType.Moodlight) {
             connection.Execute("DELETE FROM room_items_moodlight WHERE item_id = @ItemId LIMIT 1", request, transaction);
         }
-        else if (request.Type == InteractionType.Toner) {
-            connection.Execute("DELETE FROM room_items_toner WHERE id = @ItemId LIMIT 1", request, transaction);
-        }
 
         if (request.MusicPlayer) {
             connection.Execute("UPDATE room_music_players SET started_at=NULL,version=version+1 WHERE item_id=@ItemId", request, transaction);

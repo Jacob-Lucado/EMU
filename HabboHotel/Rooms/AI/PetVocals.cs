@@ -5,17 +5,24 @@ public enum PetVocal
 {
     Refusal,
     UnknownCommand,
-    Scratched
+    Scratched,
+    Eating,
+    Drinking,
+    Sleeping,
+    Playing
 }
 
 /// <summary>
-/// Habbo's pet answers. Every pet type can refuse with the shared refusal lines and adds its own lines.
+/// Habbo's pet answers. Every pet type can refuse with the shared refusal lines and adds its own lines; all pets share the playing lines.
 /// A pet type without lines for a moment stays silent.
 /// </summary>
 public static class PetVocals
 {
     private static readonly string[] SharedRefusals =
         ["Maybe I'll do it later", "I'd rather not do it...", "Yes, yes, I'll do it later", "Well, I'm not going to do it..."];
+
+    private static readonly string[] SharedPlaying =
+        ["I'm having a blast!", "I can't stop playing!", "See! I knew this would be fun!", "Wooo! Yay!", "Whee!"];
 
     private static readonly Dictionary<(int Type, PetVocal Vocal), string[]> Lines = new()
     {
@@ -46,14 +53,41 @@ public static class PetVocals
         [(22, PetVocal.UnknownCommand)] = ["Say what?", "I have no idea what you're saying.", "Try again.", "How dare you speak to me like that?", "Eh?"],
         [(28, PetVocal.UnknownCommand)] = ["No comprende, amigo.", "Don't you speak kitten?"],
         [(29, PetVocal.UnknownCommand)] = ["Stop hounding me, I don't understand!", "Let´s paws for a second."],
-        [(30, PetVocal.UnknownCommand)] = ["Hog wash", "You're bacon me crazy!"]
+        [(30, PetVocal.UnknownCommand)] = ["Hog wash", "You're bacon me crazy!"],
+        [(1, PetVocal.Eating)] = ["*eating*"],
+        [(8, PetVocal.Eating)] = ["The fresher the flesh, the greater the taste!"],
+        [(15, PetVocal.Eating)] = ["What a delicacy, yum, yum", "Yum, yum, this is delicious", "This is delicious!"],
+        [(20, PetVocal.Eating)] = ["What a delicacy, yum, yum"],
+        [(29, PetVocal.Eating)] = ["Mmm, I'm wolfing this down!"],
+        [(35, PetVocal.Eating)] = ["Veganism isn't just for Christmas. Veganism is for life.", "*Crunch* I just ADORE meal times. *Crunch*", "Mmmm. Healthy. *Crunch*"],
+        [(0, PetVocal.Drinking)] = ["*drinking*"],
+        [(8, PetVocal.Drinking)] = ["Yes... Yes... This unholy water gives me strength!"],
+        [(15, PetVocal.Drinking)] = ["Ah, that's the good stuff."],
+        [(20, PetVocal.Drinking)] = ["This is literally the greatest drink I have ever had!"],
+        [(21, PetVocal.Drinking)] = ["Yes... not too much, but not too little either."],
+        [(29, PetVocal.Drinking)] = ["I love to drink! Love it, love it, love it!", "H-2-Whoa!", "Oops, did I spill some?", "*slurp slurp slurp*"],
+        [(35, PetVocal.Drinking)] = ["Drinking water after an entire day eating grass is simply heavenly.", "*Gulp* ..if it wasn't for water.. *Gulp* ..life wouldn't exist on this planet.."],
+        [(15, PetVocal.Sleeping)] = ["Zzzz.... Marston!", "Zzzz... Old Dan Tucker....", "Zzzz... I have a heart that can never be tamed..."],
+        [(21, PetVocal.Sleeping)] =
+        [
+            "Zzzz... shira uo ya, kuroki me o aku, nori no ami...", "Zzz... otoroi ya, ha ni kuiateshim haru no ame...",
+            "Zzzz... suisen ya, shiroki shoji no, tomo utsuri..."
+        ],
+        [(22, PetVocal.Sleeping)] = ["Zzz..."],
+        [(29, PetVocal.Sleeping)] = ["Zzz... Say goodbye, cat."],
+        [(35, PetVocal.Sleeping)] = ["*Dreams of electric sheep*", "*zzZZzz..zz..zzZZzz*", "*Rolls over and has a mouthful of grass mid-sleep*"]
     };
 
     public static IReadOnlyList<string> For(int type, PetVocal vocal)
     {
         var own = Lines.GetValueOrDefault((type, vocal), []);
 
-        return vocal == PetVocal.Refusal ? [.. SharedRefusals, .. own] : own;
+        return vocal switch
+        {
+            PetVocal.Refusal => [.. SharedRefusals, .. own],
+            PetVocal.Playing => SharedPlaying,
+            _ => own
+        };
     }
 
     /// <summary>The pet says one of its lines for the moment. A muted room hears nothing.</summary>

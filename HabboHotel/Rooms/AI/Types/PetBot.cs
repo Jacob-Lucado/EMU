@@ -1,5 +1,8 @@
+using System.Drawing;
 using Plus.Core;
 using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Items;
+using Plus.HabboHotel.Items.DataFormat;
 using Plus.HabboHotel.Rooms.PathFinding;
 using Plus.Utilities;
 using Plus.HabboHotel.Rooms.Chat.Pets.Commands;
@@ -12,6 +15,9 @@ public class PetBot : BotAi
     private int _actionTimer;
     private static readonly int EnergyRestTicks = (int)(TimeSpan.FromSeconds(40) / RoomCycle.Interval);
     private int _energyTimer;
+    private uint _visitId;
+    private Point _targetPosition;
+    private Point _visitSpot;
     private int _speechTimer;
     private readonly IPetLocale _locale;
     private readonly IPetCommandManager _commands;
@@ -126,6 +132,10 @@ public class PetBot : BotAi
             return;
         }
 
+        if (_visitId != 0 && Visit(botRoom, pet, petData)) {
+            return;
+        }
+
         if (PetChatter.For(petData.Type) is { } chatter && _random.NextDouble() < chatter.ChancePerTick) {
             pet.Chat(chatter.Lines[_random.Next(chatter.Lines.Length)]);
         }
@@ -160,7 +170,19 @@ public class PetBot : BotAi
                     // Remove Status
                     RemovePetStatus();
 
-                    if (botUser.CanWalk && botRoom.GetGameMap().TryGetRandomWalkableSquare(out var nextCoord)) {
+                    if (petData.Energy < petData.MaxEnergy && FindFood(botRoom, botUser, petData) is { } food) {
+                        GoTo(botRoom, botUser, food);
+                    }
+                    else if (Random.Shared.Next(DrinkChance) == 0 && FindWater(botRoom, botUser) is { } water) {
+                        GoTo(botRoom, botUser, water);
+                    }
+                    else if (Random.Shared.Next(ToyChance) == 0 && FindNearest(botRoom, botUser, item => PetToy.Is(item.Definition) && item.Definition.Walkable) is { } toy) {
+                        GoTo(botRoom, botUser, toy);
+                    }
+                    else if (Random.Shared.Next(NestChance) == 0 && FindNearest(botRoom, botUser, item => PetNest.Is(item.Definition) && item.Definition.Walkable) is { } nest) {
+                        GoTo(botRoom, botUser, nest);
+                    }
+                    else if (botUser.CanWalk && botRoom.GetGameMap().TryGetRandomWalkableSquare(out var nextCoord)) {
                         botUser.MoveTo(nextCoord.X, nextCoord.Y);
                     }
                 }
@@ -174,7 +196,6 @@ public class PetBot : BotAi
         }
 
         if (_energyTimer <= 0) {
-            RemovePetStatus(); // Remove Status
             petData.PetEnergy(true); // Add Energy
             _energyTimer = EnergyRestTicks - 1;
         }
@@ -224,20 +245,180 @@ public class PetBot : BotAi
             return;
         }
 
+        var food = commandId == PetCommandSet.Eat ? FindFood(botRoom, pet, petData) : null;
+        var water = commandId == PetCommandSet.Drink ? FindWater(botRoom, pet) : null;
+
         // Without a bowl or food in the room a pet refuses to drink or eat.
-        if (commandId is PetCommandSet.Drink or PetCommandSet.Eat || !petData.ObeysCommand(commandId)) {
+        if (commandId == PetCommandSet.Drink && water == null || commandId == PetCommandSet.Eat && food == null || !petData.ObeysCommand(commandId)) {
             petData.SpendEnergy(2);
             PetVocals.Say(pet, PetVocal.Refusal);
 
             return;
         }
 
+        if (food != null) {
+            GoTo(botRoom, pet, food);
+            petData.Addexperience(0);
+
+            return;
+        }
+
         Obey(botRoom, pet, user, commandId);
+
+        if (water != null) {
+            GoTo(botRoom, pet, water);
+        }
 
         if (commandId != PetCommandSet.Free) {
             petData.Addexperience(5);
             petData.SpendEnergy(5);
         }
+    }
+
+    private static Item? FindFood(Room room, RoomUser pet, Pet petData) => room.GetRoomItemHandler()
+        .FindNearestFloor(pet.Coordinate, item => !item.IsTemporary && PetFood.Of(item.Definition)?.Feeds(petData.Type) == true);
+
+    private static Item? FindWater(Room room, RoomUser pet) => FindNearest(room, pet, item => PetWater.Is(item.Definition));
+
+    private static Item? FindNearest(Room room, RoomUser pet, Func<Item, bool> wanted) => room.GetRoomItemHandler().GetFloor
+        .Where(wanted)
+        .MinBy(item => Math.Abs(item.GetX - pet.X) + Math.Abs(item.GetY - pet.Y));
+
+    // A pet stands on food and bowls; it stands next to furni it cannot walk on, such as the trough.
+    private void GoTo(Room room, RoomUser pet, Item item)
+    {
+        var map = room.GetGameMap();
+        var spot = item.Definition.Walkable
+            ? item.Coordinate
+            : Around(item.Coordinate).Where(tile => map.CanWalk(tile.X, tile.Y, false))
+                .OrderBy(tile => Math.Abs(tile.X - pet.X) + Math.Abs(tile.Y - pet.Y)).FirstOrDefault(item.SquareInFront);
+        _targetPosition = item.Coordinate;
+        _visitId = item.Id;
+        _visitSpot = spot;
+        pet.MoveTo(spot);
+    }
+
+    private static IEnumerable<Point> Around(Point tile)
+    {
+        for (var dx = -1; dx <= 1; dx++) {
+            for (var dy = -1; dy <= 1; dy++) {
+                if (dx != 0 || dy != 0) {
+                    yield return new(tile.X + dx, tile.Y + dy);
+                }
+            }
+        }
+    }
+
+    // Returns false when the pet is not at the furni it went to, so it goes on with its day.
+    private bool Visit(Room room, RoomUser pet, Pet petData)
+    {
+        var item = room.GetRoomItemHandler().GetItem(_visitId);
+
+        if (item == null) {
+            _visitId = 0;
+
+            return false;
+        }
+
+        if (pet.IsWalking) {
+            return true;
+        }
+
+        _visitId = 0;
+
+        if (pet.Coordinate != _visitSpot || item.Coordinate != _targetPosition) {
+            return false;
+        }
+
+        if (PetWater.Is(item.Definition)) {
+            Drink(item, pet);
+
+            return true;
+        }
+
+        if (PetNest.Is(item.Definition)) {
+            Sleep(pet);
+
+            return true;
+        }
+
+        if (PetToy.Is(item.Definition)) {
+            Play(item, pet, petData);
+
+            return true;
+        }
+
+        return PetFood.Of(item.Definition) is { } values && values.Feeds(petData.Type) && Eat(room, item, values, pet, petData);
+    }
+
+    private void Drink(Item water, RoomUser pet)
+    {
+        RemovePetStatus();
+        pet.Statusses["eat"] = TextHandling.GetString(pet.Z);
+        pet.UpdateNeeded = true;
+        _actionTimer = 10;
+        PetVocals.Say(pet, PetVocal.Drinking);
+        PetWater.Drink(water, DateTimeOffset.UtcNow);
+        water.UpdateState(true, true);
+    }
+
+    // A horse kicks the ball; other pets play with it. The ball moves for three and a half seconds.
+    private void Play(Item toy, RoomUser pet, Pet petData)
+    {
+        RemovePetStatus();
+        pet.Statusses[petData.Type == 15 ? "kck" : "pla"] = TextHandling.GetString(pet.Z);
+        pet.Statusses["gst"] = "sml";
+        pet.UpdateNeeded = true;
+        _actionTimer = 10;
+        PetVocals.Say(pet, PetVocal.Playing);
+        toy.GetRoom()!.GetRoomItemHandler().PlayPetBall(toy);
+    }
+
+    // A pet sleeps in a nest for about a minute.
+    private void Sleep(RoomUser pet)
+    {
+        RemovePetStatus();
+        pet.Statusses["lay"] = TextHandling.GetString(pet.Z);
+        pet.UpdateNeeded = true;
+        _actionTimer = Random.Shared.Next(80, 190 + 1);
+        _speechTimer = _actionTimer;
+        PetVocals.Say(pet, PetVocal.Sleeping);
+    }
+
+    // On the food the pet takes one bite, and more while it is below its maximum energy.
+    private bool Eat(Room room, Item food, PetFood values, RoomUser pet, Pet petData)
+    {
+        var bites = int.TryParse(food.LegacyDataString, out var taken) ? Math.Clamp(taken, 0, PetFood.Bites - 1) : 0;
+        var eaten = 0;
+
+        do {
+            bites++;
+            eaten++;
+        } while (bites < PetFood.Bites && petData.Energy + eaten * values.BiteEnergy < petData.MaxEnergy);
+
+        if (bites == PetFood.Bites && !room.GetRoomItemHandler().DeleteFurniture(food)) {
+            return false;
+        }
+
+        petData.Feed(eaten * values.BiteEnergy);
+        RemovePetStatus();
+        pet.Statusses["eat"] = TextHandling.GetString(pet.Z);
+        pet.UpdateNeeded = true;
+        _actionTimer = 10;
+        PetVocals.Say(pet, PetVocal.Eating);
+
+        if (bites < PetFood.Bites) {
+            if (food.ExtraData is not LegacyDataFormat) {
+                food.ExtraData = new LegacyDataFormat();
+            }
+
+            food.LegacyDataString = bites.ToString();
+            food.UpdateUsedState();
+        }
+
+        petData.Addexperience(eaten * values.BiteExperience);
+
+        return true;
     }
 
     private void Obey(Room room, RoomUser pet, RoomUser user, int commandId)
@@ -263,6 +444,15 @@ public class PetBot : BotAi
                 break;
         }
     }
+
+    // About one action in six a pet goes to drink when there is water in the room.
+    private const int DrinkChance = 6;
+
+    // About one action in six a pet goes to play with a toy.
+    private const int ToyChance = 6;
+
+    // About one action in twenty a pet goes to sleep in a nest.
+    private const int NestChance = 20;
 
     private static readonly Dictionary<int, string> Postures = new()
     {

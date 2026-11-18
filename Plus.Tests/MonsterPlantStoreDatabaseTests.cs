@@ -28,7 +28,7 @@ public sealed class MonsterPlantStoreDatabaseTests
             "SELECT name, room_id, x, y FROM bots WHERE id = @Id", new { Id = pet.PetId }));
         var plant = Assert.IsType<MonsterPlant>(pet.Plant);
         Assert.Equal((pet.PetId, 6, PlantedAt), (plant.PetId, plant.Rarity, plant.GrowthStartedAt));
-        Assert.Equal(plant.WellbeingUntil, Assert.IsType<MonsterPlant>(MonsterPlantStore.Load(scratch.Connection, pet.PetId)).WellbeingUntil);
+        Assert.Equal(plant.WellbeingUntil, Assert.IsType<MonsterPlant>(MonsterPlantStore.LoadForPets(scratch.Connection, [pet.PetId])[pet.PetId]).WellbeingUntil);
         Assert.Equal(PlantedAt + MonsterPlant.SeedlingMaxWellbeing, plant.WellbeingUntil);
     }
 
@@ -67,9 +67,24 @@ public sealed class MonsterPlantStoreDatabaseTests
 
         scratch.Store.Save(later);
 
-        var loaded = Assert.IsType<MonsterPlant>(MonsterPlantStore.Load(scratch.Connection, pet.PetId));
+        var loaded = Assert.IsType<MonsterPlant>(MonsterPlantStore.LoadForPets(scratch.Connection, [pet.PetId])[pet.PetId]);
         Assert.Equal((6, PlantedAt.AddHours(-5), PlantedAt.AddDays(2), false, true),
             (loaded.Rarity, loaded.GrowthStartedAt, loaded.WellbeingUntil, loaded.CanBreed, loaded.BreedingPermission));
+    }
+
+    [PetPlacementDatabaseFact]
+    public void LoadingPlantsReturnsOnlyTheRequestedPets()
+    {
+        using var scratch = Scratch.Create();
+        var first = MonsterPlant.Seeded(16, 2, PlantedAt);
+        var second = MonsterPlant.Seeded(17, 3, PlantedAt);
+        MonsterPlantStore.Insert(scratch.Connection, null, first);
+        MonsterPlantStore.Insert(scratch.Connection, null, second);
+
+        var plants = MonsterPlantStore.LoadForPets(scratch.Connection, [first.PetId, 18]);
+
+        Assert.Equal(first.Rarity, Assert.Single(plants).Value.Rarity);
+        Assert.True(plants.ContainsKey(first.PetId));
     }
 
     private static MonsterPlantSeedRequest Request() => new(7, 100, 1, "owner", 42, 3, 1, 0.5, "Sunspike",

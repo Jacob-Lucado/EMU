@@ -21,17 +21,6 @@ public static class ItemUtility
         offer is { BulkPurchase: true, IsLimited: false, IsBundle: false } && offer.Product is { Type: CatalogProductType.Furni, Amount: <= 1 } product &&
         product.Definition!.InteractionType is not (InteractionType.Exchange or InteractionType.Badge or InteractionType.Deal);
 
-    public static uint GetSaddleId(int saddle)
-    {
-        switch (saddle) {
-            default:
-            case 9:
-                return 4221;
-            case 10:
-                return 4450;
-        }
-    }
-
     public static bool IsRare(Item item)
     {
         if (item.UniqueNumber > 0) {

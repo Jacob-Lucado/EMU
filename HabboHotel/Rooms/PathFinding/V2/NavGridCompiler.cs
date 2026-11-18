@@ -154,7 +154,7 @@ public sealed class NavGridCompiler(NavGrid grid, NavInputs inputs, PathfindingS
         grid.LegacyZ[t] = surface.LegacyZ;
         var structuralStatus = Volatile.Read(ref grid.FloorStatusOverrides[t]);
         grid.LegacyFloorStatus[t] = structuralStatus >= 0 ? (byte)structuralStatus
-            : (surface.Flags & NavFlags.Transit) != 0 ? (byte)1 : surface.Flags == NavFlags.None ? (byte)0 : (byte)3;
+            : (surface.Flags & NavFlags.Transit) != 0 ? (byte)1 : (surface.Flags & ~MovementRules.JumpBar) == NavFlags.None ? (byte)0 : (byte)3;
 
         if (grid.Layered) {
             return surface;

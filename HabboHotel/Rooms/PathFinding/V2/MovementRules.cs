@@ -150,7 +150,13 @@ public sealed class MovementRules(NavGrid grid, PathfindingSettings settings, Ac
             return new(actor.Interaction?.Allows(from, to) == true ? StepReason.Ok : StepReason.InteractionDenied);
         }
 
-        if (!IsStandable(flags, slot, purpose, view)) {
+        if ((flags & JumpBar) != 0
+                ? !actor.Rider || purpose != StepPurpose.Transit || !AlongJump(flags, from, to)
+                : !IsStandable(flags, slot, purpose, view)) {
+            return new(StepReason.NotStandable);
+        }
+
+        if (FlagsAt(from) is var source && (source & JumpBar) != 0 && !AlongJump(source, from, to)) {
             return new(StepReason.NotStandable);
         }
 
@@ -184,6 +190,15 @@ public sealed class MovementRules(NavGrid grid, PathfindingSettings settings, Ac
 
         return new(StepReason.Ok);
     }
+
+    internal const NavFlags JumpBar = NavFlags.JumpAlongX | NavFlags.JumpAlongY;
+
+    // Only a rider steps onto a horse jump's bar, straight along the jump, and never stops on it.
+    private static bool AlongJump(NavFlags bar, in NavPosition from, in NavPosition to)
+        => (bar & NavFlags.JumpAlongX) != 0 ? from.Y == to.Y : from.X == to.X;
+
+    private NavFlags FlagsAt(in NavPosition position) => position.Slot >= 0 ? grid.Flags[position.Slot]
+        : grid.InBounds(position.X, position.Y) ? grid.Flags[grid.Tile(position.X, position.Y)] : NavFlags.None;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private bool IsStandable(NavFlags flags, int slot, StepPurpose purpose, OccupancyView view)

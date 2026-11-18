@@ -1,3 +1,4 @@
+using Plus.Communication.Packets.Outgoing.Rooms.Avatar;
 using Plus.HabboHotel.Items.Wired.Runtime;
 using Plus.Utilities;
 
@@ -326,6 +327,31 @@ internal sealed class AnnounceService(Room room, RoomNavigation navigation, Move
             }
         }
     }
+    private const int RideJumpExpression = 10;
+
+    // The step onto a horse jump's bar shows the horse jumping and the rider in the ride-jump expression; the next step ends both.
+    private void AnnounceJump(RoomUser rider, RoomUser horse)
+    {
+        var state = rider.Movement;
+        var grid = navigation.Grid;
+        var jumping = rider.HasStatus("mv") && state.PendingCount > 0
+            && grid.SlotOf(state.Pending[state.PendingCount - 1]) is >= 0 and var slot
+            && (grid.Flags[slot] & MovementRules.JumpBar) != 0;
+
+        if (jumping == horse.HasStatus("jmp")) {
+            return;
+        }
+
+        if (jumping) {
+            horse.SetStatus("jmp", "");
+        }
+        else {
+            horse.RemoveStatus("jmp");
+        }
+
+        room.SendPacket(new ActionComposer(rider.VirtualId, jumping ? RideJumpExpression : 0));
+    }
+
     public void SynchronizeHorse(RoomUser actor)
     {
         if (!actor.RidingHorse || actor.IsBot) {
@@ -354,6 +380,8 @@ internal sealed class AnnounceService(Room room, RoomNavigation navigation, Move
             horse.SetStep = false;
             horse.IsWalking = false;
         }
+
+        AnnounceJump(actor, horse);
 
         // The horse's status follows its rider's, not every tick.
         horse.UpdateNeeded |= actor.UpdateNeeded;

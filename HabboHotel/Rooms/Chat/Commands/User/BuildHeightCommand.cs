@@ -34,7 +34,7 @@ internal class BuildHeightCommand : IChatCommand
             return;
         }
 
-        user.BuildHeight = Math.Round(height, 2);
+        user.BuildHeight = Math.Round(height * 100) / 100;
         session.SendWhisper($"Build height set to {user.BuildHeight.Value.ToString(CultureInfo.InvariantCulture)}. Type :bh to reset.");
     }
 }

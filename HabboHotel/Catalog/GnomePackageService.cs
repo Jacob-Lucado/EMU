@@ -108,10 +108,7 @@ public sealed class GnomePackageService(
             Rotation = PetPackageFurniRotation
         };
 
-        if (!room.GetRoomItemHandler().SetFloorItem(session, placed, placed.GetX, placed.GetY, placed.Rotation, true, false, true)
-            && session.GetHabbo().Inventory is { } inventory && inventory.Furniture.AddItem(placed.ToInventoryItem())) {
-            session.Send(new FurniListNotificationComposer(placed.Id, 1));
-        }
+        room.GetRoomItemHandler().PublishStoredFloorItem(placed);
     }
 
     // Habbo replaces a package with its furni facing direction 4 and puts the named pet on top of it.
@@ -119,6 +116,11 @@ public sealed class GnomePackageService(
     private void OpenPetPackage(Room room, GameClient session, Item item, PetPackage package, ItemDefinition? furni, string petName)
     {
         var habbo = session.GetHabbo();
+        var map = room.GetGameMap();
+        if (!map.ValidTile(item.GetX, item.GetY) || (furni != null && Gamemap.GetAffectedTiles(furni.Length, furni.Width, item.GetX, item.GetY, PetPackageFurniRotation).Values.Any(tile => !map.ValidTile(tile.X, tile.Y)))) {
+            return;
+        }
+
         var opened = store.OpenPetPackage(new(item.Id, item.Definition.Id, habbo.Id, habbo.Username, room.RoomId, item.GetX, item.GetY, item.GetZ,
             petName, package.Hatch(item.LegacyDataString), item.GetZ + (furni?.Height ?? 0), furni?.Id, PetPackageFurniRotation, clock.GetUtcNow()));
 
@@ -128,17 +130,18 @@ public sealed class GnomePackageService(
             return;
         }
 
-        room.GetRoomItemHandler().RemoveFurniture(session, item.Id);
-
         if (furni != null && opened.FurniId is { } furniId) {
             PlacePackageFurni(room, session, item, furni, furniId);
         }
 
+        room.GetRoomItemHandler().RemoveFurniture(session, item);
+
         var pet = opened.Pet;
         var speeches = new List<RandomSpeech>();
-        room.GetRoomUserManager().DeployBot(new(pet.PetId, pet.RoomId, "pet", "freeroam", pet.Name, "", pet.Look,
+        var actor = room.GetRoomUserManager().DeployBot(new(pet.PetId, pet.RoomId, "pet", "freeroam", pet.Name, "", pet.Look,
             pet.X, pet.Y, pet.Z, 0, 0, 0, 0, 0, ref speeches, "", 0, pet.OwnerId, false, 0, false, 0), pet);
         session.Send(new CheckGnomeNameComposer(item.Id, petName, PetPackageNameError.None));
+        (actor.BotAi as Plus.HabboHotel.Rooms.AI.Types.PetBot)?.Greet();
     }
 
     private const int PetPackageFurniRotation = 4;

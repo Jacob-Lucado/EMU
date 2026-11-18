@@ -1,3 +1,4 @@
+using Plus.HabboHotel.Items;
 using Plus.Communication.Packets.Outgoing.Rooms.AI.Pets;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Rooms.Chat.Pets.Locale;
@@ -9,7 +10,7 @@ public interface IHorseRidingService
     void Ride(Room room, GameClient session, int petId, bool mount);
 }
 
-public sealed class HorseRidingService(IPetLocale petLocale) : IHorseRidingService
+public sealed class HorseRidingService(IPetLocale petLocale, IItemDataManager? items = null) : IHorseRidingService
 {
     public void Ride(Room room, GameClient session, int petId, bool mount)
     {
@@ -30,11 +31,16 @@ public sealed class HorseRidingService(IPetLocale petLocale) : IHorseRidingServi
             return;
         }
 
+        if (mount && pet.PetData.Saddle <= 0) {
+            return;
+        }
+
         if (!MayRide(session, user, pet)) {
             return;
         }
 
-        room.GetGameMap().Navigation!.Mounts.Ride(user, pet, mount, petLocale);
+        var effect = HorseProducts.RidingEffect(items?.Items.Values ?? Enumerable.Empty<ItemDefinition>(), pet.PetData.Saddle);
+        room.GetGameMap().Navigation!.Mounts.Ride(user, pet, mount, petLocale, effect);
     }
 
     private static bool MayRide(GameClient session, RoomUser user, RoomUser pet)

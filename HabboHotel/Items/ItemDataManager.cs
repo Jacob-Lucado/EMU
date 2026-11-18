@@ -105,6 +105,8 @@ public class ItemDataManager : IItemDataManager, IStartable
                         PetPackage = ReadPetPackage(row.Table.Columns.Contains("custom_params") ? row["custom_params"] : null)
                                      ?? PetPackage.Hatchling(Convert.ToString(row["item_name"]) ?? ""),
                         Revision = row.Table.Columns.Contains("revision") && row["revision"] is not DBNull ? Convert.ToInt32(row["revision"], CultureInfo.InvariantCulture) : 0,
+                        CustomParams = row.Table.Columns.Contains("custom_params") ? Convert.ToString(row["custom_params"], CultureInfo.InvariantCulture) ?? "" : "",
+                        SpecialType = row.Table.Columns.Contains("special_type") && row["special_type"] is not DBNull ? Convert.ToInt32(row["special_type"], CultureInfo.InvariantCulture) : 1,
                     };
 
                     // Rows sharing a classname take the defaultdir of its furnidata row.

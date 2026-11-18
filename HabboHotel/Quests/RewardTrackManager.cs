@@ -13,6 +13,7 @@ using Plus.Database;
 using Plus.HabboHotel.Badges;
 using Plus.HabboHotel.Catalog;
 using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Habbicons;
 using Plus.HabboHotel.Items;
 using Plus.HabboHotel.Quests.DailyTasks;
 using Plus.HabboHotel.Users;
@@ -34,6 +35,8 @@ public sealed class RewardTrackManager : IRewardTrackManager, IStartable
     private readonly IItemDataManager? _items;
     private readonly IItemFactory? _itemFactory;
     private static readonly CatalogBotPurchaseStore BotStore = new();
+    private readonly IHabbiconService? _habbicons;
+    private readonly IHabbiconAchievementService? _habbiconAchievements;
     private readonly object _definitions = new();
     private readonly object _gates = new();
     private readonly Dictionary<int, object> _userGates = new();
@@ -42,7 +45,8 @@ public sealed class RewardTrackManager : IRewardTrackManager, IStartable
     private List<RewardTrack> _tracks = new();
 
     public RewardTrackManager(ILogger<RewardTrackManager> logger, IDatabase database, IBadgeManager badgeManager, TimeProvider clock,
-        IDailyTaskManager? dailyTasks = null, IItemDataManager? items = null, IItemFactory? itemFactory = null)
+        IDailyTaskManager? dailyTasks = null, IItemDataManager? items = null, IItemFactory? itemFactory = null, IHabbiconService? habbicons = null,
+        IHabbiconAchievementService? habbiconAchievements = null)
     {
         _logger = logger;
         _database = database;
@@ -52,6 +56,8 @@ public sealed class RewardTrackManager : IRewardTrackManager, IStartable
         _dailyTasks = dailyTasks;
         _items = items;
         _itemFactory = itemFactory;
+        _habbicons = habbicons;
+        _habbiconAchievements = habbiconAchievements;
 
         if (dailyTasks != null) {
             dailyTasks.TaskClaimed += session => Progress(session, RewardTrackActions.ClaimDailyTask);
@@ -138,6 +144,39 @@ public sealed class RewardTrackManager : IRewardTrackManager, IStartable
                     _logger.LogInformation("Reward track progress user {UserId} task {TaskId} count {Count} points {Points}", habbo.Id, step.TaskId, step.Count, step.PointsGranted);
                 }
             }
+        }
+    }
+
+    public void ProgressWiredTask(GameClient session, string trackId, string taskId, int score, bool addToExisting)
+    {
+        var habbo = session?.GetHabbo();
+
+        if (habbo == null) {
+            return;
+        }
+
+        var now = _clock.GetUtcNow();
+        var track = FindActive(Snapshot(), trackId, now);
+        var task = track?.Tasks.FirstOrDefault(task => string.Equals(task.Id, taskId, StringComparison.Ordinal));
+
+        if (track == null || task == null || !string.Equals(task.ActionType, RewardTrackActions.CustomWiredAction, StringComparison.Ordinal)) {
+            return;
+        }
+
+        lock (Gate(habbo.Id)) {
+            if (!EnsureUser(habbo.Id)) {
+                return;
+            }
+
+            var state = StateFor(habbo.Id, track.Id);
+            var step = RewardTrackRules.PlanScore(track, state, task, score, addToExisting);
+
+            if (!step.Changed || !SaveProgress(habbo.Id, track.Id, step, state.Premium)) {
+                return;
+            }
+
+            state.Apply(step);
+            SendTrackPacket(session!, new RewardTrackProgressComposer(track.Id, step.TaskId, step.Count, state.Points));
         }
     }
 
@@ -338,6 +377,7 @@ public sealed class RewardTrackManager : IRewardTrackManager, IStartable
         RewardTrackPetGrant pet when habbo.Inventory != null && _itemFactory != null && FindPetPackage(pet.PetType) is { } package =>
             new FurniDefinitionGrant(package, pet.Amount, pet.Figure),
         RewardTrackBotGrant bot when habbo.Inventory != null && FindBotPreset(bot) is { } preset => new BotPresetGrant(preset, bot.Amount),
+        RewardTrackHabbiconGrant when _habbicons != null => grant,
         _ => null
     };
 
@@ -396,6 +436,12 @@ public sealed class RewardTrackManager : IRewardTrackManager, IStartable
                 return null;
             }
 
+            var balance = currency.Type == ProductItemType.Credits ? habbo.Credits : habbo.Currencies[currency.Type];
+
+            if ((long)balance + currency.Amount > int.MaxValue) {
+                return null;
+            }
+
             if (InsertClaim(habbo, trackId, prizeId, grant, claimedAt) is not { } delivered) {
                 return null;
             }
@@ -422,7 +468,7 @@ public sealed class RewardTrackManager : IRewardTrackManager, IStartable
             connection.Execute(
                 "INSERT INTO users_reward_track_prizes (user_id, track_id, prize_id, claimed_at) VALUES (@userId, @trackId, @prizeId, @claimedAt)",
                 new { userId, trackId, prizeId, claimedAt = claimedAt.UtcDateTime }, transaction);
-            var delivered = new Delivered([], []);
+            var delivered = new Delivered([], [], null);
 
             switch (grant) {
                 case RewardTrackCurrencyGrant { Type: ProductItemType.Credits } credits:
@@ -450,6 +496,9 @@ public sealed class RewardTrackManager : IRewardTrackManager, IStartable
                         delivered.Bots.Add(BotStore.Create(connection, transaction, bots.Preset, userId));
                     }
 
+                    break;
+                case RewardTrackHabbiconGrant habbicon:
+                    delivered = delivered with { Habbicons = _habbicons!.Grant(connection, transaction, userId, habbicon.Id) };
                     break;
             }
 
@@ -493,6 +542,10 @@ public sealed class RewardTrackManager : IRewardTrackManager, IStartable
                     session.Send(new FurniListNotificationComposer((uint)bot.Id, 5));
                 }
 
+                break;
+            case RewardTrackHabbiconGrant when delivered.Habbicons is { } change:
+                HabbiconMessages.Publish(session, change);
+                _habbiconAchievements?.Reconcile(session, change.Snapshot);
                 break;
         }
     }
@@ -815,5 +868,5 @@ public sealed class RewardTrackManager : IRewardTrackManager, IStartable
 
     private sealed record BotPresetGrant(CatalogBot Preset, int Amount) : RewardTrackGrant;
 
-    private sealed record Delivered(List<Item> Items, List<Bot> Bots);
+    private sealed record Delivered(List<Item> Items, List<Bot> Bots, HabbiconChange? Habbicons);
 }

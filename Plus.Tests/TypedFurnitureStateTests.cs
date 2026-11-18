@@ -74,7 +74,7 @@ public sealed class TypedFurnitureStateTests
         var world = TonerWorld();
         new RoomItemMetadataService(new Metadata(), null!).SetToner(world.Room, world.Client, new(100, 120, 141, 120));
         var data = Assert.IsType<FurnitureDataSnapshot.Integers>(RoomItemSnapshot.Capture(world.Chest).Data);
-        Assert.Equal(new[] { 1, 120, 141, 120 }, data.Values);
+        Assert.Equal(new[] { 0, 120, 141, 120 }, data.Values);
     }
 
     [Fact]
@@ -200,7 +200,11 @@ public sealed class TypedFurnitureStateTests
         AssertToner(item, [0, 120, 141, 120]);
         var service = new RoomItemMetadataService(metadata, null!);
         service.SetToner(world.Room, world.Client, new(100, 0, 255, 17));
+        AssertToner(item, [0, 0, 255, 17]);
+        Assert.Equal("0\n0\n255\n17", fixture.Connection.ExecuteScalar<string>("SELECT extra_data FROM items WHERE id=100"));
+        use.Use(world.Room, world.Client, new(100, 0));
         AssertToner(item, [1, 0, 255, 17]);
+        Assert.Equal("1\n0\n255\n17", fixture.Connection.ExecuteScalar<string>("SELECT extra_data FROM items WHERE id=100"));
         world.Room.TonerData = null!;
         var reloaded = new RoomFurnitureLoader(fixture.Database, definitions).Load(42).Single(item => item.Id == 100);
         world.Room.GetRoomItemHandler().LoadFurniture([reloaded]);

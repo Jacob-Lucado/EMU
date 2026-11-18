@@ -33,6 +33,49 @@ public partial class PlacedFurniRoomTests
     }
 
     [Fact]
+    public async Task LeavingByTheDoorTileClosesTheRoomWithReasonTwoAndNoGenericError()
+    {
+        Set("_gamemap", new Gamemap(_room, new RoomModel("door_east", 4, 1, 0, 6, DoorEastRoom, 0, 0, false), TestLogging.Navigation,
+            TestRoomSettings.Empty, new TestGroupManager(id => _groupLookup(id)), _database, TestNavigationRewards.Instance));
+        _room.GetGameMap().GenerateMaps();
+        _room.Behavior = RoomBehaviorSettings.Default with { LeaveOnDoorTile = true };
+        FallbackActor(2, 1);
+        await EdgeMove().Parse(_client, ClientPacket(4, 1));
+
+        for (var tick = 0; tick < 8 && _client.GetHabbo().CurrentRoom == _room; tick++) {
+            ExecutorTick();
+        }
+
+        var headers = _client.Packets.Select(packet => packet.Header).ToList();
+        Assert.DoesNotContain(ServerPacketHeader.GenericErrorComposer, headers);
+        var playing = headers.IndexOf(ServerPacketHeader.YouArePlayingGameComposer);
+        var close = headers.IndexOf(ServerPacketHeader.CloseConnectionComposer);
+        Assert.True(playing >= 0 && close > playing, string.Join(",", headers));
+        Assert.Equal(new byte[] { 0, 2 }, _client.Packets[close].Body);
+    }
+
+    [Theory]
+    [InlineData("owner", true)]
+    [InlineData("staff", true)]
+    [InlineData("rights", false)]
+    [InlineData("visitor", false)]
+    public void OnlyTheOwnerAndStaffAreSparedTheIdleKickInEveryRoom(string who, bool spared)
+    {
+        var room = (Room)System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(typeof(Room));
+        room.Id = 1649919;
+        room.Type = "private";
+        room.OwnerId = who == "owner" ? 7 : 99;
+        room.UsersWithRights = who == "rights" ? [7] : [];
+        var habbo = new Plus.HabboHotel.Users.Habbo
+        {
+            Id = 7,
+            Access = who == "staff" ? EditorTestSupport.Access([Plus.HabboHotel.Permissions.PermissionKeys.ModerationTool]) : Plus.HabboHotel.Permissions.UserAccess.Empty
+        };
+
+        Assert.Equal(spared, IdleKickExemption.Applies(room, habbo));
+    }
+
+    [Fact]
     public void AnAvatarFallsAsleepAtTheRoomIdleSleepTimeout()
     {
         _room.Behavior = RoomBehaviorSettings.Default with { IdleSleepTimeoutSeconds = 30 };

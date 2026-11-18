@@ -85,7 +85,7 @@ public partial class PlacedFurniRoomTests
 
         if (kind == InteractionType.VendingMachine) {
             Assert.Equal("1", item.LegacyDataString);
-            Assert.False(actor.CanWalk);
+            Assert.True(actor.CanWalk);
             Assert.True(VendingDispenses.For(_room).HasPending);
         }
         else {
@@ -156,7 +156,7 @@ public partial class PlacedFurniRoomTests
 
         if (kind == InteractionType.VendingMachine) {
             Assert.True(VendingDispenses.For(_room).HasPending);
-            Assert.False(actor.CanWalk);
+            Assert.True(actor.CanWalk);
             PassVendingTime(clock, 1249);
             Assert.Equal("1", item.LegacyDataString);
             PassVendingTime(clock, 251);

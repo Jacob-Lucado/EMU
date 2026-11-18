@@ -72,7 +72,7 @@ public static class PetUtility
         var x = gnomeBox?.X ?? 0;
         var y = gnomeBox?.Y ?? 0;
         var z = gnomeBox?.Z ?? 0;
-        var parts = gnomeBox == null ? "2 2 -1 0 3 -1 0" : gnomeClothing;
+        var parts = gnomeBox == null || gnomeClothing == "-1" ? "2 2 -1 0 3 -1 0" : gnomeClothing;
         var look = $"{type} {race} {colour} {parts}";
         var inserted = connection.Execute(
             "INSERT INTO `bots` (`user_id`,`room_id`,`name`,`motto`,`look`,`x`,`y`,`z`,`ai_type`) VALUES (@UserId,@RoomId,@Name,'',@Look,@X,@Y,@Z,'pet')",

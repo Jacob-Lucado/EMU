@@ -3,7 +3,6 @@ using Plus.Communication.Packets.Outgoing.Inventory.Furni;
 using Plus.Communication.Packets.Outgoing.Inventory.Purse;
 using Plus.Database;
 using Plus.HabboHotel.GameClients;
-using Plus.HabboHotel.Items;
 using Plus.HabboHotel.Users.Inventory.Furniture;
 
 namespace Plus.HabboHotel.Rooms.Chat.Commands.User;
@@ -47,7 +46,7 @@ internal class ConvertCreditsCommand : IChatCommand
                 }
 
                 var exchangeItems = itemIds.Select(inventory.Furniture.GetItem)
-                    .Where(item => item?.Definition.InteractionType == InteractionType.Exchange)
+                    .Where(item => item?.Definition.RedeemableForCredits == true)
                     .ToArray();
                 var deleted = new List<InventoryItem>(exchangeItems.Length);
                 connection.Open();

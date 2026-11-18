@@ -10,6 +10,7 @@ namespace Plus.HabboHotel.Rooms.AI.Types;
 public class PetBot : BotAi
 {
     private int _actionTimer;
+    private static readonly int EnergyRestTicks = (int)(TimeSpan.FromSeconds(40) / RoomCycle.Interval);
     private int _energyTimer;
     private int _speechTimer;
     private readonly IPetLocale _locale;
@@ -21,7 +22,7 @@ public class PetBot : BotAi
         _commands = commands;
         _speechTimer = Random.Shared.Next(10, 60);
         _actionTimer = Random.Shared.Next(10, 30 + virtualId);
-        _energyTimer = Random.Shared.Next(10, 60);
+        _energyTimer = EnergyRestTicks - 1;
     }
 
     private void RemovePetStatus()
@@ -169,7 +170,7 @@ public class PetBot : BotAi
         if (_energyTimer <= 0) {
             RemovePetStatus(); // Remove Status
             petData.PetEnergy(true); // Add Energy
-            _energyTimer = Random.Shared.Next(30, 120 + 1); // 2 Min Max
+            _energyTimer = EnergyRestTicks - 1;
         }
         else {
             _energyTimer--;
@@ -178,187 +179,91 @@ public class PetBot : BotAi
 
     public override void OnUserSay(RoomUser user, string message)
     {
-        var botRoom = GetRoom();
-
-        if (botRoom == null) {
+        if (GetRoom() is not { } botRoom || GetRoomUser() is not { PetData: { } petData } pet || user?.GetClient()?.GetHabbo() is not { } speaker) {
             return;
         }
 
-        var botUser = GetRoomUser();
-
-        if (botUser == null) {
-            return;
-        }
-
-        var speakerSession = user?.GetClient();
-
-        if (speakerSession == null) {
-            return;
-        }
-
-        if (user == null) {
-            return;
-        }
-
-        var pet = botUser;
-
-        if (pet?.PetData is not { } petData) {
-            return;
-        }
-
-        if (petData.DbState != PetDatabaseUpdateState.NeedsInsert) {
-            petData.DbState = PetDatabaseUpdateState.NeedsUpdate;
-        }
-
-        if (message.ToLower().Equals(petData.Name.ToLower())) {
+        if (message.Equals(petData.Name, StringComparison.OrdinalIgnoreCase)) {
             pet.SetRot(Rotation.Calculate(pet.X, pet.Y, user.X, user.Y), false);
 
             return;
         }
 
-        //if (!Pet.Statusses.ContainsKey("gst thr"))
-        //    Pet.Statusses.Add("gst thr", TextHandling.GetString(Pet.Z));
-        if (message.ToLower().StartsWith($"{petData.Name.ToLower()} ") && speakerSession.GetHabbo().Username.ToLower() == petData.OwnerName.ToLower() ||
-            message.ToLower().StartsWith($"{petData.Name.ToLower()} ") &&
-            _commands.TryInvoke(message.Substring(petData.Name.ToLower().Length + 1)) == 8) {
-            var commandId = _commands.TryInvoke(message.Substring(petData.Name.ToLower().Length + 1));
-
-            if (petData.ObeysCommand(commandId)) {
-                RemovePetStatus(); // Remove Status
-
-                switch (commandId) {
-                    // TODO - Level you can use the commands at...
-                    case 1:
-                        RemovePetStatus();
-
-                        //int randomX = PlusEnvironment.GetRandomNumber(0, botRoom.Model.MapSizeX);
-                        //int randomY = PlusEnvironment.GetRandomNumber(0, botRoom.Model.MapSizeY);
-                        if (botRoom.GetGameMap().TryGetRandomWalkableSquare(out var nextCoord)) {
-                            pet.MoveTo(nextCoord.X, nextCoord.Y);
-                        }
-
-                        petData.Addexperience(10); // Give XP
-                        break;
-                    case 2:
-                        RemovePetStatus();
-                        var newX = user.X;
-                        var newY = user.Y;
-                        _actionTimer = 30; // Reset ActionTimer
-
-                        if (user.RotBody == 4) {
-                            newY = user.Y + 1;
-                        }
-                        else if (user.RotBody == 0) {
-                            newY = user.Y - 1;
-                        }
-                        else if (user.RotBody == 6) {
-                            newX = user.X - 1;
-                        }
-                        else if (user.RotBody == 2) {
-                            newX = user.X + 1;
-                        }
-                        else if (user.RotBody == 3) {
-                            newX = user.X + 1;
-                            newY = user.Y + 1;
-                        }
-                        else if (user.RotBody == 1) {
-                            newX = user.X + 1;
-                            newY = user.Y - 1;
-                        }
-                        else if (user.RotBody == 7) {
-                            newX = user.X - 1;
-                            newY = user.Y - 1;
-                        }
-                        else if (user.RotBody == 5) {
-                            newX = user.X - 1;
-                            newY = user.Y + 1;
-                        }
-
-                        petData.Addexperience(10); // Give XP
-                        pet.MoveTo(newX, newY);
-                        break;
-                    case 3:
-                        // Remove Status
-                        RemovePetStatus();
-                        petData.Addexperience(10); // Give XP
-
-                        // Add Status
-                        pet.Statusses.Add("sit", TextHandling.GetString(pet.Z));
-                        pet.UpdateNeeded = true;
-                        _actionTimer = 25;
-                        _energyTimer = 10;
-                        break;
-                    case 4:
-                        // Remove Status
-                        RemovePetStatus();
-
-                        // Add Status
-                        pet.Statusses.Add("lay", TextHandling.GetString(pet.Z));
-                        pet.UpdateNeeded = true;
-                        petData.Addexperience(10); // Give XP
-                        _actionTimer = 30;
-                        _energyTimer = 5;
-                        break;
-                    case 5:
-                        // Remove Status
-                        RemovePetStatus();
-
-                        // Add Status
-                        pet.Statusses.Add("ded", TextHandling.GetString(pet.Z));
-                        pet.UpdateNeeded = true;
-                        petData.Addexperience(10); // Give XP
-
-                        // Don't move to speak for a set amount of time.
-                        _speechTimer = 45;
-                        _actionTimer = 30;
-                        break;
-                    case 6:
-                        // Remove Status
-                        RemovePetStatus();
-                        pet.Statusses.Add("lay", TextHandling.GetString(pet.Z));
-                        pet.UpdateNeeded = true;
-                        petData.Addexperience(10); // Give XP
-
-                        // Don't move to speak for a set amount of time.
-                        _energyTimer = 5;
-                        _speechTimer = 30;
-                        _actionTimer = 45;
-                        break;
-                    case 7:
-                        // Remove Status
-                        RemovePetStatus();
-
-                        // Add Status
-                        pet.Statusses.Add("jmp", TextHandling.GetString(pet.Z));
-                        pet.UpdateNeeded = true;
-                        petData.Addexperience(10); // Give XP
-
-                        // Don't move to speak for a set amount of time.
-                        _energyTimer = 5;
-                        _speechTimer = 10;
-                        _actionTimer = 5;
-                        break;
-                    case 46:
-                        break;
-                }
-
-                petData.PetEnergy(false); // Remove Energy
-            }
-            else {
-                RemovePetStatus(); // Remove Status
-
-                if (petData.IsTired) {
-                    pet.Statusses.Add("lay", TextHandling.GetString(pet.Z));
-                    pet.UpdateNeeded = true;
-                    _speechTimer = 50;
-                    _actionTimer = 45;
-                    _energyTimer = 5;
-                }
-                else {
-                    petData.PetEnergy(false); // Remove Energy
-                }
-            }
+        if (speaker.Id != petData.OwnerId || !message.StartsWith(petData.Name + " ", StringComparison.OrdinalIgnoreCase)) {
+            return;
         }
-        //Pet = null;
+
+        var commandId = _commands.TryInvoke(message[(petData.Name.Length + 1)..]);
+        var commands = PetCommandSet.For(petData.Type);
+
+        if (commandId < 0 || !commands.Has(commandId)) {
+            return;
+        }
+
+        RemovePetStatus();
+        pet.UpdateNeeded = true;
+
+        if (!commands.HasLearned(commandId, petData.Level)) {
+            pet.Statusses["gst"] = "puz";
+            PetVocals.Say(pet, PetVocal.UnknownCommand);
+
+            return;
+        }
+
+        if (petData.IsTired) {
+            pet.Statusses["lay"] = TextHandling.GetString(pet.Z);
+            _speechTimer = 50;
+            _actionTimer = 45;
+
+            return;
+        }
+
+        // Without a bowl or food in the room a pet refuses to drink or eat.
+        if (commandId is PetCommandSet.Drink or PetCommandSet.Eat || !petData.ObeysCommand(commandId)) {
+            petData.SpendEnergy(2);
+            PetVocals.Say(pet, PetVocal.Refusal);
+
+            return;
+        }
+
+        Obey(botRoom, pet, user, commandId);
+
+        if (commandId != PetCommandSet.Free) {
+            petData.Addexperience(5);
+            petData.SpendEnergy(5);
+        }
     }
+
+    private void Obey(Room room, RoomUser pet, RoomUser user, int commandId)
+    {
+        switch (commandId) {
+            case PetCommandSet.Free:
+                if (room.GetGameMap().TryGetRandomWalkableSquare(out var free)) {
+                    pet.MoveTo(free.X, free.Y);
+                }
+
+                break;
+            case 3:
+                _actionTimer = 30;
+                var front = user.SquareInFront;
+                pet.MoveTo(front.X, front.Y);
+                break;
+            default:
+                if (Postures.TryGetValue(commandId, out var posture)) {
+                    pet.Statusses[posture] = TextHandling.GetString(pet.Z);
+                    _actionTimer = 30;
+                }
+
+                break;
+        }
+    }
+
+    private static readonly Dictionary<int, string> Postures = new()
+    {
+        [1] = "sit",
+        [2] = "lay",
+        [5] = "ded",
+        [9] = "jmp",
+        [44] = "wag"
+    };
 }

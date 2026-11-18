@@ -75,6 +75,7 @@ public sealed class PetRespectService(IAchievementManager achievements, IQuestMa
         pet.PetData.OnRespect();
         pet.Statusses["gst"] = "joy";
         pet.UpdateNeeded = true;
+        PetVocals.Say(pet, PetVocal.Scratched);
         rewards.Progress(session, RewardTrackActions.PetRespect);
         room.SendPacket(new CarryObjectComposer(actor.VirtualId, actor.CarryItemId));
     }

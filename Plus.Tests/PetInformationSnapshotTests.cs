@@ -28,8 +28,8 @@ public sealed class PetInformationSnapshotTests
         pet.AnyoneCanRide = 1;
         pet.CreatedAt = now.AddDays(-2);
         var composer = new PetInformationComposer(new PetInformationService(new FixedClock(now)).Capture(pet));
-        var expected = new object[] { 42, "Horse", 3, 20, 300, 400, 55, 100, 60, 150, 8, 7, 2, "Owner", 1,
-            true, false, 0, 1, false, true, false, 0, -1, -1, -1, false };
+        var expected = new object[] { 42, "Horse", 3, 20, 300, 400, 55, 160, 60, 100, 8, 7, 2, "Owner", 1,
+            true, false, 0, 1, false, false, false, 0, -1, -1, -1, false };
         Assert.Equal(expected, Writes(composer));
         pet.Name = "Changed";
         pet.Experience = 0;

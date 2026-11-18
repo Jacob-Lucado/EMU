@@ -21,7 +21,7 @@ public class Pet
     public int Energy;
     public int Experience;
 
-    public int[] ExperienceLevels = { 100, 200, 400, 600, 1000, 1300, 1800, 2400, 3200, 4300, 7200, 8500, 10100, 13300, 17500, 23000, 51900, 75000, 128000, 150000 };
+    public int[] ExperienceLevels = { 100, 200, 400, 600, 900, 1300, 1800, 2400, 3200, 4300, 7200, 8500, 10100, 13300, 17500, 23000, 51900, 75000, 128000, 150000 };
 
     public string GnomeClothing;
     public int HairDye;
@@ -117,13 +117,13 @@ public class Pet
         //will error index out of range (need to look into this sometime)
         ExperienceLevels[Level - 1];
 
-    public static int MaxEnergy => 100;
+    public int MaxEnergy => 100 + 20 * Level;
 
     public bool IsTired => Energy <= 10;
 
     public bool ObeysCommand(int commandId) => !IsTired && (Level > 15 || commandId == 8 || Random.Shared.Next(1, 9) < 6);
 
-    public static int MaxNutrition => 150;
+    public static int MaxNutrition => 100;
 
     public string CustomParts => !string.IsNullOrEmpty(GnomeClothing) && GnomeClothing != "-1"
         ? GnomeClothing
@@ -169,64 +169,50 @@ public class Pet
 
             if (Room != null) {
                 Room.SendPacket(new AddExperiencePointsComposer(PetId, VirtualId, amount));
-
-                if (Experience >= ExperienceGoal && !Room.Behavior.MuteAllPets) {
-                    Room.SendChat(receiver => new ChatComposer(VirtualId, $"*leveled up to level {Level} *", 0, 0, receiver));
-                }
             }
         }
 
         var gained = Level - before;
 
-        if (gained < 1 || OwnerId <= 0) {
+        if (gained < 1) {
             return;
         }
 
-        var client = _clients?.GetClientByUserId(OwnerId);
+        var client = OwnerId > 0 ? _clients?.GetClientByUserId(OwnerId) : null;
 
         if (client != null) {
+            client.Send(new PetLevelNotificationComposer(PetId, Name, Level, Look));
+            client.Send(new PetTrainingPanelComposer(this));
             _rewards!.Progress(client, RewardTrackActions.PetLevel, gained);
+        }
+
+        if (Room != null && !Room.Behavior.MuteAllPets) {
+            Room.SendChat(receiver => new ChatComposer(VirtualId, "Leveling up", 0, 0, receiver));
         }
     }
 
     public void PetEnergy(bool add)
     {
-        int maxE;
-
         if (add) {
-            if (Energy == 100) // If Energy is 100, no point.
-{
+            if (Energy >= MaxEnergy) {
                 return;
             }
 
-            if (Energy > 85) {
-                maxE = MaxEnergy - Energy;
+            Energy++;
+
+            if (DbState != PetDatabaseUpdateState.NeedsInsert) {
+                DbState = PetDatabaseUpdateState.NeedsUpdate;
             }
-            else {
-                maxE = 10;
-            }
-        }
-        else {
-            maxE = 15; // Remove Max Energy as 15
+
+            return;
         }
 
-        if (maxE <= 4) {
-            maxE = 15;
-        }
+        SpendEnergy(5);
+    }
 
-        var r = Random.Shared.Next(4, maxE + 1);
-
-        if (!add) {
-            Energy = Energy - r;
-
-            if (Energy < 0) {
-                Energy = 1;
-                r = 1;
-            }
-        }
-        else {
-            Energy = Energy + r;
-        }
+    public void SpendEnergy(int amount)
+    {
+        Energy = Math.Max(0, Energy - amount);
 
         if (DbState != PetDatabaseUpdateState.NeedsInsert) {
             DbState = PetDatabaseUpdateState.NeedsUpdate;

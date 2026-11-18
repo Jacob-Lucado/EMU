@@ -79,8 +79,8 @@ public partial class PlacedFurniRoomTests
         service.SendTrainingPanel(_client, 50);
         Assert.Equal(ServerPacketHeader.PetTrainingPanelComposer, Assert.Single(_client.Sent));
         var packet = new FlashIncomingPacket { Buffer = Assert.Single(_client.Packets).Body };
-        var values = Enumerable.Range(0, 19).Select(_ => packet.ReadInt()).ToArray();
-        Assert.Equal(new[] { 50, 8, 46, 0, 1, 2, 3, 4, 5, 6, 2, 46, 0, 1, 2, 3, 4, 5, 6 }, values);
+        var values = Enumerable.Range(0, 33).Select(_ => packet.ReadInt()).ToArray();
+        Assert.Equal(new[] { 50, 23, 46, 0, 1, 14, 43, 2, 3, 4, 17, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 24, 25, 26, 7, 46, 0, 1, 14, 43, 2, 3 }, values);
         _client.Sent.Clear();
         _client.Packets.Clear();
         var foreign = new RoomUser(0, 99, 2, _room, null, TestChatEmotions.Unused, TestRewardProgress.Unused) { BotData = horse.BotData, PetData = horse.PetData };

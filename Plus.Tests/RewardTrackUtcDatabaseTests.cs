@@ -57,7 +57,7 @@ public class RewardTrackUtcDatabaseTests
                 connection.Execute(File.ReadAllText(HabbiconPacketTests.Repo("Resources/SQLs/Updates/15_IntroductionRewardTrack.sql")));
                 connection.Execute(File.ReadAllText(HabbiconPacketTests.Repo("Database/Migrations/35_UseUtcRewardTrackTimes.sql")));
                 connection.Execute("INSERT INTO reward_tracks (id, theme, sort_order, has_premium, enabled) VALUES ('open', 'blue', 4, 0, 1)");
-                connection.Execute("INSERT INTO reward_track_prizes (track_id, id, required_points, product_item_type_id, reward_type, extra_params, reward_amount, premium, sort_order) VALUES ('open', 'coins', 10, 0, 'duckets', '', 3, 0, 1)");
+                connection.Execute("INSERT INTO reward_track_prizes (track_id, id, required_points, product_item_type_id, reward_type, extra_params, reward_amount, premium, sort_order) VALUES ('open', 'coins', 10, 8, '0', '', 3, 0, 1)");
                 connection.Execute("INSERT INTO users_reward_tracks (user_id, track_id, points, premium) VALUES (7, 'open', 60, 0)");
             }
 

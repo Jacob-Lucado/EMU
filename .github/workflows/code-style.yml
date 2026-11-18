@@ -30,7 +30,7 @@ jobs:
         env:
           MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: "1"
         ports:
-          - 3306:3306
+          - "127.0.0.1:3306:3306"
         options: >-
           --health-cmd="healthcheck.sh --connect --innodb_initialized"
           --health-interval=5s

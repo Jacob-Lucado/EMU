@@ -121,6 +121,22 @@ public partial class PlacedFurniRoomTests
     }
 
     [Fact]
+    public void MovingTheBowlCancelsTheDrink()
+    {
+        var owner = LegacyRider();
+        var user = PetUser(CommandPet(15, 17_600, 420));
+        var bowl = Water(80, "waterbowl*1", "5", 3, 3, true);
+        var ai = CommandBot(user, PetCommandSet.Drink);
+        ai.OnUserSay(owner, "horse drink");
+        Assert.True(_room.GetRoomItemHandler().SetFloorItem(null, bowl, 2, 2, 0, false, false, false));
+
+        ArriveAt(ai, user, 3, 3);
+
+        Assert.Equal("5", bowl.LegacyDataString);
+        Assert.DoesNotContain("eat", user.Statusses.Keys);
+    }
+
+    [Fact]
     public void AtTheBowlThePetDrinksAndSaysADrinkingLine()
     {
         var owner = LegacyRider();

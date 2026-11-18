@@ -57,12 +57,66 @@ public partial class PlacedFurniRoomTests
         PlayUntilTheBallMoves(ai, petUser, ball);
 
         for (var tick = 0; tick < 6; tick++) {
-            ai.OnTimerTick();
+            _room.GetRoomItemHandler().OnCycle();
         }
 
         Assert.Equal("1", ball.LegacyDataString);
-        ai.OnTimerTick();
+        _room.GetRoomItemHandler().OnCycle();
         Assert.Equal("0", ball.LegacyDataString);
+    }
+
+    [Fact]
+    public void AnotherPlayRestartsTheBallTimer()
+    {
+        var handler = _room.GetRoomItemHandler();
+        var ball = Ball(95, 3, 3);
+        handler.PlayPetBall(ball);
+        handler.OnCycle();
+        handler.PlayPetBall(ball);
+
+        for (var tick = 0; tick < 6; tick++) {
+            handler.OnCycle();
+        }
+
+        Assert.Equal("1", ball.LegacyDataString);
+        handler.OnCycle();
+        Assert.Equal("0", ball.LegacyDataString);
+    }
+
+    [Fact]
+    public void RemovingTheBallCancelsItsReset()
+    {
+        var handler = _room.GetRoomItemHandler();
+        var ball = Ball(95, 3, 3);
+        handler.PlayPetBall(ball);
+        Assert.True(handler.DeleteFurniture(ball));
+
+        for (var tick = 0; tick < 7; tick++) {
+            handler.OnCycle();
+        }
+
+        Assert.Equal("1", ball.LegacyDataString);
+    }
+
+    [Fact]
+    public void IdlePetTicksAllocateNoMemory()
+    {
+        var user = PetUser(CommandPet(15, 17_600, 420));
+        var bytes = 0L;
+
+        for (var sample = 0; sample < 128; sample++) {
+            var ai = CommandBot(user, -1);
+            ai.OnTimerTick();
+            var before = GC.GetAllocatedBytesForCurrentThread();
+
+            for (var tick = 0; tick < 8; tick++) {
+                ai.OnTimerTick();
+            }
+
+            bytes += GC.GetAllocatedBytesForCurrentThread() - before;
+        }
+
+        Assert.Equal(0, bytes);
     }
 
     private static void PlayUntilTheBallMoves(PetBot ai, RoomUser petUser, Item ball)

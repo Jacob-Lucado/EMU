@@ -16,8 +16,7 @@ public class PetBot : BotAi
     private static readonly int EnergyRestTicks = (int)(TimeSpan.FromSeconds(40) / RoomCycle.Interval);
     private int _energyTimer;
     private uint _visitId;
-    private uint _toyId;
-    private int _toyTicks;
+    private Point _targetPosition;
     private Point _visitSpot;
     private int _speechTimer;
     private readonly IPetLocale _locale;
@@ -129,10 +128,6 @@ public class PetBot : BotAi
 
         if (pet?.PetData is not { } petData) {
             return;
-        }
-
-        if (_toyId != 0 && --_toyTicks <= 0) {
-            StopPlaying(botRoom);
         }
 
         if (_visitId != 0 && Visit(botRoom, pet, petData)) {
@@ -274,9 +269,8 @@ public class PetBot : BotAi
         }
     }
 
-    private static Item? FindFood(Room room, RoomUser pet, Pet petData) => room.GetRoomItemHandler().GetFloor
-        .Where(item => PetFood.Of(item.Definition)?.Feeds(petData.Type) == true)
-        .MinBy(item => Math.Abs(item.GetX - pet.X) + Math.Abs(item.GetY - pet.Y));
+    private static Item? FindFood(Room room, RoomUser pet, Pet petData) => room.GetRoomItemHandler()
+        .FindNearestFloor(pet.Coordinate, item => !item.IsTemporary && PetFood.Of(item.Definition)?.Feeds(petData.Type) == true);
 
     private static Item? FindWater(Room room, RoomUser pet) => FindNearest(room, pet, item => PetWater.Is(item.Definition));
 
@@ -292,6 +286,7 @@ public class PetBot : BotAi
             ? item.Coordinate
             : Around(item.Coordinate).Where(tile => map.CanWalk(tile.X, tile.Y, false))
                 .OrderBy(tile => Math.Abs(tile.X - pet.X) + Math.Abs(tile.Y - pet.Y)).FirstOrDefault(item.SquareInFront);
+        _targetPosition = item.Coordinate;
         _visitId = item.Id;
         _visitSpot = spot;
         pet.MoveTo(spot);
@@ -325,7 +320,7 @@ public class PetBot : BotAi
 
         _visitId = 0;
 
-        if (pet.Coordinate != _visitSpot) {
+        if (pet.Coordinate != _visitSpot || item.Coordinate != _targetPosition) {
             return false;
         }
 
@@ -370,28 +365,7 @@ public class PetBot : BotAi
         pet.UpdateNeeded = true;
         _actionTimer = 10;
         PetVocals.Say(pet, PetVocal.Playing);
-        SetToyState(toy, "1");
-        _toyId = toy.Id;
-        _toyTicks = (int)(TimeSpan.FromSeconds(3.5) / RoomCycle.Interval);
-    }
-
-    private void StopPlaying(Room room)
-    {
-        if (room.GetRoomItemHandler().GetItem(_toyId) is { } toy) {
-            SetToyState(toy, "0");
-        }
-
-        _toyId = 0;
-    }
-
-    private static void SetToyState(Item toy, string state)
-    {
-        if (toy.ExtraData is not LegacyDataFormat) {
-            toy.ExtraData = new LegacyDataFormat();
-        }
-
-        toy.LegacyDataString = state;
-        toy.UpdateUsedState();
+        toy.GetRoom()!.GetRoomItemHandler().PlayPetBall(toy);
     }
 
     // A pet sleeps in a nest for about a minute.
@@ -412,21 +386,22 @@ public class PetBot : BotAi
         var eaten = 0;
 
         do {
-            petData.Feed(values.BiteEnergy);
             bites++;
             eaten++;
-        } while (bites < PetFood.Bites && petData.Energy < petData.MaxEnergy);
+        } while (bites < PetFood.Bites && petData.Energy + eaten * values.BiteEnergy < petData.MaxEnergy);
 
+        if (bites == PetFood.Bites && !room.GetRoomItemHandler().DeleteFurniture(food)) {
+            return false;
+        }
+
+        petData.Feed(eaten * values.BiteEnergy);
         RemovePetStatus();
         pet.Statusses["eat"] = TextHandling.GetString(pet.Z);
         pet.UpdateNeeded = true;
         _actionTimer = 10;
         PetVocals.Say(pet, PetVocal.Eating);
 
-        if (bites >= PetFood.Bites) {
-            room.GetRoomItemHandler().DeleteFurniture(food);
-        }
-        else {
+        if (bites < PetFood.Bites) {
             if (food.ExtraData is not LegacyDataFormat) {
                 food.ExtraData = new LegacyDataFormat();
             }

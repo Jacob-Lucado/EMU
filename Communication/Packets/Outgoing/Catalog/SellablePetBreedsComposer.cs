@@ -18,7 +18,6 @@ public sealed class SellablePetBreedsComposer(PetPaletteSnapshot snapshot) : ISe
             packet.WriteInteger(race.Palette);
             packet.WriteBoolean(true);
             packet.WriteBoolean(false);
-            packet.WriteBoolean(false);
         }
     }
 }

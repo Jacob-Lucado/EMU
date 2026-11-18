@@ -264,7 +264,7 @@ public class PetBot : BotAi
         }
 
         if (commandId != PetCommandSet.Free) {
-            petData.Addexperience(5);
+            petData.Addexperience(PetCommandSet.Experience(petData.Type, commandId));
             petData.SpendEnergy(5);
         }
     }

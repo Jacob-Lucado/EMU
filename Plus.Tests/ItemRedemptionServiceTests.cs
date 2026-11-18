@@ -88,6 +88,15 @@ public sealed class ItemRedemptionServiceTests
     }
 
     [Fact]
+    public void CreditRedeemPaysTheCoinValueInTheStoreStep()
+    {
+        var (room, client, _, item) = Context(InteractionType.Exchange, 10);
+        var store = new Store();
+        Service(store).RedeemCredits(room, client, item.Id);
+        Assert.Equal(10, store.RedeemedCredits);
+    }
+
+    [Fact]
     public void ClothingTransactionFailurePublishesNothing()
     {
         var (room, client, sent, item) = Context(InteractionType.PurchasableClothing, 0, figureSetIds: [10, 11]);

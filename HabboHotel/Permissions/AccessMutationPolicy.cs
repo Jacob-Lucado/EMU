@@ -13,8 +13,9 @@ internal static class AccessMutationPolicy
 
     // A role of the actor's own weight comes back off a user only when the actor gave it and outranks the user without it.
     public static bool CanRevoke(int actorId, int targetId, UserAccess actor, UserAccess target, UserAccess targetWithoutRole, AccessRole role, bool grantedByActor) =>
-        role.Weight <= actor.Weight &&
-        (CanEdit(actorId, targetId, actor, target) || grantedByActor && CanEdit(actorId, targetId, actor, targetWithoutRole));
+        role.Weight == actor.Weight
+            ? grantedByActor && CanEdit(actorId, targetId, actor, targetWithoutRole)
+            : role.Weight < actor.Weight && CanEdit(actorId, targetId, actor, target);
 
     public static bool CanGrant(UserAccess actor, string pattern, IEnumerable<string> registry)
     {

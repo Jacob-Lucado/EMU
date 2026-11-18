@@ -147,6 +147,16 @@ public sealed partial class AccessControlDatabaseTests : IDisposable
     }
 
     [AccessControlDatabaseFact]
+    public void StaffCannotRevokeAnExpiredOwnWeightRoleWithoutAGrantor()
+    {
+        using var connection = _database.Connection();
+        connection.Execute("INSERT INTO user_roles (user_id, role_id, expires_at) VALUES (@Target, @PeerRole, UTC_TIMESTAMP() - INTERVAL 1 HOUR)", new { Target, PeerRole });
+
+        Assert.False(_access.RevokeRole(_actor, Target, PeerRole));
+        Assert.Equal(1, connection.ExecuteScalar<int>("SELECT COUNT(*) FROM user_roles WHERE user_id = @Target AND role_id = @PeerRole", new { Target, PeerRole }));
+    }
+
+    [AccessControlDatabaseFact]
     public void StaffCannotRevokeTheirOwnGrantFromAUserWhoIsStillTheirPeerWithoutIt()
     {
         Assert.True(_access.AssignRole(_actor, Target, PeerRole));

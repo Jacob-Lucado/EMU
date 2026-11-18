@@ -6,7 +6,8 @@ public enum PetVocal
     Refusal,
     UnknownCommand,
     Scratched,
-    Eating
+    Eating,
+    Drinking
 }
 
 /// <summary>
@@ -53,7 +54,14 @@ public static class PetVocals
         [(15, PetVocal.Eating)] = ["What a delicacy, yum, yum", "Yum, yum, this is delicious", "This is delicious!"],
         [(20, PetVocal.Eating)] = ["What a delicacy, yum, yum"],
         [(29, PetVocal.Eating)] = ["Mmm, I'm wolfing this down!"],
-        [(35, PetVocal.Eating)] = ["Veganism isn't just for Christmas. Veganism is for life.", "*Crunch* I just ADORE meal times. *Crunch*", "Mmmm. Healthy. *Crunch*"]
+        [(35, PetVocal.Eating)] = ["Veganism isn't just for Christmas. Veganism is for life.", "*Crunch* I just ADORE meal times. *Crunch*", "Mmmm. Healthy. *Crunch*"],
+        [(0, PetVocal.Drinking)] = ["*drinking*"],
+        [(8, PetVocal.Drinking)] = ["Yes... Yes... This unholy water gives me strength!"],
+        [(15, PetVocal.Drinking)] = ["Ah, that's the good stuff."],
+        [(20, PetVocal.Drinking)] = ["This is literally the greatest drink I have ever had!"],
+        [(21, PetVocal.Drinking)] = ["Yes... not too much, but not too little either."],
+        [(29, PetVocal.Drinking)] = ["I love to drink! Love it, love it, love it!", "H-2-Whoa!", "Oops, did I spill some?", "*slurp slurp slurp*"],
+        [(35, PetVocal.Drinking)] = ["Drinking water after an entire day eating grass is simply heavenly.", "*Gulp* ..if it wasn't for water.. *Gulp* ..life wouldn't exist on this planet.."]
     };
 
     public static IReadOnlyList<string> For(int type, PetVocal vocal)

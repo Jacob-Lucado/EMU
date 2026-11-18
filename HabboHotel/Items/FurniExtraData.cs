@@ -21,8 +21,8 @@ internal static class FurniExtraData
 
     private static readonly HashSet<string> BackgroundAddressKeys = new(StringComparer.Ordinal) { "imageUrl", "clickUrl" };
 
-    // A room background shows the image a branding staff member typed and opens its click address.
-    // Only plain http(s) addresses pass; every other key keeps the client image rules.
+    // A room background shows the image a branding staff member typed and opens its click address (a web address, or room:<id> to enter a room).
+    // Only plain http(s) addresses (or a room link) pass; every other key keeps the client image rules.
     public static bool RejectsBackground(IReadOnlyList<string> values)
     {
         var rest = new List<string>();
@@ -32,13 +32,17 @@ internal static class FurniExtraData
                 rest.Add(values[index]);
                 rest.Add(values[index + 1]);
             }
-            else if (!IsWebAddress(values[index + 1] ?? "")) {
+            else if (!IsWebAddress(values[index + 1] ?? "") && !(values[index] == "clickUrl" && IsRoomLink(values[index + 1] ?? ""))) {
                 return true;
             }
         }
 
         return values.Count % 2 != 0 || RejectsClientImage(rest);
     }
+
+    private static bool IsRoomLink(string value) => value.StartsWith("room:", StringComparison.Ordinal)
+        && value.Length is > 5 and <= 14
+        && value.Skip(5).All(char.IsAsciiDigit);
 
     private static bool IsWebAddress(string value) => value.Length == 0
         || (!value.Any(character => char.IsWhiteSpace(character) || char.IsControl(character) || character == '\\')

@@ -228,6 +228,34 @@ public class PetBot : BotAi
             return;
         }
 
+        if (pet.RidingHorse) {
+            ObeyRidden(botRoom, pet, petData, user, commandId);
+
+            return;
+        }
+
+        Respond(botRoom, pet, petData, user, commandId);
+    }
+
+    // A ridden horse ignores Free. Any other command first puts the rider down, then the horse responds.
+    private void ObeyRidden(Room botRoom, RoomUser pet, Pet petData, RoomUser user, int commandId)
+    {
+        if (commandId == PetCommandSet.Free) {
+            return;
+        }
+
+        var navigation = botRoom.GetGameMap().Navigation;
+
+        if (botRoom.GetRoomUserManager().GetRoomUserByVirtualId(pet.HorseId) is { } rider) {
+            navigation.Mounts.Ride(rider, pet, false, _locale);
+        }
+
+        navigation.RunOwner(pet, (_, _) => Respond(botRoom, pet, petData, user, commandId));
+    }
+
+    private void Respond(Room botRoom, RoomUser pet, Pet petData, RoomUser user, int commandId)
+    {
+        var commands = PetCommandSet.For(petData.Type);
         RemovePetStatus();
         pet.UpdateNeeded = true;
 

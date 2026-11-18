@@ -580,7 +580,8 @@ public partial class RoomItemHandling
             return false;
         }
 
-        return RemoveRoomItemCore(item, true, () => {
+        return RemoveRoomItemCore(item, true, () =>
+        {
             lock (_payloadGate) {
                 _consumedItems.Add(item.Id);
             }

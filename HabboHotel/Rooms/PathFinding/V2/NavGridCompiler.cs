@@ -181,6 +181,7 @@ internal readonly record struct CompatSurface(double Z, NavFlags Flags, uint Sup
         if (t == grid.DoorTile) {
             // A user on the door tile stands on walkable furni that Wired moves there.
             var doorZ = top is { } onDoor && SurfaceRules.ItemCandidate(onDoor, t) is { Standable: true } standable
+                && (standable.Flags & MovementRules.JumpBar) == 0
                 ? Math.Max(grid.DoorZ, standable.Z) : grid.DoorZ;
 
             return new(doorZ, NavFlags.Door, 0, SurfaceKind.Door, 0, [], legacyZ);

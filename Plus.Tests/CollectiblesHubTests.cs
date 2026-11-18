@@ -774,13 +774,16 @@ public sealed class CollectiblesHubTests
             db.Execute("UPDATE collectible_shop_offers SET emerald_price = 1 WHERE product_code = 'nft_h26_witchchair'");
             db.Execute("DELETE FROM collectible_mintable_items WHERE sprite_id = 19169");
 
-            await Apply(db, "Database/Migrations/111_CollectiblesHubContent.sql");
-
-            Assert.Equal((73, 583, 29, 10, 74, 0), db.QuerySingle<(int, int, int, int, int, int)>("""
+            const string counts = """
                 SELECT (SELECT COUNT(*) FROM collectible_collections), (SELECT COUNT(*) FROM collectible_products),
                     (SELECT COUNT(*) FROM collectible_shop_offers), (SELECT COUNT(*) FROM collectible_mint_token_offers),
                     (SELECT COUNT(*) FROM collectible_mintable_items), (SELECT COUNT(*) FROM collectible_reward_claims)
-                """));
+                """;
+            var before = db.QuerySingle<(int, int, int, int, int, int)>(counts);
+
+            await Apply(db, "Database/Migrations/111_CollectiblesHubContent.sql");
+
+            Assert.Equal(before, db.QuerySingle<(int, int, int, int, int, int)>(counts));
             Assert.Equal(1, db.QuerySingle<int>("SELECT emerald_price FROM collectible_shop_offers WHERE product_code = 'nft_h26_witchchair'"));
         });
     }

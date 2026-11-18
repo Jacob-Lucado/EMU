@@ -88,6 +88,7 @@ public static class GoalResolver
         var flags = grid.Flags[slot];
 
         return (flags & (NavFlags.Transit | NavFlags.GoalOnlySeat | NavFlags.GoalOnlyBed | NavFlags.Door)) != 0
+            && (!actor.Rider || (flags & (NavFlags.GoalOnlySeat | NavFlags.GoalOnlyBed)) == 0)
             && (flags & NavFlags.FloorLocked) == 0
             && ((flags & NavFlags.GuildGate) == 0 || (access ?? ActorAccessResolver.Cached).CanEnterGuildGate(actor, grid.GroupId[slot]))
             && (occupancy == null || (occupancy.Targets[slot] & ClaimMatrix.BlockingMask(actor, flags, StepPurpose.Goal, OccupancyView.Execution)) == 0);

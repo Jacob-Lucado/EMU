@@ -236,6 +236,17 @@ public sealed class HabbiconService(IDatabase database, TimeProvider clock) : IH
         return new(Load(connection, userId, transaction), changed, balances);
     }
 
+    public HabbiconChange Grant(IDbConnection connection, IDbTransaction transaction, int userId, int id)
+    {
+        var before = Load(connection, userId, transaction);
+
+        if (!before.RequireItem(id).Owned) {
+            Save(connection, transaction, userId, id, HabbiconState.Owned, true);
+        }
+
+        return Changed(connection, transaction, userId, before, null);
+    }
+
     public bool Use(int userId, int id)
     {
         var now = clock.GetUtcNow().ToUniversalTime();

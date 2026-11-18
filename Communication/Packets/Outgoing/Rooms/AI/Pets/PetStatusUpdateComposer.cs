@@ -2,7 +2,8 @@ using Plus.HabboHotel.GameClients;
 
 namespace Plus.Communication.Packets.Outgoing.Rooms.AI.Pets;
 
-public sealed class PetStatusUpdateComposer(int virtualId, int petId, bool hasBreedingPermission) : IServerPacket
+public sealed class PetStatusUpdateComposer(int virtualId, int petId, bool canBreed, bool canHarvest, bool canRevive, bool breedingPermission)
+    : IServerPacket
 {
     public uint MessageId => ServerPacketHeader.PetStatusUpdateComposer;
 
@@ -10,9 +11,9 @@ public sealed class PetStatusUpdateComposer(int virtualId, int petId, bool hasBr
     {
         packet.WriteInteger(virtualId);
         packet.WriteInteger(petId);
-        packet.WriteBoolean(false);
-        packet.WriteBoolean(false);
-        packet.WriteBoolean(false);
-        packet.WriteBoolean(hasBreedingPermission);
+        packet.WriteBoolean(canBreed);
+        packet.WriteBoolean(canHarvest);
+        packet.WriteBoolean(canRevive);
+        packet.WriteBoolean(breedingPermission);
     }
 }

@@ -51,15 +51,15 @@ public sealed class UsersComposer : IServerPacket
                 packet.WriteInteger(user.PetType);
                 packet.WriteInteger(user.OwnerId);
                 packet.WriteString(user.OwnerName);
-                packet.WriteInteger(1);
+                packet.WriteInteger(user.Plant?.Rarity ?? 1);
                 packet.WriteBoolean(user.HasSaddle);
                 packet.WriteBoolean(user.IsRidden);
+                packet.WriteBoolean(user.Plant?.CanBreed ?? false);
                 packet.WriteBoolean(false);
-                packet.WriteBoolean(false);
-                packet.WriteBoolean(false);
-                packet.WriteBoolean(user.HasBreedingPermission);
+                packet.WriteBoolean(user.Plant?.CanRevive ?? false);
+                packet.WriteBoolean(user.Plant?.BreedingPermission ?? user.HasBreedingPermission);
                 packet.WriteInteger(user.PetLevel);
-                packet.WriteString("");
+                packet.WriteString(user.Plant?.Posture ?? "");
             }
             else {
                 packet.WriteString(user.Gender);

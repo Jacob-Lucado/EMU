@@ -674,6 +674,22 @@ public sealed class RecyclerDatabaseTests
     }
 
     [RecyclerDatabaseFact]
+    public void AClosedMachineWithCustomSettingsKeepsThemBeforePrizesAreAdded()
+    {
+        using var fixture = new Fixture();
+        ResetToUntouchedRecycler(fixture);
+        AddHabboPrizeFurniture(fixture);
+        fixture.Connection.Execute("UPDATE recycler_settings SET slots=7,cost_duckets=20,cooldown_seconds=60");
+
+        fixture.Connection.Execute(HabboDefaultsMigration);
+
+        var configuration = fixture.Store.Load();
+        Assert.False(configuration.Enabled);
+        Assert.Equal((7, 20, 60), (configuration.Slots, configuration.CostDuckets, configuration.CooldownSeconds));
+        Assert.Empty(configuration.Levels);
+    }
+
+    [RecyclerDatabaseFact]
     public void ASettingsRowCreatedWithoutASlotCountGetsEightSlots()
     {
         using var fixture = new Fixture();

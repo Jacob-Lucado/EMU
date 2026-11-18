@@ -1,7 +1,9 @@
 -- A hotel that never set up its Furni-Matic gets Habbo's machine: 8 slots, 10 Duckets, 10 seconds between exchanges and
 -- Habbo's prize table. Without every prize furni it only gets the 8 slots. A hotel with its own setup is left unchanged.
 SET @recycler_untouched = (SELECT COUNT(*) FROM recycler_levels) = 0 AND (SELECT COUNT(*) FROM recycler_prizes) = 0
-    AND COALESCE((SELECT enabled FROM recycler_settings WHERE id = 1), FALSE) = FALSE;
+    AND NOT EXISTS (
+        SELECT 1 FROM recycler_settings WHERE id = 1
+        AND (enabled <> FALSE OR slots NOT IN (5, 8) OR cooldown_seconds <> 0 OR cost_duckets <> 0));
 
 CREATE TEMPORARY TABLE recycler_habbo_levels (level INT NOT NULL PRIMARY KEY, chance INT NOT NULL);
 INSERT INTO recycler_habbo_levels(level, chance) VALUES (1, 1), (2, 4), (3, 10), (4, 40), (5, 400), (6, 5000);

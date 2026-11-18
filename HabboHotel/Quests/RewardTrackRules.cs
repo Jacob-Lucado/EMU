@@ -6,6 +6,9 @@ namespace Plus.HabboHotel.Quests;
 
 public static class RewardTrackRules
 {
+    /// <summary>The bot AI types a bot preset can have; a bot prize names one in upper case, such as GENERIC.</summary>
+    private static readonly string[] BotAiTypes = ["generic", "bartender"];
+
     public static RewardTrackStep Plan(RewardTrack track, UserRewardTrackState state, RewardTrackTask task, int amount)
     {
         var before = state.ProgressOf(task.Id);
@@ -78,6 +81,7 @@ public static class RewardTrackRules
 
         var code = prize.RewardType.Trim();
         var id = int.TryParse(code, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var number) ? number : (int?)null;
+        var figure = prize.ExtraParams.Trim();
 
         return prize.ProductItemTypeId switch
         {
@@ -86,6 +90,9 @@ public static class RewardTrackRules
             ProductItemType.Badge when code.Length > 0 => new RewardTrackBadgeGrant(code),
             ProductItemType.Currency when id is { } type && (type == ProductItemType.Credits || ActivityPointType.IsValid(type)) =>
                 new RewardTrackCurrencyGrant(type, prize.RewardAmount),
+            ProductItemType.Pet when id >= 0 && figure.Split(' ')[0] == code => new RewardTrackPetGrant(id.Value, figure, prize.RewardAmount),
+            ProductItemType.Bot when BotAiTypes.Contains(code.ToLowerInvariant()) && figure.Length > 0 =>
+                new RewardTrackBotGrant(code.ToLowerInvariant(), figure, prize.RewardAmount),
             ProductItemType.Habbicon when id > 0 => new RewardTrackHabbiconGrant(id.Value),
             _ => null
         };

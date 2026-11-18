@@ -11,7 +11,9 @@ public static class ProductItemType
     public const short WallItem = 0;
     public const short FloorItem = 1;
     public const short Badge = 4;
+    public const short Bot = 6;
     public const short Currency = 8;
+    public const short Pet = 10;
     public const short Habbicon = 12;
 
     /// <summary>The currency type of credits. Every other currency type is an activity point type.</summary>
@@ -28,4 +30,9 @@ public sealed record RewardTrackBadgeGrant(string Code) : RewardTrackGrant;
 
 public sealed record RewardTrackFurniGrant(ItemType Type, int SpriteId, int Amount) : RewardTrackGrant;
 
+/// <summary>A pet prize: <paramref name="Figure"/> is the pet's "type race colour" figure.</summary>
+public sealed record RewardTrackPetGrant(int PetType, string Figure, int Amount) : RewardTrackGrant;
+
+/// <summary>A bot prize: <paramref name="AiType"/> is the bot preset's AI type, such as generic.</summary>
+public sealed record RewardTrackBotGrant(string AiType, string Figure, int Amount) : RewardTrackGrant;
 public sealed record RewardTrackHabbiconGrant(int Id) : RewardTrackGrant;

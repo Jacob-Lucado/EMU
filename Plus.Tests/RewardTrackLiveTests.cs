@@ -290,7 +290,123 @@ public class RewardTrackLiveTests
         Assert.DoesNotContain(ServerHeader(client, ServerPacketHeader.UserHabbiconStatusChangedComposer), client.Sent);
     }
 
+    [Fact]
+    public async Task PetPrizeDeliversTheNewestPackageOfItsPetTypeHoldingThePrizeFigure()
+    {
+        var database = TrackDatabase(10, "1", 1, "1 0 ABABAB");
+        var (client, habbo, manager) = await Claimer(database, new BadgeDefinitions(), new FurniDefinitions(Sofa(), Nest(),
+            Package(80, "newbie_present", 45508, 1),
+            Package(81, "newbie_cat_package", 75424, 1),
+            Package(82, "newbie_crocodile_package", 75424, 2),
+            Package(83, "newbie_cat_package_copy", 75424, 1)));
+
+        await manager.Claim(client, "introduction", "track_champ");
+
+        Assert.Equal(RewardTrackResults.Ok, client.ClaimResult());
+        var write = Assert.Single(database.Committed);
+        Assert.Contains(write, sql => sql.Contains("INTO users_reward_track_prizes"));
+        Assert.Single(write, sql => sql.Contains("INSERT INTO `items`"));
+        var package = habbo.Inventory!.Furniture.Floor[NewItemId];
+        Assert.Equal(81u, package.Definition.Id);
+        Assert.Equal("1 0 ABABAB", package.ExtraData.Serialize());
+        Assert.Contains(ServerHeader(client, ServerPacketHeader.FurniListNotificationComposer), client.Sent);
+        Assert.Contains(ServerHeader(client, ServerPacketHeader.FurniListUpdateComposer), client.Sent);
+    }
+
+    [Fact]
+    public async Task PetPrizeWithoutAPackageForItsPetTypeIsUnknownAndStoresNothing()
+    {
+        var database = TrackDatabase(10, "3", 1, "3 0 FFFFFF");
+        var withoutItsFurni = new ItemDefinition
+        {
+            Id = 84,
+            SpriteId = 55842,
+            ItemName = "horse_dye_17",
+            Type = ItemType.Floor,
+            ProductType = "s",
+            PetPackage = new PetPackage(3, "Lime")
+        };
+        var (client, habbo, manager) = await Claimer(database, new BadgeDefinitions(),
+            new FurniDefinitions(Sofa(), Nest(), Package(81, "newbie_cat_package", 75424, 1), withoutItsFurni));
+
+        await manager.Claim(client, "introduction", "track_champ");
+
+        Assert.Equal(RewardTrackResults.Unknown, client.ClaimResult());
+        Assert.Empty(database.Committed);
+        Assert.Empty(habbo.Inventory!.Furniture.AllItems);
+    }
+
+    [Fact]
+    public async Task BotPrizeDeliversTheBotOfThePresetWithItsFigure()
+    {
+        var database = TrackDatabase(6, "GENERIC", 1, RobbieFigure);
+        database.Tables["FROM catalog_bot_presets"] = Rows(["Id", "Name", "Figure", "Gender", "Motto", "AiType"],
+            [3570u, "Skye", "hr-9534-39.hd-600-1", "F", "Serves drinks", "bartender"],
+            [3568u, "Frank", "hd-180-1", "M", "Another generic bot", "generic"],
+            [3569u, "Robbie", RobbieFigure, "M", "Can talk, walk, dance and dress up", "generic"]);
+        var (client, habbo, manager) = await Claimer(database, new BadgeDefinitions());
+
+        await manager.Claim(client, "introduction", "track_champ");
+
+        Assert.Equal(RewardTrackResults.Ok, client.ClaimResult());
+        var write = Assert.Single(database.Committed);
+        Assert.Contains(write, sql => sql.Contains("INTO users_reward_track_prizes"));
+        Assert.Single(write, sql => sql.Contains("INSERT INTO bots"));
+        var bot = Assert.Single(habbo.Inventory!.Bots.Bots.Values);
+        Assert.Equal((int)NewItemId, bot.Id);
+        Assert.Equal(("Robbie", "M", RobbieFigure, "Can talk, walk, dance and dress up"), (bot.Name, bot.Gender, bot.Figure, bot.Motto));
+        Assert.Contains(ServerHeader(client, ServerPacketHeader.BotInventoryComposer), client.Sent);
+        Assert.Contains(ServerHeader(client, ServerPacketHeader.FurniListNotificationComposer), client.Sent);
+    }
+
+    [Fact]
+    public async Task BotPrizeWithAnUnknownFigureTakesTheFirstPresetOfItsAiType()
+    {
+        var database = TrackDatabase(6, "GENERIC", 1, "hd-190-1.ch-210-66");
+        database.Tables["FROM catalog_bot_presets"] = Rows(["Id", "Name", "Figure", "Gender", "Motto", "AiType"],
+            [3570u, "Skye", "hr-9534-39.hd-600-1", "F", "Serves drinks", "bartender"],
+            [3569u, "Robbie", RobbieFigure, "M", "Can talk, walk, dance and dress up", "generic"],
+            [3571u, "Frank", "hd-180-1", "M", "Another generic bot", "generic"]);
+        var (client, habbo, manager) = await Claimer(database, new BadgeDefinitions());
+
+        await manager.Claim(client, "introduction", "track_champ");
+
+        Assert.Equal(RewardTrackResults.Ok, client.ClaimResult());
+        var bot = Assert.Single(habbo.Inventory!.Bots.Bots.Values);
+        Assert.Equal(("Robbie", "M", "hd-190-1.ch-210-66"), (bot.Name, bot.Gender, bot.Figure));
+    }
+
+    [Fact]
+    public async Task BotPrizeWithoutAPresetOfItsAiTypeIsUnknownAndStoresNothing()
+    {
+        var database = TrackDatabase(6, "GENERIC", 1, RobbieFigure);
+        database.Tables["FROM catalog_bot_presets"] = Rows(["Id", "Name", "Figure", "Gender", "Motto", "AiType"],
+            [3570u, "Skye", "hr-9534-39.hd-600-1", "F", "Serves drinks", "bartender"]);
+        var (client, habbo, manager) = await Claimer(database, new BadgeDefinitions());
+
+        await manager.Claim(client, "introduction", "track_champ");
+
+        Assert.Equal(RewardTrackResults.Unknown, client.ClaimResult());
+        Assert.Empty(database.Committed);
+        Assert.Empty(habbo.Inventory!.Bots.Bots);
+    }
+
     private const uint NewItemId = 9001;
+
+    private const string RobbieFigure = "hr-3020-34.hd-3091-2.ch-225-92.lg-3058-100.sh-3089-1338.ca-3084-78-108.wa-2005";
+
+    private static ItemDefinition Nest() => new() { Id = 79, SpriteId = 3897, ItemName = "newbie_nest", Type = ItemType.Floor, ProductType = "s" };
+
+    private static ItemDefinition Package(uint id, string name, int revision, int petType) => new()
+    {
+        Id = id,
+        SpriteId = (int)id + 18000,
+        ItemName = name,
+        Type = ItemType.Floor,
+        ProductType = "s",
+        Revision = revision,
+        PetPackage = new PetPackage(petType, "newbie_nest")
+    };
 
     private static ItemDefinition Sofa() => new() { Id = 77, SpriteId = 1534, ItemName = "club_sofa", Type = ItemType.Floor, ProductType = "s" };
 
@@ -327,7 +443,7 @@ public class RewardTrackLiveTests
     private static FakeDatabase TrackDatabase() => TrackDatabase(4, Badge, 1);
 
     /// <summary>A track with one prize named track_champ, worth 50 points, with the player 10 points past it.</summary>
-    private static FakeDatabase TrackDatabase(int productType, string rewardType, int amount)
+    private static FakeDatabase TrackDatabase(int productType, string rewardType, int amount, string extraParams = "")
     {
         var database = new FakeDatabase();
         database.Tables["FROM reward_tracks "] = Table(
@@ -335,7 +451,7 @@ public class RewardTrackLiveTests
             ("Boost", 1.0), ("InstantPoints", 0), ("CostDiamonds", 0), ("CostCredits", 25));
         database.Tables["FROM reward_track_prizes"] = Table(
             ("TrackId", "introduction"), ("Id", "track_champ"), ("RequiredPoints", 50), ("ProductItemTypeId", productType), ("RewardType", rewardType),
-            ("ExtraParams", ""), ("RewardAmount", amount), ("Premium", 0), ("SortOrder", 1));
+            ("ExtraParams", extraParams), ("RewardAmount", amount), ("Premium", 0), ("SortOrder", 1));
         database.Tables["LAST_INSERT_ID"] = Table(("Id", NewItemId));
         database.Tables["FROM users_reward_tracks "] = Table(("TrackId", "introduction"), ("Points", 60), ("Premium", 0));
 
@@ -351,6 +467,21 @@ public class RewardTrackLiveTests
         }
 
         table.Rows.Add(row.Select(cell => cell.Value).ToArray());
+
+        return table;
+    }
+
+    private static DataTable Rows(string[] columns, params object[][] rows)
+    {
+        var table = new DataTable();
+
+        for (var i = 0; i < columns.Length; i++) {
+            table.Columns.Add(columns[i], rows[0][i].GetType());
+        }
+
+        foreach (var row in rows) {
+            table.Rows.Add(row);
+        }
 
         return table;
     }

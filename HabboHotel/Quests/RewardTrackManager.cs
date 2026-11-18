@@ -3,6 +3,7 @@ using Dapper;
 using Microsoft.Extensions.Logging;
 using Plus.Communication.Packets;
 using Plus.Communication.Packets.Outgoing.Inventory.Badges;
+using Plus.Communication.Packets.Outgoing.Inventory.Bots;
 using Plus.Communication.Packets.Outgoing.Inventory.Furni;
 using Plus.Communication.Packets.Outgoing.Inventory.Purse;
 using Plus.Communication.Packets.Outgoing.Notifications;
@@ -10,12 +11,14 @@ using Plus.Communication.Packets.Outgoing.Quests;
 using Plus.Core;
 using Plus.Database;
 using Plus.HabboHotel.Badges;
+using Plus.HabboHotel.Catalog;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Habbicons;
 using Plus.HabboHotel.Items;
 using Plus.HabboHotel.Quests.DailyTasks;
 using Plus.HabboHotel.Users;
 using Plus.HabboHotel.Users.Badges;
+using Plus.HabboHotel.Users.Inventory.Bots;
 using Plus.HabboHotel.Users.Inventory.Furniture;
 
 namespace Plus.HabboHotel.Quests;
@@ -31,6 +34,7 @@ public sealed class RewardTrackManager : IRewardTrackManager, IStartable
     private readonly IDailyTaskManager? _dailyTasks;
     private readonly IItemDataManager? _items;
     private readonly IItemFactory? _itemFactory;
+    private static readonly CatalogBotPurchaseStore BotStore = new();
     private readonly IHabbiconService? _habbicons;
     private readonly IHabbiconAchievementService? _habbiconAchievements;
     private readonly object _definitions = new();
@@ -335,10 +339,49 @@ public sealed class RewardTrackManager : IRewardTrackManager, IStartable
         RewardTrackCurrencyGrant => grant,
         RewardTrackBadgeGrant badge when habbo.Inventory != null && TryResolveBadge(habbo, badge.Code, out var code) => new RewardTrackBadgeGrant(code),
         RewardTrackFurniGrant furni when habbo.Inventory != null && _itemFactory != null && FindFurni(furni) is { } definition =>
-            new FurniDefinitionGrant(definition, furni.Amount),
+            new FurniDefinitionGrant(definition, furni.Amount, ""),
+        // Habbo gives a pet prize as its pet package furni, which holds the pet's figure until the player opens it.
+        RewardTrackPetGrant pet when habbo.Inventory != null && _itemFactory != null && FindPetPackage(pet.PetType) is { } package =>
+            new FurniDefinitionGrant(package, pet.Amount, pet.Figure),
+        RewardTrackBotGrant bot when habbo.Inventory != null && FindBotPreset(bot) is { } preset => new BotPresetGrant(preset, bot.Amount),
         RewardTrackHabbiconGrant when _habbicons != null => grant,
         _ => null
     };
+
+    // A pet type can have several packages; the newest one is the package the reward tracks give, such as newbie_cat_package.
+    private ItemDefinition? FindPetPackage(int petType) =>
+        _items?.Items.Values
+            .Where(definition => definition.Type == ItemType.Floor && definition.PetPackage is { } package && package.PetType == petType
+                                 && _items.GetItemByName(package.FurniName) != null)
+            .OrderByDescending(definition => definition.Revision)
+            .ThenBy(definition => definition.Id)
+            .FirstOrDefault();
+
+    /// <summary>
+    /// The bot preset that names the prize's bot: the preset of its AI type with the same figure, else the first preset of that type.
+    /// The bot keeps the prize's figure.
+    /// </summary>
+    private CatalogBot? FindBotPreset(RewardTrackBotGrant bot)
+    {
+        try {
+            using var connection = _database.Connection();
+            var preset = connection.Query<CatalogBot>(
+                    "SELECT id AS Id, name AS Name, figure AS Figure, gender AS Gender, motto AS Motto, ai_type AS AiType FROM catalog_bot_presets")
+                .Where(preset => string.Equals(preset.AiType, bot.AiType, StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(preset => preset.Figure == bot.Figure)
+                .ThenBy(preset => preset.Id)
+                .FirstOrDefault();
+
+            return preset == null
+                ? null
+                : new CatalogBot { Id = preset.Id, Name = preset.Name, Gender = preset.Gender, Motto = preset.Motto, AiType = preset.AiType, Figure = bot.Figure };
+        }
+        catch (Exception exception) {
+            _logger.LogError(exception, "Reward track bot presets failed to load");
+
+            return null;
+        }
+    }
 
     // Several definitions can share a sprite; the lowest id is the original.
     private ItemDefinition? FindFurni(RewardTrackFurniGrant furni) =>
@@ -392,7 +435,7 @@ public sealed class RewardTrackManager : IRewardTrackManager, IStartable
             connection.Execute(
                 "INSERT INTO users_reward_track_prizes (user_id, track_id, prize_id, claimed_at) VALUES (@userId, @trackId, @prizeId, @claimedAt)",
                 new { userId, trackId, prizeId, claimedAt = claimedAt.UtcDateTime }, transaction);
-            var delivered = new Delivered([], null);
+            var delivered = new Delivered([], [], null);
 
             switch (grant) {
                 case RewardTrackCurrencyGrant { Type: ProductItemType.Credits } credits:
@@ -408,10 +451,16 @@ public sealed class RewardTrackManager : IRewardTrackManager, IStartable
                         new { userId, badge = badge.Code }, transaction);
                     break;
                 case FurniDefinitionGrant furni:
-                    delivered = delivered with { Items = FurniDelivery.Create(_itemFactory!, connection, transaction, habbo, furni.Definition, "", furni.Amount, 0, 0) };
+                    delivered = delivered with { Items = FurniDelivery.Create(_itemFactory!, connection, transaction, habbo, furni.Definition, furni.ExtraData, furni.Amount, 0, 0) };
 
                     if (delivered.Items.Count == 0) {
                         return null;
+                    }
+
+                    break;
+                case BotPresetGrant bots:
+                    for (var i = 0; i < bots.Amount; i++) {
+                        delivered.Bots.Add(BotStore.Create(connection, transaction, bots.Preset, userId));
                     }
 
                     break;
@@ -448,6 +497,18 @@ public sealed class RewardTrackManager : IRewardTrackManager, IStartable
                 }
 
                 session.Send(new FurniListUpdateComposer());
+                break;
+            case BotPresetGrant when habbo.Inventory is { } inventory:
+                foreach (var bot in delivered.Bots) {
+                    inventory.Bots.AddBot(bot);
+                }
+
+                session.Send(new BotInventoryComposer(BotInventorySnapshot.Capture(inventory.Bots.Bots.Values)));
+
+                foreach (var bot in delivered.Bots) {
+                    session.Send(new FurniListNotificationComposer((uint)bot.Id, 5));
+                }
+
                 break;
             case RewardTrackHabbiconGrant when delivered.Habbicons is { } change:
                 HabbiconMessages.Publish(session, change);
@@ -770,7 +831,9 @@ public sealed class RewardTrackManager : IRewardTrackManager, IStartable
         public string PrizeId { get; set; } = "";
     }
 
-    private sealed record FurniDefinitionGrant(ItemDefinition Definition, int Amount) : RewardTrackGrant;
+    private sealed record FurniDefinitionGrant(ItemDefinition Definition, int Amount, string ExtraData) : RewardTrackGrant;
 
-    private sealed record Delivered(List<Item> Items, HabbiconChange? Habbicons);
+    private sealed record BotPresetGrant(CatalogBot Preset, int Amount) : RewardTrackGrant;
+
+    private sealed record Delivered(List<Item> Items, List<Bot> Bots, HabbiconChange? Habbicons);
 }

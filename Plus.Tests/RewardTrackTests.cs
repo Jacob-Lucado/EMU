@@ -113,9 +113,21 @@ public class RewardTrackTests
         Assert.Equal(new RewardTrackHabbiconGrant(32), RewardTrackRules.Grant(Prize(12, "32", "", 1)));
     }
 
+    [Fact]
+    public void PetPrizeGrantsItsPetFigure() =>
+        Assert.Equal(new RewardTrackPetGrant(1, "1 0 ABABAB", 1), RewardTrackRules.Grant(Prize(10, "1", "1 0 ABABAB", 1)));
+
+    [Fact]
+    public void BotPrizeGrantsABotOfItsAiTypeWithItsFigure() =>
+        Assert.Equal(new RewardTrackBotGrant("generic", "hr-3020-34.hd-3091-2", 1), RewardTrackRules.Grant(Prize(6, "GENERIC", "hr-3020-34.hd-3091-2", 1)));
+
     [Theory]
-    [InlineData(10, "1", "1 0 ABABAB", 1)]
-    [InlineData(6, "GENERIC", "hr-3020-34.hd-3091-2", 1)]
+    [InlineData(10, "1", "", 1)]
+    [InlineData(10, "cat", "1 0 ABABAB", 1)]
+    [InlineData(10, "2", "1 0 ABABAB", 1)]
+    [InlineData(10, "1", "1 0 ABABAB", 0)]
+    [InlineData(6, "GENERIC", "", 1)]
+    [InlineData(6, "WAITER", "hr-3020-34.hd-3091-2", 1)]
     [InlineData(1, "furni", "club_sofa", 1)]
     [InlineData(1, "1534", "", 0)]
     [InlineData(8, "0", "", 0)]

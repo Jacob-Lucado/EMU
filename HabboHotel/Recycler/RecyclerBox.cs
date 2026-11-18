@@ -4,7 +4,10 @@ using Plus.HabboHotel.Users.Inventory.Furniture;
 
 namespace Plus.HabboHotel.Recycler;
 
-internal sealed record RecyclerBoxKind(string ClassName, int SpriteId, string DateFormat);
+internal sealed record RecyclerBoxKind(string ClassName, int SpriteId, string DateFormat)
+{
+    public bool Matches(ItemDefinition definition) => definition.SpriteId == SpriteId && definition.ItemName == ClassName;
+}
 
 internal static class RecyclerBox
 {
@@ -13,13 +16,13 @@ internal static class RecyclerBox
     public static readonly RecyclerBoxKind Ecotron = new("ecotron_box", 3095, "d-M-yyyy");
 
     public static RecyclerBoxKind? KindOf(ItemDefinition definition) =>
-        new[] { Mystery, Ecotron }.FirstOrDefault(kind => definition.ItemName == kind.ClassName && definition.SpriteId == kind.SpriteId);
+        Mystery.Matches(definition) ? Mystery : Ecotron.Matches(definition) ? Ecotron : null;
     public static bool IsIdentity(ItemDefinition definition) => KindOf(definition) is not null;
     public static bool IsDefinition(ItemDefinition definition) => IsIdentity(definition)
         && definition.Type == ItemType.Floor && definition.ProductType == "s" && definition.InteractionType == InteractionType.None;
     public static ItemDefinition? Find(IEnumerable<ItemDefinition> definitions, RecyclerBoxKind kind)
     {
-        var boxes = definitions.Where(definition => KindOf(definition) == kind).Take(2).ToArray();
+        var boxes = definitions.Where(kind.Matches).Take(2).ToArray();
 
         return boxes.Length == 1 && IsDefinition(boxes[0]) ? boxes[0] : null;
     }

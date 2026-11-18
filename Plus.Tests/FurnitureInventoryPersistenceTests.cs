@@ -171,7 +171,7 @@ public sealed class FurnitureInventoryPersistenceTests
     public async Task RealAccountGateHoldsPersistenceAndPublicationUntilRelease()
     {
         var context = Context();
-        var gate = new AccountSessionGate();
+        var gate = new AccountSessionGate(TimeSpan.FromSeconds(60));
         var store = new RecordingStore();
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var held = gate.Enter(context.Habbo.Id);

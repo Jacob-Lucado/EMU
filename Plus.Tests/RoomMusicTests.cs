@@ -238,7 +238,7 @@ namespace Plus.Tests
                 var (client, sent) = HabbiconTestSupport.Client(habbo);
                 habbo.Client = client;
                 var clients = Proxy<Plus.HabboHotel.GameClients.IGameClientManager>((name, args) => name == "GetClientByUserId" && (int)args[0]! == owner ? client : null);
-                var gate = new AccountSessionGate();
+                var gate = new AccountSessionGate(TimeSpan.FromSeconds(60));
                 var held = gate.Enter((int)owner);
                 Task? pending = null;
                 var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -316,7 +316,7 @@ namespace Plus.Tests
         [InlineData(true)]
         public async Task MusicReturnedDiscWaitsForAccountWithoutBlockingNavigationOrTeardown(bool nested)
         {
-            var gate = new AccountSessionGate();
+            var gate = new AccountSessionGate(TimeSpan.FromSeconds(60));
             var (music, store, _, _) = Music(new([new(31, 7, Song(71, 1000))], 0, null, 0, true), v2: true, accounts: gate);
             Inventory(MusicDisc(40));
             var removed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);

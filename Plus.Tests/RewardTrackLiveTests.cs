@@ -32,6 +32,35 @@ public class RewardTrackLiveTests
     private const string Badge = "ACH_RewardTracksCompleted1";
 
     [Fact]
+    public async Task WiredScoreMovesOnlyTheNamedCustomWiredTaskOfTheNamedTrack()
+    {
+        var database = new FakeDatabase();
+        database.Tables["FROM reward_tracks "] = Table(
+            ("Id", "habboween2026"), ("Theme", "red"), ("SortOrder", 0), ("StartsAt", DBNull.Value), ("EndsAt", DBNull.Value), ("HasPremium", 1),
+            ("Boost", 1.2), ("InstantPoints", 0), ("CostDiamonds", 75), ("CostCredits", 75));
+        database.Tables["FROM reward_track_tasks"] = Rows(["TrackId", "Id", "ActionType", "Parameter", "Premium", "SortOrder"],
+            ["habboween2026", "game1", RewardTrackActions.CustomWiredAction, "", 0, 1],
+            ["habboween2026", "scratch_pets", RewardTrackActions.PetRespect, "", 0, 2]);
+        database.Tables["FROM reward_track_task_levels"] = Rows(["TrackId", "TaskId", "Level", "RequiredCount", "PointsReward", "Premium"],
+            ["habboween2026", "game1", 1, 1, 100, 0],
+            ["habboween2026", "scratch_pets", 1, 3, 10, 0]);
+        var (client, _, manager) = await Claimer(database, new BadgeDefinitions());
+
+        manager.ProgressWiredTask(client, "introduction", "game1", 1, true);
+        manager.ProgressWiredTask(client, "habboween2026", "missing", 1, true);
+        manager.ProgressWiredTask(client, "habboween2026", "scratch_pets", 3, true);
+        Assert.Empty(client.Sent);
+        Assert.Empty(database.Committed);
+
+        manager.ProgressWiredTask(client, "habboween2026", "game1", 1, false);
+
+        Assert.Equal(new uint[] { ServerPacketHeader.RewardTrackProgressComposer }, client.Sent);
+        var write = Assert.Single(database.Committed);
+        Assert.Contains(write, sql => sql.Contains("INTO users_reward_track_tasks"));
+        Assert.Contains(write, sql => sql.Contains("INTO users_reward_tracks"));
+    }
+
+    [Fact]
     public async Task LoginSendsTracksToTheVoltClient()
     {
         var client = new TestClient(await Profile());
@@ -458,19 +487,6 @@ public class RewardTrackLiveTests
         return database;
     }
 
-    private static DataTable Table(params (string Column, object Value)[] row)
-    {
-        var table = new DataTable();
-
-        foreach (var (column, value) in row) {
-            table.Columns.Add(column, value is DBNull ? typeof(DateTimeOffset) : value.GetType());
-        }
-
-        table.Rows.Add(row.Select(cell => cell.Value).ToArray());
-
-        return table;
-    }
-
     private static DataTable Rows(string[] columns, params object[][] rows)
     {
         var table = new DataTable();
@@ -482,6 +498,19 @@ public class RewardTrackLiveTests
         foreach (var row in rows) {
             table.Rows.Add(row);
         }
+
+        return table;
+    }
+
+    private static DataTable Table(params (string Column, object Value)[] row)
+    {
+        var table = new DataTable();
+
+        foreach (var (column, value) in row) {
+            table.Columns.Add(column, value is DBNull ? typeof(DateTimeOffset) : value.GetType());
+        }
+
+        table.Rows.Add(row.Select(cell => cell.Value).ToArray());
 
         return table;
     }

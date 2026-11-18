@@ -155,9 +155,16 @@ public partial class PlacedFurniRoomTests
         definition.ItemName = "petfood1";
         definition.CustomParams = "375,10,0";
         definition.Walkable = true;
-        var food = new Item {
-            Id = TemporaryItemIds.First, OwnerId = 7, RoomId = RoomId, IsTemporary = true,
-            Definition = definition, GetX = 3, GetY = 3, ExtraData = new LegacyDataFormat { Data = "4" }
+        var food = new Item
+        {
+            Id = TemporaryItemIds.First,
+            OwnerId = 7,
+            RoomId = RoomId,
+            IsTemporary = true,
+            Definition = definition,
+            GetX = 3,
+            GetY = 3,
+            ExtraData = new LegacyDataFormat { Data = "4" }
         };
         _room.GetRoomItemHandler().LoadFurniture([food]);
         var ai = CommandBot(user, PetCommandSet.Eat);

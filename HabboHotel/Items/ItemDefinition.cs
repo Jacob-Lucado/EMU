@@ -14,6 +14,9 @@ public class ItemDefinition
     /// <summary>The name Habbo's furnidata gives the furni; empty when the row has none.</summary>
     public string FurniName { get; set; } = string.Empty;
 
+    /// <summary>The Habbo furnidata furniline, as in "pet_food".</summary>
+    public string FurniLine { get; set; } = string.Empty;
+
     /// <summary>The name a player sees: the furnidata name, or the public name when there is none.</summary>
     public string DisplayName => FurniName.Length > 0 ? FurniName : PublicName;
     public ItemType Type { get; set; }
@@ -40,14 +43,20 @@ public class ItemDefinition
         || WiredBoxRegistry.TryGet(ItemName, out descriptor) ? descriptor : null;
     public int BehaviourData { get; set; }
 
+    /// <summary>Credit furni the owner can exchange for its credit value. Habbo names every CFC_ credit furni "Non-redeemable item".</summary>
+    public bool RedeemableForCredits => InteractionType == InteractionType.Exchange && !ItemName.StartsWith("CFC_", StringComparison.OrdinalIgnoreCase);
+
     /// <summary>The figure set ids a purchasable clothing item unlocks: its Habbo furnidata customparams.</summary>
     public IReadOnlyList<int> FigureSetIds { get; set; } = [];
 
     /// <summary>The Habbo furnidata customparams, as in "15 2,3 50,50" for a horse hair dye.</summary>
     public string CustomParams { get; set; } = string.Empty;
 
-    /// <summary>The Habbo furnidata furniline, as in "pet_food".</summary>
-    public string FurniLine { get; set; } = string.Empty;
+    /// <summary>The pet a pet package holds and the furni it leaves behind, from its Habbo customparams; null for other furni.</summary>
+    public PetPackage? PetPackage { get; set; }
+
+    /// <summary>The furnidata revision of the furni's asset. Newer furni have higher revisions.</summary>
+    public int Revision { get; set; }
 
     public int Modes { get; set; }
     public List<int> VendingIds { get; set; } = new();

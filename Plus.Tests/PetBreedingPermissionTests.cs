@@ -145,13 +145,13 @@ public partial class PlacedFurniRoomTests
         public bool Fail { get; init; }
         public List<(int PetId, bool Allowed)> Saved { get; } = [];
 
-        public void Save(int petId, bool allowed)
+        public void Save(Pet pet, bool allowed)
         {
             if (Fail) {
                 throw new InvalidOperationException("The breeding permission was not persisted.");
             }
 
-            Saved.Add((petId, allowed));
+            Saved.Add((pet.PetId, allowed));
         }
     }
 }

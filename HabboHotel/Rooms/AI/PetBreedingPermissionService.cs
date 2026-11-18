@@ -7,16 +7,20 @@ namespace Plus.HabboHotel.Rooms.AI;
 
 public interface IPetBreedingPermissionStore
 {
-    void Save(int petId, bool allowed);
+    void Save(Pet pet, bool allowed);
 }
 
 public sealed class PetBreedingPermissionStore(IDatabase database) : IPetBreedingPermissionStore
 {
-    public void Save(int petId, bool allowed)
+    public void Save(Pet pet, bool allowed)
     {
         using var connection = database.Connection();
 
-        if (connection.Execute("UPDATE bots_petdata SET allow_breeding = @allowed WHERE id = @petId LIMIT 1", new { allowed, petId }) != 1) {
+        var sql = pet.Plant == null
+            ? "UPDATE bots_petdata SET allow_breeding = @allowed WHERE id = @petId LIMIT 1"
+            : "UPDATE bots_monsterplants SET breeding_permission = @allowed WHERE pet_id = @petId LIMIT 1";
+
+        if (connection.Execute(sql, new { allowed, petId = pet.PetId }) != 1) {
             throw new InvalidOperationException("The breeding permission was not persisted.");
         }
     }
@@ -27,7 +31,7 @@ public interface IPetBreedingPermissionService
     void Toggle(Room room, GameClient session, int petId);
 }
 
-public sealed class PetBreedingPermissionService(IPetBreedingPermissionStore store) : IPetBreedingPermissionService
+public sealed class PetBreedingPermissionService(IPetBreedingPermissionStore store, TimeProvider? clock = null) : IPetBreedingPermissionService
 {
     public void Toggle(Room room, GameClient session, int petId)
     {
@@ -35,8 +39,23 @@ public sealed class PetBreedingPermissionService(IPetBreedingPermissionStore sto
             return;
         }
 
+        if (data.Plant is { } plant) {
+            var now = (clock ?? TimeProvider.System).GetUtcNow();
+
+            if (!plant.CanBreedNow(now)) {
+                return;
+            }
+
+            var permission = !plant.BreedingPermission;
+            store.Save(data, permission);
+            plant.BreedingPermission = permission;
+            room.SendPacket(new PetStatusUpdateComposer(pet.VirtualId, data.PetId, true, false, false, permission));
+
+            return;
+        }
+
         var allowed = !data.AllowBreeding;
-        store.Save(data.PetId, allowed);
+        store.Save(data, allowed);
         data.AllowBreeding = allowed;
         room.SendPacket(new PetStatusUpdateComposer(pet.VirtualId, data.PetId, false, false, false, allowed));
     }

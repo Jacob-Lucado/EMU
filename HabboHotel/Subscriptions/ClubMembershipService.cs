@@ -39,7 +39,8 @@ public class ClubMembershipService(IDatabase database, IAccessControl permission
 
             using var connection = database.Connection();
             connection.Open();
-            using var transaction = connection.BeginTransaction();
+            // The locked reads must see rows committed after the offer read; REPEATABLE READ refuses that on MariaDB 11.6 and newer.
+            using var transaction = connection.BeginTransaction(IsolationLevel.ReadCommitted);
             var storedOffer = connection.QuerySingleOrDefault<ClubOffer>("SELECT id, name, days, credits, points, points_type AS PointsType, giftable AS Giftable FROM catalog_club_offers WHERE id = @id AND enabled = 1", new { id = offer.Id }, transaction);
 
             if (storedOffer == null || storedOffer.Days is <= 0 or > 36500 || storedOffer.Credits < 0 || storedOffer.Points < 0 || recipientId.HasValue && !storedOffer.Giftable) {

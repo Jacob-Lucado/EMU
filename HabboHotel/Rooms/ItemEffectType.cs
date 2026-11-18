@@ -7,5 +7,6 @@ public enum ItemEffectType
     SwimLow,
     SwimHalloween,
     Iceskates,
-    Normalskates
+    Normalskates,
+    Snowboard
 }

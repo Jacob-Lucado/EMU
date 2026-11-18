@@ -100,6 +100,10 @@ public static class InteractionTypes
                 return InteractionType.IceSkates;
             case "rollerskate":
                 return InteractionType.NormalSkates;
+            case "snowb_slope":
+                return InteractionType.SnowboardSlope;
+            case "snowb_jump":
+                return InteractionType.SnowboardJump;
             case "lowpool":
                 return InteractionType.Lowpool;
             case "haloweenpool":

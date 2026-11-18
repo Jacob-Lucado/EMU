@@ -122,8 +122,8 @@ public static class WiredSelectorModule
                         throw new ArgumentException("Altitude must be an invariant number");
                     }
 
-                    // A tile stacked to 0.6 equals 60, and the stored comparisons 3, 4 and 5 are <=, != and >=. A height compares as a decimal, so the double sum 0.2 + 0.2 + 0.2 is 0.6.
-                    selected.FurniIds.UnionWith(available.Where(x => (decimal)x.Z is var z && (P(0, 1) switch
+                    // A tile stacked to 0.6 equals 60, and the stored comparisons 3, 4 and 5 are <=, != and >=. A height compares to nine decimal places, so the double sum 0.2 + 0.2 + 0.2 is 0.6.
+                    selected.FurniIds.UnionWith(available.Where(x => Math.Round((decimal)x.Z, 9) is var z && (P(0, 1) switch
                     {
                         0 => z < altitude,
                         1 => z == altitude,

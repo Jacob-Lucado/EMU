@@ -45,14 +45,14 @@ public static class HorseProducts
         return product switch
         {
             InteractionType.HorseBodyDye => Dye(style, values[1]),
-            InteractionType.HorseHairDye when values.Length >= 3 => style with { HairPalette = First(values[2]) },
+            InteractionType.HorseHairDye when values.Length >= 3 && First(values[2]) is int dye => style with { HairPalette = dye },
             // Hair that already has a colour keeps it; otherwise the product's colour is used.
-            InteractionType.HorseHairstyle when values.Length >= 4 => style with
+            InteractionType.HorseHairstyle when values.Length >= 4 && First(values[2]) is int hair && First(values[3]) is int defaultColor => style with
             {
-                Hair = First(values[2]),
-                HairPalette = style.HairPalette > 0 ? style.HairPalette : First(values[3]),
+                Hair = hair,
+                HairPalette = style.HairPalette > 0 ? style.HairPalette : defaultColor,
             },
-            InteractionType.HorseSaddle1 or InteractionType.HorseSaddle2 when values.Length >= 4 => style with { Saddle = First(values[2]) },
+            InteractionType.HorseSaddle1 or InteractionType.HorseSaddle2 when values.Length >= 4 && First(values[2]) is int saddle => style with { Saddle = saddle },
             _ => null,
         };
     }
@@ -64,5 +64,5 @@ public static class HorseProducts
         return breed >= 0 && BodyColours.TryGetValue(tag, out var colour) ? style with { Palette = colour + breed } : null;
     }
 
-    private static int First(string list) => int.Parse(list.Split(',')[0], CultureInfo.InvariantCulture);
+    private static int? First(string list) => int.TryParse(list.Split(',')[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) ? value : null;
 }

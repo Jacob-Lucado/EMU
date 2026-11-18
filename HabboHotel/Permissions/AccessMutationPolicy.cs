@@ -11,6 +11,11 @@ internal static class AccessMutationPolicy
         role.Limits.All(limit => limit.Value <= actor.Limit(limit.Key, AccessLimits.Defaults.GetValueOrDefault(limit.Key))) &&
         registry.Where(key => role.Permissions.Any(pattern => UserAccess.Matches(pattern, key))).All(actor.Can);
 
+    // A role of the actor's own weight comes back off a user only when the actor gave it and outranks the user without it.
+    public static bool CanRevoke(int actorId, int targetId, UserAccess actor, UserAccess target, UserAccess targetWithoutRole, AccessRole role, bool grantedByActor) =>
+        role.Weight <= actor.Weight &&
+        (CanEdit(actorId, targetId, actor, target) || grantedByActor && CanEdit(actorId, targetId, actor, targetWithoutRole));
+
     public static bool CanGrant(UserAccess actor, string pattern, IEnumerable<string> registry)
     {
         var keys = registry.Where(key => UserAccess.Matches(pattern, key)).ToArray();

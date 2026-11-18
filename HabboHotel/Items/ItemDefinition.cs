@@ -54,8 +54,6 @@ public class ItemDefinition
 
     /// <summary>The pet type a breeding box is for: the first value of its Habbo furnidata customparams. Null for other furni.</summary>
     public int? BreedingPetType { get; set; }
-    /// <summary>The Habbo furnidata customparams, as in "15 2,3 50,50" for a horse hair dye.</summary>
-    public string CustomParams { get; set; } = string.Empty;
 
     /// <summary>The pet a pet package holds and the furni it leaves behind, from its Habbo customparams; null for other furni.</summary>
     public PetPackage? PetPackage { get; set; }

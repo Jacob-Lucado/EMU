@@ -104,7 +104,6 @@ public class ItemDataManager : IItemDataManager, IStartable
                         DefaultDirection = row.Table.Columns.Contains("default_dir") && row["default_dir"] is not DBNull ? Convert.ToInt32(row["default_dir"], CultureInfo.InvariantCulture) : 0,
                         FigureSetIds = ReadFigureSetIds(row.Table.Columns.Contains("custom_params") ? row["custom_params"] : null),
                         BreedingPetType = ReadBreedingPetType(Convert.ToString(row["item_name"]), row.Table.Columns.Contains("custom_params") ? row["custom_params"] : null),
-                        CustomParams = row.Table.Columns.Contains("custom_params") ? Convert.ToString(row["custom_params"], CultureInfo.InvariantCulture) ?? "" : "",
                         PetPackage = ReadPetPackage(row.Table.Columns.Contains("custom_params") ? row["custom_params"] : null),
                         Revision = row.Table.Columns.Contains("revision") && row["revision"] is not DBNull ? Convert.ToInt32(row["revision"], CultureInfo.InvariantCulture) : 0,
                         CustomParams = row.Table.Columns.Contains("custom_params") ? Convert.ToString(row["custom_params"], CultureInfo.InvariantCulture) ?? "" : "",

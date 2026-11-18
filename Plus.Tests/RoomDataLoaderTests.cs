@@ -115,6 +115,7 @@ public sealed class RoomDataLoaderTests
                 INSERT INTO rooms (id, owner, caption, model_name) VALUES (4, 999, 'Orphan', 'model_a');
                 INSERT INTO rooms (id, owner, caption, model_name) VALUES (5, 8, 'Empty owner name', 'model_a');
                 """);
+            connection.Execute(File.ReadAllText(HabbiconPacketTests.Repo("Database/Migrations/137_RoomBehaviorSettings.sql")));
 
             var model = new RoomModel("model_a", 0, 0, 0, 0, "0", 0, 0, false);
             var manager = Proxy<IRoomManager>((method, args) => method switch

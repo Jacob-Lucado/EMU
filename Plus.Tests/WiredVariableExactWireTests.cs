@@ -81,9 +81,9 @@ public sealed class WiredVariableExactWireTests
     public async Task ActualMenuServiceUsesOriginatingRefreshReportsFailedWriteAndPreflightsNativeResponses()
     {
         using var fixture = new WiredChestDatabaseTests.Fixture();
-        var config = new WiredConfiguration { Text = "exact_score", IntParams = [1, 0] };
-        fixture.Connection.Execute("INSERT INTO items(id,user_id,room_id,base_item,extra_data) VALUES(10,1,42,1,''); INSERT INTO wired_item_configurations VALUES(10,'wf_var_room',@config)",
-            new { config = JsonSerializer.Serialize(config) });
+        var (config, row) = WiredVariableRequestLocalTests.RoomVariable(1);
+        fixture.Connection.Execute("INSERT INTO items(id,user_id,room_id,base_item,extra_data) VALUES(10,1,42,1,''); INSERT INTO wired_item_configurations VALUES(10,'wf_var_room',@row)",
+            new { row });
         var world = new WiredChestProtocolTests.World(fixture.Database);
         world.Room.Type = "private";
         world.Room.OwnerName = "Owner";
@@ -108,13 +108,13 @@ public sealed class WiredVariableExactWireTests
         service.ManageExact(world.Room, world.Client, new(0, WiredVariableTarget.Global, 0, 10, long.MinValue, ""));
         Assert.Equal(2, world.Packets.Count);
         Assert.NotEqual(9480u, world.Packets[0].Header);
-        Assert.Equal(9480u, world.Packets[2508].Header);
+        Assert.Equal(9480u, world.Packets[1].Header);
         Assert.Equal(long.MinValue, Assert.Single(new WiredVariableMenu(world.Room, variables).Snapshot().Assignments).Value.Value);
         world.Packets.Clear();
         service.WriteExact(world.Room, world.Client, new(0, WiredVariableTarget.Global, 0, 999, 123, ""));
         Assert.Equal(2, world.Packets.Count);
         Assert.NotEqual(9480u, world.Packets[0].Header); // Visible failure precedes the authoritative refresh.
-        Assert.Equal(9480u, world.Packets[2508].Header);
+        Assert.Equal(9480u, world.Packets[1].Header);
         Assert.Equal(long.MinValue, Assert.Single(new WiredVariableMenu(world.Room, variables).Snapshot().Assignments).Value.Value);
         var (legacy, packets) = Client(new Habbo { Id = 1, Username = "Owner", CurrentRoom = world.Room });
         service.ShowSnapshot(world.Room, legacy);
@@ -130,14 +130,14 @@ public sealed class WiredVariableExactWireTests
         service.WriteExact(world.Room, guest, new(0, WiredVariableTarget.Global, 0, 10, 123, ""));
         Assert.Equal(2, guestPackets.Count);
         Assert.NotEqual(9480u, guestPackets[0].Header);
-        Assert.Equal(9480u, guestPackets[2508].Header);
+        Assert.Equal(9480u, guestPackets[1].Header);
         Assert.Equal(long.MinValue, Assert.Single(new WiredVariableMenu(world.Room, variables).Snapshot().Assignments).Value.Value);
         guest.GetHabbo().Access = EditorTestSupport.Access([PermissionKeys.RoomRightsAny]);
         guestPackets.Clear();
         service.ManageExact(world.Room, guest, new(2, WiredVariableTarget.Global, 0, 10, 0, ""));
         Assert.Equal(2, guestPackets.Count);
         Assert.NotEqual(9480u, guestPackets[0].Header);
-        Assert.Equal(9480u, guestPackets[2508].Header);
+        Assert.Equal(9480u, guestPackets[1].Header);
         Assert.Equal(long.MinValue, Assert.Single(new WiredVariableMenu(world.Room, variables).Snapshot().Assignments).Value.Value);
     }
 

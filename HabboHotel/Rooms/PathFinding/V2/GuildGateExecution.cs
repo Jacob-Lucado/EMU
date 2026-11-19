@@ -28,11 +28,21 @@ internal sealed class GuildGateExecution(Room room, NavGrid grid)
             return;
         }
 
-        // Sequenced like every gate write; the user and timer apply at the commit boundary.
-        GateTransitionService.ToggleState(gate, state => state == "1" ? null : "1", GateCloseReason.Walk, persist: false, afterWrite: opened =>
+        GateTransitionService.ToggleState(gate, state =>
+        {
+            if (state != "1") {
+                return "1";
+            }
+
+            TrackPassage(gate);
+
+            return null;
+        }, GateCloseReason.Walk, persist: false, afterWrite: TrackPassage);
+
+        void TrackPassage(Item opened)
         {
             opened.InteractingUser = habbo.Id;
             opened.RequestUpdate(4, true);
-        });
+        }
     }
 }

@@ -94,7 +94,7 @@ public sealed class InventoryItemSnapshotTests
         var items = Enumerable.Range(1, count).Select(id => Item((uint)id, new EmptyDataFormat())).ToArray();
         var habbo = new Habbo { Inventory = new() { Furniture = new(items, []) } };
         var (client, sent) = HabbiconTestSupport.Client(habbo);
-        await new RequestFurniInventoryEvent().Parse(client, HabbiconTestSupport.Incoming());
+        await new RequestFurniInventoryEvent(TestGroupManager.Empty).Parse(client, HabbiconTestSupport.Incoming());
         Assert.Equal(pages, sent.Count);
         var actualCount = 0;
 

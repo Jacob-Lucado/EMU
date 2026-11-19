@@ -1464,7 +1464,7 @@ public partial class RoomItemHandling
 
             // A Builders Club furni goes nowhere: the inventory refuses it.
             if (!item.IsBuildersClub) {
-                session.Send(new FurniListAddComposer(InventoryItemSnapshot.Capture(item.ToInventoryItem())));
+                session.Send(new FurniListAddComposer(InventoryItemSnapshot.Capture(item.ToInventoryItem(), _room.FindGuildAppearance(item.GroupId))));
             }
 
             item.Detach(_room);

@@ -25,7 +25,7 @@ internal sealed class TestRoomSettings(Dictionary<string, string>? values = null
     public Task Reload() => throw new InvalidOperationException("Room fixture settings cannot reload.");
 }
 
-internal sealed class TestGroupManager(Func<int, Group?>? lookup = null) : IGroupManager
+internal sealed class TestGroupManager(Func<int, Group?>? lookup = null, Func<int, bool, string>? colours = null) : IGroupManager
 {
     public static TestGroupManager Empty { get; } = new();
     public ICollection<GroupBadgeParts> BadgeBases => throw Unused();
@@ -46,7 +46,7 @@ internal sealed class TestGroupManager(Func<int, Group?>? lookup = null) : IGrou
         group = null;
         throw Unused();
     }
-    public string GetColourCode(int id, bool colourOne) => throw Unused();
+    public string GetColourCode(int id, bool colourOne) => colours?.Invoke(id, colourOne) ?? throw Unused();
     public void DeleteGroup(int id) => throw Unused();
     public List<Group> GetGroupsForUser(int userId) => throw Unused();
     public Dictionary<int, string> GetAllBadgesInRoom(Room room) => throw Unused();

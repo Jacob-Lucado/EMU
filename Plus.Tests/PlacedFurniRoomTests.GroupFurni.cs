@@ -56,6 +56,25 @@ public partial class PlacedFurniRoomTests
         Assert.Equal(5, _room.GetRoomItemHandler().GetItem(30).GroupId);
     }
 
+    [Fact]
+    public async Task PickedUpGroupFurniReachesTheInventoryWithItsGroupLook()
+    {
+        GuildLook(5);
+        Viewer();
+        var item = Add(30, 1, 1, type: InteractionType.GuildItem);
+        item.GroupId = 5;
+        _client.Packets.Clear();
+
+        await PickupObject().Parse(_client, ClientPacket(2, 30));
+
+        var added = Assert.Single(_client.Packets, packet => packet.Header == ServerPacketHeader.FurniListAddComposer);
+        var body = new FlashIncomingPacket { Buffer = added.Body };
+        Assert.Equal(1, body.ReadInt());
+        var entry = GroupFurniInventoryTests.Entry.Read(body);
+        Assert.Equal(17, entry.Category);
+        Assert.Equal(["5", "b01010s21084", "84de00", "9844e7"], entry.Strings!.Skip(1));
+    }
+
     private void GuildLook(int groupId)
     {
         var group = new Group(groupId, "group", "", "b01010s21084", RoomId, 7, null, 0, 19, 37, 0, false, new GroupMembershipSnapshot([7], [], []));

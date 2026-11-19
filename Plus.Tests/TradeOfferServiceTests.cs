@@ -87,6 +87,44 @@ public sealed class TradeOfferServiceTests
     }
 
     [Fact]
+    public void TradingGroupFurnitureShowsItsGroupInTheOfferAndTheRecipientsInventory()
+    {
+        using var f = new TradeConfirmationServiceTests.TradeFixture();
+        var alice = f.Join(1, 7);
+        var bob = f.Join(2, 8);
+        var trade = f.Start(alice, bob);
+        typeof(Plus.HabboHotel.Rooms.Room).GetField("_groups", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .SetValue(f.Room, GroupFurniInventoryTests.Groups(5));
+        var item = Floor(100, 11);
+        item.Definition.InteractionType = InteractionType.GuildItem;
+        item.GroupId = 5;
+        Stock(alice, item);
+
+        f.Trades.OfferItem(alice.Session, item.Id);
+
+        var offer = new FlashIncomingPacket { Buffer = bob.Packets.Single(packet => packet.Header == ServerPacketHeader.TradingUpdateComposer).Payload };
+        Assert.Equal(alice.Habbo.Id, offer.ReadInt());
+        Assert.Equal(1, offer.ReadInt());
+        offer.ReadUInt();
+        offer.ReadString();
+        offer.ReadUInt();
+        offer.ReadInt();
+        Assert.Equal(17, offer.ReadInt());
+        offer.ReadBool();
+        Assert.Equal(2, offer.ReadInt());
+        Assert.Equal(5, offer.ReadInt());
+        string[] expected = ["0", "5", "b01010s21084", "84de00", "9844e7"];
+        Assert.Equal(expected, Enumerable.Range(0, 5).Select(_ => offer.ReadString()));
+
+        Assert.True(trade.ProcessItems());
+        var added = new FlashIncomingPacket { Buffer = bob.Packets.Single(packet => packet.Header == ServerPacketHeader.FurniListAddComposer).Payload };
+        Assert.Equal(1, added.ReadInt());
+        var entry = GroupFurniInventoryTests.Entry.Read(added);
+        Assert.Equal(17, entry.Category);
+        Assert.Equal(expected, entry.Strings);
+    }
+
+    [Fact]
     public void RemoveTakesOnlyAnOfferedItemAndUpdatesBothTraders()
     {
         using var f = new TradeConfirmationServiceTests.TradeFixture();

@@ -288,7 +288,9 @@ public sealed class Trade
         applied.Clear();
     }
 
-    private static void PublishTransfers(GameClient sender, GameClient recipient, IEnumerable<InventoryItem> items, bool autoRedeem)
+    internal InventoryItemSnapshot CaptureGroupItem(InventoryItem item) => InventoryItemSnapshot.Capture(item, _instance.FindGuildAppearance(item.GroupId));
+
+    private void PublishTransfers(GameClient sender, GameClient recipient, IEnumerable<InventoryItem> items, bool autoRedeem)
     {
         var creditsChanged = false;
 
@@ -300,7 +302,8 @@ public sealed class Trade
                 continue;
             }
 
-            PublishCommitted(() => recipient.Send(new FurniListAddComposer(InventoryItemSnapshot.Capture(item))));
+            PublishCommitted(() => recipient.Send(new FurniListAddComposer(GuildFurnitureAppearance.IsGuildFurni(item.Definition)
+                ? CaptureGroupItem(item) : InventoryItemSnapshot.Capture(item))));
             PublishCommitted(() => recipient.Send(new FurniListNotificationComposer(item.Id, 1)));
         }
 

@@ -490,6 +490,10 @@ public sealed class GateTransitionService(Room room, Func<IGateOccupancy> occupa
         if (reason == GateCloseReason.Wired) {
             room.GetWired().PublishState(item, persist);
         }
+        else if (item.Definition.InteractionType == InteractionType.GuildGate && reason is GateCloseReason.Walk or GateCloseReason.Automatic) {
+            item.UpdateState(persist, false);
+            room.SendObjectData(item, item.LegacyDataString, true);
+        }
         else if (reason == GateCloseReason.Timer) {
             item.UpdateState(persist, false);
             room.SendObjectData(item, item.LegacyDataString, false);

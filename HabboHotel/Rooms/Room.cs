@@ -954,7 +954,12 @@ public class Room
     }
 
     // Clients whose revision does not map the data composer get the full update instead; the mapping is checked before anything is sent to a client.
-    internal void SendObjectData(Item item, string data, bool batch) => SendObjectData(item, FurnitureWireData.ForState(item.ExtraData, data), batch);
+    internal void SendObjectData(Item item, string data, bool batch) => SendObjectData(item, StateData(item, data), batch);
+
+    // Group furni send their whole group data with every state.
+    private FurnitureDataSnapshot StateData(Item item, string state) =>
+        (GuildFurnitureAppearance.IsGuildFurni(item.Definition) ? FindGuildAppearance(item.GroupId)?.Data(state) : null)
+        ?? FurnitureWireData.ForState(item.ExtraData, state);
 
     internal void SendObjectData(Item item, FurnitureDataSnapshot wire, bool batch)
     {
@@ -1020,13 +1025,13 @@ public class Room
         }
     }
 
-    private static void SendObjectsData(IReadOnlyList<Item> items, GameClient[] clients)
+    private void SendObjectsData(IReadOnlyList<Item> items, GameClient[] clients)
     {
         if (items.Count == 0) {
             return;
         }
 
-        IServerPacket packet = new ObjectsDataUpdateComposer([.. items.Select(item => (item.Id, FurnitureWireData.ForState(item.ExtraData, item.LegacyDataString)))]);
+        IServerPacket packet = new ObjectsDataUpdateComposer([.. items.Select(item => (item.Id, StateData(item, item.LegacyDataString)))]);
 
         try {
             bool Maps(GameClient client, uint id) => client.Revision?.InternalIdToOutgoingIdMapping.ContainsKey(id) == true;

@@ -88,6 +88,32 @@ public class HabbiconDatabaseTests
     }
 
     [HabbiconDatabaseFact]
+    public void PriceMigrationRecognizesRenamedSetsAndKeepsCustomPrices()
+    {
+        Execute("UPDATE habbicon_collections SET name = 'bread' WHERE id = 6");
+        Execute("UPDATE habbicon_collections SET name = 'birds', cost_credits = 23 WHERE id = 7");
+        Execute("UPDATE habbicons SET cost_points = 12, points_type = 5 WHERE id = 62");
+
+        try {
+            var migration = File.ReadAllText(HabbiconPacketTests.Repo("Database/Migrations/164_HabbiconPricesLikeHabbo.sql"));
+            Execute(migration);
+            Execute(migration);
+
+            var snapshot = _service.Load(UserId);
+            var toast = snapshot.Collections.Single(set => set.Name == "bread");
+            Assert.Equal((50, 50, 5), (toast.Credits, toast.Points, toast.PointsType));
+            Assert.Equal(5, snapshot.RequireItem(61).Points);
+            Assert.Equal(12, snapshot.RequireItem(62).Points);
+            Assert.Equal(23, snapshot.Collections.Single(set => set.Name == "birds").Credits);
+            Assert.Equal(HabbiconState.Reward, snapshot.RequireItem(29).State);
+        }
+        finally {
+            Execute("UPDATE habbicon_collections SET name = 'toast' WHERE id = 6");
+            Execute("UPDATE habbicon_collections SET name = 'duck' WHERE id = 7");
+        }
+    }
+
+    [HabbiconDatabaseFact]
     public void ClaimableMembersCompleteCollectionsAndUnlockTheRewardClaim()
     {
         Execute("INSERT INTO users_habbicons (user_id, habbicon_id, state, unseen) SELECT 910001, id, 1, FALSE FROM habbicons WHERE collection_id = 6 AND id <> 71");

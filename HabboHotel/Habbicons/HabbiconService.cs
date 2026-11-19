@@ -32,11 +32,11 @@ public sealed class HabbiconService(IDatabase database, TimeProvider clock) : IH
         foreach (var row in rows) {
             int id = row.id, collectionId = row.collection_id, rewardId = row.reward_id;
             int credits = checked((int)row.cost_credits), points = checked((int)row.cost_points), pointsType = checked((int)row.points_type);
+            // An available icon without its own price can still belong to a paid set.
             int state = row.state != null ? (int)row.state
                 : Convert.ToBoolean(row.default_owned) ? HabbiconState.Owned
-                : rewardId == id ? HabbiconState.Reward
-                : !Convert.ToBoolean(row.available) ? HabbiconState.Unavailable
-                : credits == 0 && points == 0 ? HabbiconState.Claimable : HabbiconState.NotOwned;
+                : rewardId == id || !Convert.ToBoolean(row.available) ? HabbiconState.Unavailable
+                : credits == 0 && points == 0 ? HabbiconState.Reward : HabbiconState.NotOwned;
             items.Add(id, new(id, (string)row.name, collectionId, state, credits, points, pointsType));
 
             if (row.unseen != null && Convert.ToBoolean(row.unseen)) {
@@ -53,7 +53,7 @@ public sealed class HabbiconService(IDatabase database, TimeProvider clock) : IH
             bool complete = members.Length > 0 && members.All(item => item.Collected);
             items.TryGetValue(rewardId, out var reward);
 
-            if (reward != null && reward.CollectionId == id && complete && reward.State == HabbiconState.Reward) {
+            if (reward != null && reward.CollectionId == id && complete && reward.State == HabbiconState.Unavailable) {
                 items[rewardId] = reward = reward with { State = HabbiconState.Claimable };
             }
 
@@ -167,7 +167,7 @@ public sealed class HabbiconService(IDatabase database, TimeProvider clock) : IH
                 throw new HabbiconRejected(HabbiconActionError.AlreadyOwned);
             }
 
-            if ((collection.Credits <= 0 && collection.Points <= 0) || missing.Any(item => item.State != HabbiconState.NotOwned)) {
+            if ((collection.Credits <= 0 && collection.Points <= 0) || missing.Any(item => item.State is not (HabbiconState.NotOwned or HabbiconState.Reward))) {
                 throw new HabbiconRejected(HabbiconActionError.InvalidRequest);
             }
 
@@ -228,7 +228,7 @@ public sealed class HabbiconService(IDatabase database, TimeProvider clock) : IH
         var changed = after.Items.Values.Where(item => before.RequireItem(item.Id).State != item.State).ToArray();
 
         foreach (var item in changed) {
-            if (item.State == HabbiconState.Claimable && before.RequireItem(item.Id).State == HabbiconState.Reward) {
+            if (item.State == HabbiconState.Claimable && before.RequireItem(item.Id).State == HabbiconState.Unavailable) {
                 Save(connection, transaction, userId, item.Id, HabbiconState.Claimable, true);
             }
         }

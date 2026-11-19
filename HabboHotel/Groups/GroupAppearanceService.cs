@@ -78,8 +78,7 @@ public sealed class GroupAppearanceService(
                 return Task.CompletedTask;
             }
 
-            group.Colour1 = request.MainColour;
-            group.Colour2 = request.SecondaryColour;
+            group.SetColours(request.MainColour, request.SecondaryColour);
             SendGroupInfo(session, group);
             PublishGuildItems(session, group.Id);
         }

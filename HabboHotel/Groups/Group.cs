@@ -3,8 +3,12 @@ using Plus.HabboHotel.Rooms;
 
 namespace Plus.HabboHotel.Groups;
 
+public sealed record GroupAppearance(string Badge, int Colour1, int Colour2);
+
 public class Group
 {
+    private static readonly GroupAppearance EmptyAppearance = new("", 0, 0);
+    private volatile GroupAppearance? _appearance;
     private readonly List<int> _administrators;
     private readonly List<int> _members;
     private readonly List<int> _requests;
@@ -19,11 +23,9 @@ public class Group
         Name = name;
         Description = description;
         RoomId = roomId;
-        Badge = badge;
+        _appearance = new(badge, colour1 == 0 ? 1 : colour1, colour2 == 0 ? 1 : colour2);
         CreatedAt = createdAt?.ToUniversalTime();
         CreatorId = owner;
-        Colour1 = colour1 == 0 ? 1 : colour1;
-        Colour2 = colour2 == 0 ? 1 : colour2;
         HasForum = hasForum;
         Type = (GroupType)type;
         AdminOnlyDeco = adminOnlyDeco;
@@ -36,13 +38,15 @@ public class Group
     public int Id { get; set; }
     public string Name { get; set; }
     public int AdminOnlyDeco { get; set; }
-    public string Badge { get; set; }
+    public GroupAppearance Appearance => _appearance ?? EmptyAppearance;
+    public string Badge { get => Appearance.Badge; set => _appearance = Appearance with { Badge = value }; }
     public DateTimeOffset? CreatedAt { get; set; }
     public int CreatorId { get; set; }
     public string Description { get; set; }
     public uint RoomId { get; set; }
-    public int Colour1 { get; set; }
-    public int Colour2 { get; set; }
+    public int Colour1 { get => Appearance.Colour1; set => SetColours(value, Colour2); }
+    public int Colour2 { get => Appearance.Colour2; set => SetColours(Colour1, value); }
+    public void SetColours(int primary, int secondary) => _appearance = Appearance with { Colour1 = primary, Colour2 = secondary };
     public bool ForumEnabled { get; set; }
     public GroupType Type { get; set; }
 

@@ -54,11 +54,16 @@ public sealed record GuildFurnitureAppearance(int GroupId, string Badge, string 
     public static bool IsGuildFurni(ItemDefinition definition) =>
         definition.InteractionType is InteractionType.GuildItem or InteractionType.GuildGate or InteractionType.GuildForum;
 
-    // Null without the group (or a group manager, in tests).
-    public static GuildFurnitureAppearance? Find(IGroupManager? groups, int groupId) =>
-        groupId > 0 && groups != null && groups.TryGetGroup(groupId, out var group)
-            ? new(group.Id, group.Badge, groups.GetColourCode(group.Colour1, true), groups.GetColourCode(group.Colour2, false))
-            : null;
+    public static GuildFurnitureAppearance? Find(IGroupManager? groups, int groupId)
+    {
+        if (groupId <= 0 || groups == null || !groups.TryGetGroup(groupId, out var group)) {
+            return null;
+        }
+
+        var look = group.Appearance;
+
+        return new(group.Id, look.Badge, groups.GetColourCode(look.Colour1, true), groups.GetColourCode(look.Colour2, false));
+    }
 
     // The client reads [state, groupId, badge, colour1, colour2]; it draws the badge and colours and links the forum
     // terminal to groupforum/<groupId>.

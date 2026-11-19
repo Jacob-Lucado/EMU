@@ -91,6 +91,7 @@ public class InventoryItem
     public bool IsWallItem => Definition.Type == ItemType.Wall;
     public ItemDefinition Definition { get; set; } = null!;
     public IFurniObjectData ExtraData { get; set; } = FurniObjectData.Empty;
+    public int GroupId { get; set; }
     // A Builders Club furni that left its room; it never enters an inventory.
     public bool IsBuildersClub { get; init; }
 

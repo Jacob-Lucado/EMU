@@ -1,23 +1,19 @@
--- Habbicon collections use Habbo's ids: 5 duck, 6 duck2, 7 frank, 8 toast. The client reads the collection icons by these ids.
--- Nothing changes unless all four collections still have the old ids. Safe to run again, also after an interrupted run.
-SET @old_ids = (SELECT COUNT(*) FROM habbicon_collections WHERE (id, name) IN ((5, 'frank'), (6, 'toast'), (7, 'duck'), (8, 'duck2')));
-
-INSERT IGNORE INTO habbicon_collections (id, name, reward_id, cost_credits, cost_points, points_type)
-SELECT id + 1000, name, reward_id, cost_credits, cost_points, points_type FROM habbicon_collections
-WHERE @old_ids = 4 AND id BETWEEN 5 AND 8;
-
-UPDATE habbicons SET collection_id = collection_id + 1000
-WHERE @old_ids = 4 AND collection_id BETWEEN 5 AND 8;
-
-DELETE FROM habbicon_collections WHERE @old_ids = 4 AND id BETWEEN 5 AND 8;
-
-INSERT IGNORE INTO habbicon_collections (id, name, reward_id, cost_credits, cost_points, points_type)
-SELECT CASE name WHEN 'duck' THEN 5 WHEN 'duck2' THEN 6 WHEN 'frank' THEN 7 WHEN 'toast' THEN 8 END,
+-- Keep the parent keys in place so icon ownership and foreign keys stay valid.
+DROP TEMPORARY TABLE IF EXISTS migration_163_sets;
+CREATE TEMPORARY TABLE migration_163_sets AS
+SELECT id, CASE id WHEN 5 THEN 7 WHEN 6 THEN 8 WHEN 7 THEN 5 WHEN 8 THEN 6 END AS target_id,
        name, reward_id, cost_credits, cost_points, points_type
-FROM habbicon_collections WHERE id BETWEEN 1005 AND 1008;
+FROM habbicon_collections
+WHERE (id, reward_id) IN ((5, 60), (6, 71), (7, 38), (8, 49));
 
-UPDATE habbicons h JOIN habbicon_collections c ON c.id = h.collection_id
-SET h.collection_id = CASE c.name WHEN 'duck' THEN 5 WHEN 'duck2' THEN 6 WHEN 'frank' THEN 7 WHEN 'toast' THEN 8 END
-WHERE h.collection_id BETWEEN 1005 AND 1008;
+SET @old_sets = (SELECT COUNT(*) FROM migration_163_sets);
 
-DELETE FROM habbicon_collections WHERE id BETWEEN 1005 AND 1008;
+-- Swap the set data and membership in one InnoDB statement so a retry sees either complete layout.
+UPDATE habbicon_collections c
+JOIN migration_163_sets s ON s.target_id = c.id
+LEFT JOIN habbicons h ON h.collection_id = c.id
+SET c.name = s.name, c.reward_id = s.reward_id, c.cost_credits = s.cost_credits,
+    c.cost_points = s.cost_points, c.points_type = s.points_type, h.collection_id = s.id
+WHERE @old_sets = 4;
+
+DROP TEMPORARY TABLE migration_163_sets;

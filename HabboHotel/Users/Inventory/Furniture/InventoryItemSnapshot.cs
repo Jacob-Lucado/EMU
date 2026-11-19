@@ -33,7 +33,7 @@ public sealed record InventoryItemSnapshot(uint Id, string Type, int SpriteId, F
 
         // A Furni-Matic box keeps its date for the room, but the inventory lists it without data.
         var data = category == FurniCategory.EcotronBox ? new FurnitureDataSnapshot.Legacy("")
-            : isGuildFurni && guild != null ? guild.Data(GuildState(item.ExtraData))
+            : isGuildFurni ? (guild ?? new GuildFurnitureAppearance(item.GroupId, "", "", "")).Data(GuildState(item.ExtraData))
             : FurnitureDataSnapshot.Capture(item.ExtraData);
 
         return new(item.Id, definition.Type.ToCharCode(), definition.SpriteId, category,

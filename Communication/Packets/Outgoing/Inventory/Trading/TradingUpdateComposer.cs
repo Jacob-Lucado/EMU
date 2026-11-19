@@ -1,3 +1,4 @@
+using Plus.HabboHotel.Users.Inventory.Furniture;
 using System.Collections.Immutable;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Rooms.Trading;
@@ -19,9 +20,13 @@ public sealed class TradingUpdateComposer(ImmutableArray<TradeOfferSnapshot> use
                 packet.WriteString(item.Type);
                 packet.WriteUInteger(item.Id);
                 packet.WriteInteger(item.SpriteId);
-                packet.WriteInteger(0);
+                packet.WriteInteger(item.GroupData == null ? 0 : (int)FurniCategory.GuildFurni);
 
-                if (item.UniqueNumber > 0) {
+                if (item.GroupData != null) {
+                    packet.WriteBoolean(item.UniqueNumber == 0);
+                    FurnitureDataSerializer.Write(packet, item.GroupData, item.UniqueNumber, item.UniqueSeries);
+                }
+                else if (item.UniqueNumber > 0) {
                     packet.WriteBoolean(false);
                     packet.WriteInteger(256);
                     packet.WriteString(string.Empty);

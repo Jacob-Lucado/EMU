@@ -1,8 +1,11 @@
 using Plus.Communication.Flash;
+using Plus.Communication.Packets.Incoming.Rooms.Engine;
 using Plus.Communication.Packets.Outgoing;
 using Plus.HabboHotel.Groups;
 using Plus.HabboHotel.Items;
+using Plus.HabboHotel.Items.DataFormat;
 using Plus.HabboHotel.Items.Wired;
+using Plus.HabboHotel.Quests;
 using Plus.HabboHotel.Users.Inventory;
 using Plus.HabboHotel.Users.Inventory.Furniture;
 using Xunit;
@@ -73,6 +76,27 @@ public partial class PlacedFurniRoomTests
         var entry = GroupFurniInventoryTests.Entry.Read(body);
         Assert.Equal(17, entry.Category);
         Assert.Equal(["5", "b01010s21084", "84de00", "9844e7"], entry.Strings!.Skip(1));
+    }
+
+    [Fact]
+    public async Task UsingGroupFurniSendsTheNewStateWithTheGroupLook()
+    {
+        GuildLook(5);
+        AdmitOwner();
+        var item = Add(30, 1, 1, type: InteractionType.GuildItem);
+        item.Definition.Modes = 11;
+        item.GroupId = 5;
+        item.ExtraData = new LegacyDataFormat { Data = "0" };
+        _client.Packets.Clear();
+
+        await new UseFurnitureEvent(new FurnitureUseService(new FurnitureUseStore(_database), Proxy<IQuestManager>((_, _) => null)))
+            .Parse(_room, _client, ClientPacket(30, 0));
+
+        var update = new FlashIncomingPacket { Buffer = Assert.Single(_client.Packets, packet => packet.Header == ServerPacketHeader.ObjectDataUpdateComposer).Body };
+        Assert.Equal("30", update.ReadString());
+        Assert.Equal(2, update.ReadInt());
+        Assert.Equal(5, update.ReadInt());
+        Assert.Equal(["1", "5", "b01010s21084", "84de00", "9844e7"], Enumerable.Range(0, 5).Select(_ => update.ReadString()));
     }
 
     private void GuildLook(int groupId)

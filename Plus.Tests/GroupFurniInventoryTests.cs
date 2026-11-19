@@ -36,6 +36,25 @@ public sealed class GroupFurniInventoryTests
     }
 
     [Fact]
+    public async Task AColourEditDuringInventoryListingKeepsBothColoursFromOnePalette()
+    {
+        var group = new Group(5, "group", "", "badge", 1, 7, null, 0, 19, 37, 0, false, GroupMembershipSnapshot.Empty);
+        var groups = new TestGroupManager(_ => group, (id, primary) =>
+        {
+            if (primary) {
+                group.Colour1 = 7;
+                group.Colour2 = 8;
+            }
+
+            return id.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        });
+
+        var entry = await ListedEntry(Item(InteractionType.GuildItem, 5), groups);
+
+        Assert.Equal(["0", "5", "badge", "19", "37"], entry.Strings);
+    }
+
+    [Fact]
     public async Task OtherFurniKeepTheirCategoryAndData()
     {
         var entry = await ListedEntry(Item(InteractionType.None, groupId: 0), Groups(5));

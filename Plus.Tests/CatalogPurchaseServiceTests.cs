@@ -449,6 +449,21 @@ public sealed class CatalogPurchaseServiceTests
     }
 
     [Theory]
+    [InlineData(InteractionType.GuildItem, 1)]
+    [InlineData(InteractionType.GuildItem, 2)]
+    [InlineData(InteractionType.GuildGate, 1)]
+    [InlineData(InteractionType.GuildForum, 1)]
+    public async Task BoughtGroupFurnitureStartsInStateZero(InteractionType interaction, int amount)
+    {
+        var context = Context(interaction: interaction, groups: Groups(Group(owner: 42, members: [], forum: true)), forums: Forums([]));
+
+        await context.Service.Purchase(context.Client, new(1, 2, "4", amount));
+
+        Assert.Equal(Enumerable.Repeat(4, amount), context.Factory.GroupIds);
+        Assert.Equal(Enumerable.Repeat("0", amount), context.Factory.ExtraData);
+    }
+
+    [Theory]
     [InlineData("4")]
     [InlineData("9")]
     [InlineData("abc")]

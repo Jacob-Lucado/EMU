@@ -32,6 +32,7 @@ internal static class ItemBehaviourUtility
         ExtraData = item.ExtraData is DataFormat.EmptyDataFormat ? FurniExtraData.Load(item.Definition, "", keepLegacy: true) : item.ExtraData,
         UniqueNumber = item.UniqueNumber,
         UniqueSeries = item.UniqueSeries,
+        GroupId = item.GroupId,
     };
 
     public static InventoryItem ToInventoryItem(this Item item) => new()
@@ -42,6 +43,7 @@ internal static class ItemBehaviourUtility
         ExtraData = item.ExtraData,
         UniqueNumber = item.UniqueNumber,
         UniqueSeries = item.UniqueSeries,
+        GroupId = item.GroupId,
         IsBuildersClub = item.IsBuildersClub
     };
 

@@ -1,0 +1,68 @@
+using Plus.HabboHotel.Groups;
+using Plus.HabboHotel.Items;
+using Plus.HabboHotel.Items.Wired;
+using Plus.HabboHotel.Users.Inventory;
+using Plus.HabboHotel.Users.Inventory.Furniture;
+using Xunit;
+
+namespace Plus.Tests;
+
+public partial class PlacedFurniRoomTests
+{
+    [Theory]
+    [InlineData(InteractionType.GuildItem)]
+    [InlineData(InteractionType.GuildGate)]
+    [InlineData(InteractionType.GuildForum)]
+    public async Task GroupFurniPlacedFromTheInventoryShowsItsGroup(InteractionType type)
+    {
+        GuildLook(5);
+        Inventory(new InventoryItem { Id = 30, Definition = Furni(30, type, WiredBoxType.None).Definition, GroupId = 5 });
+
+        await PlaceObject().Parse(_room, _client, ClientPacket("30 1 1 0"));
+
+        var placed = _room.GetRoomItemHandler().GetItem(30);
+        Assert.Equal(5, placed.GroupId);
+        var data = Assert.IsType<FurnitureDataSnapshot.Strings>(RoomItemSnapshot.Capture(placed).Data);
+        Assert.Equal(["5", "b01010s21084", "84de00", "9844e7"], data.Values.Skip(1));
+    }
+
+    [Fact]
+    public async Task PickedUpGroupFurniKeepsItsGroupInTheInventory()
+    {
+        GuildLook(5);
+        Viewer();
+        var item = Add(30, 1, 1, type: InteractionType.GuildItem);
+        item.GroupId = 5;
+
+        await PickupObject().Parse(_client, ClientPacket(2, 30));
+
+        var picked = Assert.IsType<InventoryComponent>(_client.GetHabbo().Inventory).Furniture.GetItem(30);
+        Assert.Equal(5, picked.GroupId);
+
+        await PlaceObject().Parse(_room, _client, ClientPacket("30 2 2 0"));
+
+        Assert.Equal(5, _room.GetRoomItemHandler().GetItem(30).GroupId);
+    }
+
+    private void GuildLook(int groupId)
+    {
+        var group = new Group(groupId, "group", "", "b01010s21084", RoomId, 7, null, 0, 19, 37, 0, false, new GroupMembershipSnapshot([7], [], []));
+        Set("_groups", Proxy<IGroupManager>((method, args) =>
+        {
+            switch (method) {
+                case "TryGetGroup":
+                    if ((int)args[0]! != groupId) {
+                        return false;
+                    }
+
+                    args[1] = group;
+
+                    return true;
+                case "GetColourCode":
+                    return (bool)args[1]! ? "84de00" : "9844e7";
+                default:
+                    throw new InvalidOperationException(method);
+            }
+        }));
+    }
+}

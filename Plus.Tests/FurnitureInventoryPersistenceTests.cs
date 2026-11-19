@@ -255,6 +255,7 @@ public sealed class FurnitureInventoryPersistenceTests
             Assert.Equal(new uint[] { 4, 6 }, loaded.Select(item => item.UniqueNumber));
             Assert.Equal(new uint[] { 40, 60 }, loaded.Select(item => item.UniqueSeries));
             Assert.All(loaded, item => Assert.Equal("", item.ExtraData.Serialize()));
+            Assert.Equal(new[] { 3, 0 }, loaded.Select(item => item.GroupId));
 
             var store = new InventoryClearStore(database, definitions);
             await connection.ExecuteAsync("""

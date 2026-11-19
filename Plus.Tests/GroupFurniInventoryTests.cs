@@ -32,7 +32,7 @@ public sealed class GroupFurniInventoryTests
         var entry = await ListedEntry(Item(InteractionType.GuildItem, groupId: 9), Groups(5));
 
         Assert.Equal(17, entry.Category);
-        Assert.Equal("0", entry.Legacy);
+        Assert.Equal(["0", "9", "", "", ""], entry.Strings);
     }
 
     [Fact]

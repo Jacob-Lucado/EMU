@@ -95,11 +95,8 @@ public class Room
     }
 
 
-    // Guild furniture shows its group's badge and colours; null without the group (or a group manager, in tests).
-    internal GuildFurnitureAppearance? FindGuildAppearance(int groupId) =>
-        groupId > 0 && _groups != null && _groups.TryGetGroup(groupId, out var group)
-            ? new(group.Id, group.Badge, _groups.GetColourCode(group.Colour1, true), _groups.GetColourCode(group.Colour2, false))
-            : null;
+    // Guild furniture shows its group's badge and colours.
+    internal GuildFurnitureAppearance? FindGuildAppearance(int groupId) => GuildFurnitureAppearance.Find(_groups, groupId);
 
     /// <summary>The hotel's achievements, for wired boxes that progress them.</summary>
     internal IAchievementManager Achievements => _achievements;

@@ -149,7 +149,7 @@ public sealed class RoomItemPickupService(
                 recipientInventory.Furniture.AddItem(inventoryItem);
                 // Habbo sends the picker the item itself; an item returned to its owner keeps the reload.
                 receiver!.Send(ReferenceEquals(receiver, session)
-                    ? new FurniListAddComposer(InventoryItemSnapshot.Capture(inventoryItem))
+                    ? new FurniListAddComposer(InventoryItemSnapshot.Capture(inventoryItem, room.FindGuildAppearance(item.GroupId)))
                     : new FurniListUpdateComposer());
             }
 

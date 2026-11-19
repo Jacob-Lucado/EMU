@@ -7,7 +7,7 @@ internal sealed class RequestFurniInventoryEvent(IGroupManager groups) : IPacket
 {
     public Task Parse(GameClient session, IIncomingPacket packet)
     {
-        session.GetHabbo().Inventory?.Furniture.SendInventory(session);
+        session.GetHabbo().Inventory?.Furniture.SendInventory(session, groups);
 
         return Task.CompletedTask;
     }

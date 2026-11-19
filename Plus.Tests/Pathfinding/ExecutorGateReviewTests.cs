@@ -1,4 +1,6 @@
 using System.Reflection;
+using Plus.Communication.Flash;
+using Plus.Communication.Packets.Outgoing;
 using Plus.HabboHotel;
 using Plus.HabboHotel.Groups;
 using Plus.HabboHotel.Items;
@@ -15,27 +17,33 @@ public partial class PlacedFurniRoomTests
     public void AcceptedGuildMemberStepOpensTheGateAndClosesItAfterDeparture(bool v2)
     {
         var gate = ReviewGuildGate(member: true);
+        GuildLook(23);
         var actor = ReviewGateActor(v2);
         actor.MoveTo(1, 1);
         ExecutorTick();
-        Assert.Equal("1", gate.LegacyDataString);
-        Assert.Equal(7, gate.InteractingUser);
-        Assert.Equal(4, gate.UpdateCounter);
-        Assert.True(gate.UpdateNeeded);
         Assert.Equal("1,1,0.0", actor.Statusses["mv"]);
+        AssertGateUpdate("1");
         ExecutorTick();
         Assert.Equal((1, 1), (actor.X, actor.Y));
+        Assert.DoesNotContain(_client.Packets, packet => packet.Header == ServerPacketHeader.ObjectsDataUpdateComposer);
         actor.MoveTo(2, 1);
         ExecutorTick();
+        Assert.Equal("1", gate.LegacyDataString);
         ExecutorTick();
         Assert.Equal((2, 1), (actor.X, actor.Y));
-
-        for (var cycle = 0; cycle < 8; cycle++) {
-            ExecutorTick();
-        }
-
+        AssertGateUpdate("0");
         Assert.Equal("0", gate.LegacyDataString);
-        Assert.False(gate.UpdateNeeded);
+
+        void AssertGateUpdate(string state)
+        {
+            var update = Assert.Single(_client.Packets, packet => packet.Header == ServerPacketHeader.ObjectsDataUpdateComposer);
+            var body = new FlashIncomingPacket { Buffer = update.Body };
+            Assert.Equal(1, body.ReadInt());
+            Assert.Equal(gate.Id, body.ReadUInt());
+            Assert.Equal(2, body.ReadInt());
+            Assert.Equal(5, body.ReadInt());
+            Assert.Equal([state, "23", "b01010s21084", "84de00", "9844e7"], Enumerable.Range(0, 5).Select(_ => body.ReadString()));
+        }
     }
 
     [Theory]

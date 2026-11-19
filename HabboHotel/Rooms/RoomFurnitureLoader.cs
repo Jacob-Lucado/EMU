@@ -45,7 +45,7 @@ public sealed class RoomFurnitureLoader(IDatabase database, IItemDataManager def
             UserId = (int)row.UserId,
             Username = row.Username ?? "",
             Definition = definition,
-            ExtraData = FurniExtraData.Load(definition, row.ExtraData ?? "", keepLegacy: true),
+            ExtraData = FurniExtraData.Load(definition, row.ExtraData ?? "", keepLegacy: true, groupId: row.GroupId),
             GetX = row.X,
             GetY = row.Y,
             GetZ = row.Z,

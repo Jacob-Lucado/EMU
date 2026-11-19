@@ -99,6 +99,7 @@ public sealed class RoomComponentDatabaseTests
             var migration = File.ReadAllText(Path.GetFullPath(Path.Join(AppContext.BaseDirectory,
                 "../../../../Database/Migrations/20_UseUtcPetCreationTime.sql")));
             connection.Execute(migration);
+            connection.Execute(File.ReadAllText(HabbiconPacketTests.Repo("Database/Migrations/155_PetBreedingPermission.sql")));
             Assert.Equal("datetime", connection.QuerySingle<string>("""
                 SELECT DATA_TYPE FROM information_schema.columns
                 WHERE table_schema = DATABASE() AND table_name = 'bots_petdata' AND column_name = 'createstamp'
@@ -237,7 +238,7 @@ public sealed class RoomComponentDatabaseTests
             Assert.Equal(["written", "inside visit"],
                 Assert.Single(userChatlog.Rooms).Entries.Select(entry => entry.Message).ToArray());
             var tradeStore = (ITradeStore)new RoomTradingComponent(new ProbeDatabase(databaseConnection), visitClock, TestRoomSettings.Empty);
-            tradeStore.TransferItem(90, 2);
+            tradeStore.TransferItem(90, 1, 2);
             tradeStore.DeleteItem(91);
             tradeStore.Log(1, 2, "90;", "91;");
             Assert.Equal(2, connection.QuerySingle<int>("SELECT user_id FROM items WHERE id = 90"));

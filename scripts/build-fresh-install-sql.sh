@@ -14,8 +14,8 @@ bots_pet_commands bots_pet_responses bots_responses campaign_calendar_rewards ca
 catalog_bot_presets catalog_club_offers catalog_deals catalog_items
 catalog_offer_limited catalog_offer_products catalog_offers catalog_page_images
 catalog_page_offers catalog_page_texts catalog_pages catalog_pet_races catalog_promotions
-club_gift_offers crafting_altars_recipes
-crafting_recipes crafting_recipes_ingredients furniture games_config groups_items habbicons
+club_gift_offers collectible_levels crafting_altars_recipes
+crafting_recipes crafting_recipes_ingredients daily_task_rewards daily_tasks furniture games_config groups_items habbicons
 habbicon_collections moderation_presets moderation_preset_action_categories
 moderation_preset_action_messages moderation_topics moderation_topic_actions navigator_categories
 quests recycler_levels recycler_prizes recycler_settings reward_tracks reward_track_prizes
@@ -24,11 +24,14 @@ room_models room_music_disc_definitions room_music_songs safety_quiz_questions s
 schema_migrations server_landing server_locale server_rewards server_settings snowwar_token_offers talents
 talents_sub_levels wordfilter"
 
+# Upgraded hotels keep these for their old data; a new hotel never has them.
+LEGACY_TABLES="wired_items"
+
 dump() {
     # The first line of a MariaDB 11 dump enables sandbox mode, which older
     # clients reject, so it is dropped.
     docker exec "$CONTAINER" sh -c 'MYSQL_PWD="$MARIADB_ROOT_PASSWORD" exec mariadb-dump -uroot --skip-dump-date "$@"' sh "$@" |
-        sed '/enable the sandbox mode/d'
+        sed -E '/enable the sandbox mode/d; /^-- Host:/d; /^-- Dumping routines for database /d; s|/\*![0-9]+ DEFINER=`[^`]*`@`[^`]*`\*/||g; s/[[:blank:]]+$//'
 }
 
 query() {
@@ -43,8 +46,11 @@ tables=$(for table in $CONTENT_TABLES; do grep -qx "$table" <<< "$existing" && e
     echo "-- PlusEMU fresh install: the full schema plus game content (catalog, furniture, roles, ...)."
     echo "-- Import into an empty database instead of Original Database.sql and the update scripts."
     echo "-- Regenerate with scripts/build-fresh-install-sql.sh after adding a migration."
+    # Tables a later migration creates without naming a collation take the database default.
+    echo "ALTER DATABASE CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
     # MariaDB 10.6 (Ubuntu 22.04) has no uca1400 collations.
-    dump --no-data --routines --triggers "$DB" |
+    # shellcheck disable=SC2046
+    dump --no-data --routines --triggers $(for table in $LEGACY_TABLES; do echo "--ignore-table=$DB.$table"; done) "$DB" |
         sed -E 's/ AUTO_INCREMENT=[0-9]+//; s/utf8mb4_uca1400_ai_ci/utf8mb4_unicode_ci/g'
     # shellcheck disable=SC2086
     dump --no-create-info --skip-triggers "$DB" $tables

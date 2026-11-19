@@ -24,14 +24,14 @@ public class OfficialUserWireTests
             Motto = "hi",
             Look = "hd-180-1",
             Gender = "M",
-            HabboStats = new HabboStats(0, 0, 0, 0, 0, 0, 0, 0, 12, 0, 0, 0, "", 0)
+            HabboStats = new HabboStats(0, 0, 0, 0, 0, 0, 12, 0, 0, "")
         };
         var client = new TestClient();
         client.SetHabbo(habbo);
         var active = true;
         var clients = Proxy<IGameClientManager>((method, _) => method == "GetClientByUserId" && active ? client : null);
         var service = new RoomUserSnapshotService(Proxy<IGroupManager>((_, _) => null), clients,
-            Proxy<ICacheManager>((_, _) => null), Proxy<IDatabase>((_, _) => null));
+            Proxy<ICacheManager>((_, _) => null), Proxy<IDatabase>((_, _) => null), TestBadgeRarity.Empty);
         var user = new RoomUser(7, 1, 4, null, null, TestChatEmotions.Unused, TestRewardProgress.Unused) { X = 2, Y = 3, Z = 1.5, RotBody = 2 };
 
         var snapshot = Assert.IsType<RoomUserSnapshot>(service.Capture(user));
@@ -57,7 +57,7 @@ public class OfficialUserWireTests
             Motto = "hi",
             Look = "hd-180-1",
             Gender = "M",
-            HabboStats = new HabboStats(0, 0, 0, 0, 0, 0, 0, 0, 12, 0, 0, 0, "", 0)
+            HabboStats = new HabboStats(0, 0, 0, 0, 0, 0, 12, 0, 0, "")
         };
         var client = new TestClient();
         client.SetHabbo(habbo);
@@ -126,7 +126,7 @@ public class OfficialUserWireTests
             Motto = "hi",
             Look = "hd-180-1",
             Gender = "M",
-            HabboStats = new HabboStats(0, 0, 0, 0, 0, 0, 0, 0, 12, 0, 0, 0, "", 0)
+            HabboStats = new HabboStats(0, 0, 0, 0, 0, 0, 12, 0, 0, "")
         };
         var client = new TestClient();
         client.SetHabbo(habbo);

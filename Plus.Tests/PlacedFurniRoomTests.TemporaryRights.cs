@@ -62,7 +62,7 @@ public partial class PlacedFurniRoomTests
     {
         var avatar = Viewer();
         var habbo = _client.GetHabbo();
-        habbo.HabboStats = new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, "", 0) { AchievementPoints = 5454 };
+        habbo.HabboStats = new(0, 0, 0, 0, 0, 0, 0, 0, 0, "") { AchievementPoints = 5454 };
         habbo.AccountLevel = 9;
         InspectionInstallModule();
 
@@ -127,6 +127,7 @@ public partial class PlacedFurniRoomTests
         var habbo = _client.GetHabbo();
         habbo.Id = 9;
         habbo.Username = "visitor";
+        _room.OwnerId = 99;
         _room.UsersWithRights = rights ? [9] : [];
     }
 }

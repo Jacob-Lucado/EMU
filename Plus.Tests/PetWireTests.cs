@@ -32,7 +32,7 @@ public class PetWireTests
         var composer = new PetInventoryComposer(PetAppearanceSnapshots.Inventory(pets));
         composer.Compose(packet);
 
-        Assert.Equal(new object[] { 1, 0, 1, 42, "LifePet", 12, 2, "FFFFFF", 0, 2, 2, -1, 0, 3, -1, 0, 3, -1 }, packet.Writes);
+        Assert.Equal(new object[] { 1, 0, 1, 42, "LifePet", 12, 2, "FFFFFF", 0, 0, 3, -1 }, packet.Writes);
         pets.Clear();
         pet.Name = "Changed";
         pet.Race = "invalid";
@@ -43,15 +43,15 @@ public class PetWireTests
     }
 
     [Theory]
-    [InlineData(0, "-1", "12 2 FFFFFF 2 2 -1 0 3 -1 0")]
-    [InlineData(9, "-1", "12 2 FFFFFF 3 2 -1 0 3 -1 0 4 9 0")]
-    [InlineData(0, "1 3 302 4", "12 2 FFFFFF 1 3 302 4")]
+    [InlineData(0, "-1", "15 2 FFFFFF 2 2 -1 1 3 -1 1")]
+    [InlineData(9, "-1", "15 2 FFFFFF 3 2 -1 1 3 -1 1 4 9 0")]
+    [InlineData(0, "1 3 302 4", "15 2 FFFFFF 1 3 302 4")]
     public void RoomAndInventoryUseTheSameCompleteCustomParts(int saddle, string clothing, string expectedFigure)
     {
         var pet = (Pet)RuntimeHelpers.GetUninitializedObject(typeof(Pet));
         pet.PetId = 42;
         pet.Name = "LifePet";
-        pet.Type = 12;
+        pet.Type = 15;
         pet.Race = "2";
         pet.Color = "FFFFFF";
         pet.PetHair = -1;
@@ -113,14 +113,14 @@ public class PetWireTests
         {
             Id = 42,
             Username = "LifePet",
-            HabboStats = new HabboStats(0, 0, 0, 0, 0, 0, 0, 0, 12, 0, 0, 0, "", 0)
+            HabboStats = new HabboStats(0, 0, 0, 0, 0, 0, 12, 0, 0, "")
         };
         var packet = new RecordingPacket();
 
         new PetInformationComposer(PetInformationService.Capture(habbo, DateTimeOffset.UtcNow)).Compose(packet);
 
         // PetInfoMessageParser reads the status tail after rarity, saddle, and rider.
-        Assert.Equal(new object[] { 0, 0, false, true, false, 0, -1, -1, -1, false }, packet.Writes.Skip(17));
+        Assert.Equal(new object[] { 0, 0, false, false, false, 0, -1, -1, -1, false }, packet.Writes.Skip(17));
     }
 
     [Theory]
@@ -143,9 +143,9 @@ public class PetWireTests
         var composer = new PetHorseFigureInformationComposer(PetAppearanceSnapshots.Horse(user));
         var packet = new RecordingPacket();
         composer.Compose(packet);
-        var expected = new List<object> { 4, 42, 12, 2, "abcdef" };
-        expected.AddRange(saddle > 0 ? new object[] { 4, 3, 3, 7, 8, 2, 7, 8, 4, 9, 0 }
-            : new object[] { 1, 2, 2, 7, 8, 3, 7, 8 });
+        var expected = new List<object> { 4, 42, 12, 2, "abcdef", 1 };
+        expected.AddRange(saddle > 0 ? new object[] { 3, 2, 7, 8, 3, 7, 8, 4, 9, 0 }
+            : new object[] { 2, 2, 7, 8, 3, 7, 8 });
         expected.AddRange(new object[] { saddle > 0, true });
         Assert.Equal(expected, packet.Writes);
         pet.Race = "invalid";
@@ -155,6 +155,33 @@ public class PetWireTests
         var repeated = new RecordingPacket();
         composer.Compose(repeated);
         Assert.Equal(packet.Writes, repeated.Writes);
+    }
+
+    [Theory]
+    [InlineData("2", 0, 1, "15 2 ffffff 2 2 -1 1 3 -1 1")]
+    [InlineData("7", 55, 2, "15 7 ffffff 2 2 -1 55 3 -1 55")]
+    [InlineData("89", 0, 4, "15 89 ffffff 2 2 -1 1 3 -1 1")]
+    [InlineData("1", 0, 0, "15 1 ffffff 2 2 -1 1 3 -1 1")]
+    public void HorseLookSendsTheBreedAndDefaultHairColour(string palette, int hairDye, int breed, string look)
+    {
+        var pet = (Pet)RuntimeHelpers.GetUninitializedObject(typeof(Pet));
+        pet.VirtualId = 4;
+        pet.PetId = 42;
+        pet.Type = 15;
+        pet.Race = palette;
+        pet.Color = "ffffff";
+        pet.GnomeClothing = "";
+        pet.PetHair = -1;
+        pet.HairDye = hairDye;
+        var user = (RoomUser)RuntimeHelpers.GetUninitializedObject(typeof(RoomUser));
+        user.PetData = pet;
+        var packet = new RecordingPacket();
+
+        new PetHorseFigureInformationComposer(PetAppearanceSnapshots.Horse(user)).Compose(packet);
+
+        var hair = hairDye > 0 ? hairDye : 1;
+        Assert.Equal(new object[] { 4, 42, 15, int.Parse(palette), "ffffff", breed, 2, 2, -1, hair, 3, -1, hair, false, false }, packet.Writes);
+        Assert.Equal(look, pet.Look);
     }
 
     private sealed class RecordingPacket : IOutgoingPacket

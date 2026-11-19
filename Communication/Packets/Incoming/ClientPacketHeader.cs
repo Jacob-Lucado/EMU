@@ -114,6 +114,7 @@ public static class ClientPacketHeader
     public const uint GetCreditsInfoEvent = 893;
     public const uint GetAchievementsEvent = 3231;
     public const uint GetBadgesEvent = 2687;
+    public const uint GetBadgeLeaderboardEvent = 2242;
     public const uint RequestFurniInventoryEvent = 3120;
     public const uint SetActivatedBadgesEvent = 2190;
     public const uint AvatarEffectActivatedEvent = 723;
@@ -162,6 +163,7 @@ public static class ClientPacketHeader
     public const uint GetRoomFilterListEvent = 3297;
     public const uint GetPromoArticlesEvent = 314;
     public const uint ModifyWhoCanRideHorseEvent = 879;
+    public const uint TogglePetBreedingPermissionEvent = 3224;
     public const uint RemoveFriendEvent = 3675;
     public const uint RefreshCampaignEvent = 2617;
     public const uint AcceptFriendEvent = 1558;
@@ -358,7 +360,7 @@ public static class ClientPacketHeader
     public const uint GetHabboGroupBadgesEvent = 1132;
     public const uint GetUserTagsEvent = 65382;
     public const uint GetGameAchievementsEvent = 65475;
-    public const uint GetCatalogRoomPromotionEvent = 3223;
+    public const uint GetBonusRareInfoEvent = 3223;
     public const uint MoveAvatarEvent = 2995;
     public const uint SaveBrandingItemEvent = 3623;
     public const uint SetAreaHideEvent = 2228;

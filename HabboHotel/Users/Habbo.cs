@@ -90,7 +90,8 @@ public class Habbo
     internal DateTimeOffset? LastHabbiconTriggeredAt { get; set; }
     internal object WalletSync { get; } = new();
     internal object InventoryMutationSync { get; } = new();
-    internal bool WalletClosed => _habboSaved || _disconnected;
+    internal bool CurrencyPersistenceUncertain { get; set; }
+    internal bool WalletClosed => _habboSaved || _disconnected || CurrencyPersistenceUncertain;
 
     public int Credits { get; set; }
 
@@ -239,6 +240,8 @@ public class Habbo
     [System.Diagnostics.CodeAnalysis.MemberNotNullWhen(true, nameof(CurrentRoom))]
     public bool InRoom => CurrentRoom != null;
 
+    public ConcurrentDictionary<int, byte> PurchasedChatStyles { get; } = new();
+
     public Room? CurrentRoom { get; set; }
 
     internal void Save()
@@ -334,16 +337,16 @@ public class Habbo
         }
     }
 
-    public void CheckCreditsTimer(Plus.Core.Settings.ISettingsManager settings)
+    public void CheckCreditsTimer(Plus.Core.Settings.ISettingsManager settings, IUserProcessStore store)
     {
         lock (WalletSync) {
             if (!WalletClosed) {
-                CheckCreditsTimerCore(settings);
+                CheckCreditsTimerCore(settings, store);
             }
         }
     }
 
-    private void CheckCreditsTimerCore(Plus.Core.Settings.ISettingsManager settings)
+    private void CheckCreditsTimerCore(Plus.Core.Settings.ISettingsManager settings, IUserProcessStore store)
     {
         try {
             CreditsUpdateTick--;
@@ -351,16 +354,39 @@ public class Habbo
             if (CreditsUpdateTick <= 0) {
                 var creditUpdate = Convert.ToInt32(settings.TryGetValue("user.currency_scheduler.credit_reward"));
                 var ducketUpdate = Convert.ToInt32(settings.TryGetValue("user.currency_scheduler.ducket_reward"));
-                creditUpdate += Access.Limit("limit.currency_credits", 0);
-                ducketUpdate += Access.Limit("limit.currency_duckets", 0);
-                Credits += creditUpdate;
-                Duckets += ducketUpdate;
+                creditUpdate = checked(creditUpdate + Access.Limit("limit.currency_credits", 0));
+                ducketUpdate = checked(ducketUpdate + Access.Limit("limit.currency_duckets", 0));
+                var interval = Convert.ToInt32(settings.TryGetValue("user.currency_scheduler.tick"));
+
+                if (creditUpdate < 0 || ducketUpdate < 0) {
+                    CreditsUpdateTick = interval;
+
+                    return;
+                }
+
+                if (creditUpdate == 0 && ducketUpdate == 0) {
+                    CreditsUpdateTick = interval;
+
+                    return;
+                }
+
+                var credits = checked(Credits + creditUpdate);
+                var duckets = checked(Duckets + ducketUpdate);
+
+                if (!store.SaveCurrency(Id, credits, duckets)) {
+                    return;
+                }
+
+                Credits = credits;
+                Duckets = duckets;
+                CreditsUpdateTick = interval;
                 Client?.Send(new CreditBalanceComposer(Credits));
                 Client?.Send(new HabboActivityPointNotificationComposer(Duckets, ducketUpdate));
-                CreditsUpdateTick = Convert.ToInt32(settings.TryGetValue("user.currency_scheduler.tick"));
             }
         }
-        catch { }
+        catch (Exception exception) {
+            Plus.Core.ExceptionLogger.LogException(exception);
+        }
     }
 
 
@@ -450,7 +476,7 @@ public class Habbo
             Client.Send(new OpenConnectionComposer(room.Id));
         }
 
-        if (!room.CheckRights(Client, true, true) && !Client.GetHabbo().IsTeleporting && !Client.GetHabbo().IsHopping) {
+        if (!room.CheckRights(Client, true) && !Client.GetHabbo().IsTeleporting && !Client.GetHabbo().IsHopping) {
             // A room hidden by Builders Club furni overrides its door mode (notification.builders_club.room_locked); staff still enter.
             if (!Access.Can(PermissionKeys.RoomEnterLocked) && _buildersClub?.HidesRoom(room) == true) {
                 Client.Send(new FlatAccessDeniedComposer(room.Id, ""));
@@ -497,42 +523,52 @@ public class Habbo
 
     public bool EnterRoom(Room? room)
     {
-        if (room == null || Client == null) {
+        if (room == null || Client == null || !room.TryBeginEntry()) {
             return false;
         }
 
-        Client.GetHabbo().CurrentRoom = room;
+        try {
+            EnterOpenRoom(Client, room);
+        }
+        finally {
+            room.EndEntry();
+        }
+
+        return true;
+    }
+
+    private void EnterOpenRoom(GameClient client, Room room)
+    {
+        client.GetHabbo().CurrentRoom = room;
         // The NFT chat styles come before RoomReady, the entry tile right after it.
-        Client.Send(new Plus.Communication.Packets.Outgoing.Rooms.Session.UserNftChatStylesComposer());
-        Client.Send(new RoomReadyComposer(room.RoomId, room.ModelName));
+        client.Send(new Plus.Communication.Packets.Outgoing.Rooms.Session.UserNftChatStylesComposer());
+        client.Send(new RoomReadyComposer(room.RoomId, room.ModelName));
 
         if (room.GetGameMap()?.Model is { } model) {
-            Client.Send(new Plus.Communication.Packets.Outgoing.Rooms.FloorPlan.RoomEntryTileComposer(model.DoorX, model.DoorY, model.DoorOrientation));
+            client.Send(new Plus.Communication.Packets.Outgoing.Rooms.FloorPlan.RoomEntryTileComposer(model.DoorX, model.DoorY, model.DoorOrientation));
         }
 
         if (room.Wallpaper != "0.0") {
-            Client.Send(new RoomPropertyComposer("wallpaper", room.Wallpaper));
+            client.Send(new RoomPropertyComposer("wallpaper", room.Wallpaper));
         }
 
         if (room.Floor != "0.0") {
-            Client.Send(new RoomPropertyComposer("floor", room.Floor));
+            client.Send(new RoomPropertyComposer("floor", room.Floor));
         }
 
-        Client.Send(new RoomPropertyComposer("landscape", room.Landscape));
-        _roomVisits.RecordEntry(Client.GetHabbo().Id, room.RoomId);
+        client.Send(new RoomPropertyComposer("landscape", room.Landscape));
+        _roomVisits.RecordEntry(client.GetHabbo().Id, room.RoomId);
 
         if (room.OwnerId != Id) {
             if (HabboStats is { } stats) {
                 stats.RoomVisits += 1;
             }
 
-            _roomAchievements.ProgressAchievement(Client, "ACH_RoomEntry", 1);
+            _roomAchievements.ProgressAchievement(client, "ACH_RoomEntry", 1);
         }
 
         // The server sends the room data right after opening it; the client asks for nothing.
-        _roomEntry?.Enter(Client);
-
-        return true;
+        _roomEntry?.Enter(client);
     }
 
     // UserDataFactory wires every loaded user; a hand-built user has no hotel to unregister from or enter rooms in.

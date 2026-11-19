@@ -34,7 +34,7 @@ public partial class PlacedFurniRoomTests
         Assert.Null(Read("@pet_id"));
         Assert.Null(Read("@achievement_score"));
         Assert.Null(Read("@favourite_group_id"));
-        habbo.HabboStats = new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, "", 0);
+        habbo.HabboStats = new(0, 0, 0, 0, 0, 0, 0, 0, 0, "");
         Assert.Equal(0, Read("@achievement_score")?.Value);
         Assert.Null(Read("@favourite_group_id"));
         habbo.HabboStats.AchievementPoints = 17;
@@ -108,8 +108,8 @@ public partial class PlacedFurniRoomTests
     [InlineData("~pet.experience_required", 200L)]
     [InlineData("~pet.happiness", 80L)]
     [InlineData("~pet.level", 2L)]
-    [InlineData("~pet.max_energy", 100L)]
-    [InlineData("~pet.max_happiness", 150L)]
+    [InlineData("~pet.max_energy", 140L)]
+    [InlineData("~pet.max_happiness", 100L)]
     [InlineData("~pet.max_level", 20L)]
     [InlineData("~pet.owner_id", 7L)]
     [InlineData("~pet.scratches", 3L)]
@@ -212,7 +212,7 @@ public partial class PlacedFurniRoomTests
         Assert.False(module.Mutate(reference, holder, WiredVariableMutation.Set, 2147483648L, frame));
         Assert.Equal(0, calls);
         Assert.True(module.Mutate(reference, holder, WiredVariableMutation.Set, 255, frame));
-        Assert.Equal((255, 33, 44, 1), (_room.TonerData.Hue, _room.TonerData.Saturation, _room.TonerData.Lightness, _room.TonerData.Enabled));
+        Assert.Equal((255, 33, 44, 0), (_room.TonerData.Hue, _room.TonerData.Saturation, _room.TonerData.Lightness, _room.TonerData.Enabled));
         var change = Assert.Single(module.DrainChanges());
         Assert.Equal((22L, 255L), (change.Before!.Value, change.After!.Value));
         Assert.Same(item, ((ConcurrentDictionary<uint, Item>)typeof(RoomItemHandling).GetField("_movedItems", BindingFlags.Instance | BindingFlags.NonPublic)!
@@ -244,7 +244,7 @@ public partial class PlacedFurniRoomTests
     {
         var user = new RoomUser(7, RoomId, 1, _room, _client, TestChatEmotions.Unused, TestRewardProgress.Unused) { X = 1, Y = 2 };
         BuiltinUsers()[user.VirtualId] = user;
-        _client.GetHabbo().HabboStats = new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, "", 0);
+        _client.GetHabbo().HabboStats = new(0, 0, 0, 0, 0, 0, 0, 0, 0, "");
         var holder = WiredVariableRuntimeFrames.UserHolder(user);
         var frame = new WiredVariableFrame(RoomId, [holder]);
         var builtins = new RoomWiredBuiltinVariables(_room);

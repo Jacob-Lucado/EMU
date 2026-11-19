@@ -432,7 +432,7 @@ public class UserProcessTests
             Look = "look",
             Motto = "",
             Access = UserAccess.Empty,
-            HabboStats = new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, "old", 0),
+            HabboStats = new(0, 0, 0, 0, 0, 0, 0, 0, 0, "old"),
             Effects = new EffectsComponent(clock),
             CreditsUpdateTick = 100
         };
@@ -449,6 +449,7 @@ public class UserProcessTests
     private static T Proxy<T>(Func<string, object?[]?, object?> invoke) where T : class => CatalogSnapshotTestSupport.Proxy<T>(invoke);
     private sealed class Store(Action<int, int, int, string> save) : IUserProcessStore
     {
+        public bool SaveCurrency(int userId, int credits, int duckets) => throw new NotSupportedException();
         public void ResetDailyRespects(int userId, int respects, int petRespects, string day) => save(userId, respects, petRespects, day);
     }
 

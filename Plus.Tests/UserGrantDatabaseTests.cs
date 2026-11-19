@@ -64,6 +64,7 @@ public sealed class UserGrantDatabaseTests : IDisposable
         _access = CatalogSnapshotTestSupport.Proxy<IAccessControl>((name, args) => name == "Can" ? _rights.Contains((string)args[1]!) : throw new InvalidOperationException(name));
         Clean();
         Sql("INSERT INTO users (id, username, auth_ticket, credits) VALUES (962001, 'rcon_grant_user', '', 100), (962002, 'rcon_grant_other', '', 100); " +
+            "INSERT INTO furniture (id, item_name) VALUES (962201, 'rcon_chair'), (962202, 'rcon_locked'); " +
             "INSERT INTO users_settings (user_id) VALUES (962001), (962002); INSERT INTO user_statistics (id) VALUES (962001), (962002); " +
             "INSERT INTO user_currencies (user_id, type, amount) VALUES (962001, 0, 10); " +
             "INSERT INTO badge_definitions (code, required_right) VALUES ('RCONT1', ''), ('RCONOWN', ''), ('RCONSTAFF', 'moderation.tool'); " +
@@ -443,7 +444,7 @@ public sealed class UserGrantDatabaseTests : IDisposable
             Id = userId,
             Username = "rcon_grant_user",
             Credits = credits,
-            HabboStats = new HabboStats(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, "", 0),
+            HabboStats = new HabboStats(0, 0, 0, 0, 0, 0, 0, 0, 0, ""),
             Persistence = new UserPersistenceService(_database, TimeProvider.System, _clients),
             SessionStartedAt = DateTimeOffset.UtcNow
         };
@@ -460,7 +461,7 @@ public sealed class UserGrantDatabaseTests : IDisposable
         var factory = new UserDataFactory(null!, _database, [], null!, null!, null!, new Plus.HabboHotel.Rooms.RoomVisitRecorder(_database, TimeProvider.System),
             TimeProvider.System, TestRoomAchievements.Unused, _clients, TestRoomManager.Unused);
         var habbo = (await factory.GetUserDataByIdAsync(User))!;
-        habbo.HabboStats ??= new HabboStats(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, "", 0);
+        habbo.HabboStats ??= new HabboStats(0, 0, 0, 0, 0, 0, 0, 0, 0, "");
         habbo.Persistence = new UserPersistenceService(_database, TimeProvider.System, _clients);
         habbo.SessionStartedAt = DateTimeOffset.UtcNow;
 
@@ -497,7 +498,7 @@ public sealed class UserGrantDatabaseTests : IDisposable
     private static string Payload(object payload) => Convert.ToBase64String(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(payload)));
 
     private void Clean() => Sql("DELETE FROM rcon_grants WHERE user_id IN (962001, 962002) OR idempotency_key LIKE 'order-%'; " +
-        "DELETE FROM items WHERE user_id IN (962001, 962002); DELETE FROM user_badges WHERE user_id IN (962001, 962002); " +
+        "DELETE FROM items WHERE user_id IN (962001, 962002); DELETE FROM furniture WHERE id IN (962201, 962202); DELETE FROM user_badges WHERE user_id IN (962001, 962002); " +
         "DELETE FROM user_roles WHERE user_id IN (962001, 962002); DELETE FROM acl_audit_log WHERE target_id IN (962001, 962002); " +
         "DELETE FROM user_currencies WHERE user_id IN (962001, 962002); DELETE FROM users_settings WHERE user_id IN (962001, 962002); " +
         "DELETE FROM user_statistics WHERE id IN (962001, 962002); DELETE FROM rooms WHERE id = 962101; " +

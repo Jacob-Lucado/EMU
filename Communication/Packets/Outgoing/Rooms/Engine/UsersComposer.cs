@@ -12,8 +12,6 @@ namespace Plus.Communication.Packets.Outgoing.Rooms.Engine;
 /// </summary>
 public sealed class UsersComposer : IServerPacket
 {
-    /// <summary>No rank. The client defaults to it and hides a negative rank.</summary>
-    private const int BadgesRankUnknown = -1;
     /// <summary>The skills of a bot type without a list of its own.</summary>
     private static readonly short[] DefaultBotSkills = [1, 2, 3, 4, 5];
 
@@ -47,21 +45,21 @@ public sealed class UsersComposer : IServerPacket
                 packet.WriteString("");
                 packet.WriteInteger(user.AchievementPoints);
                 packet.WriteBoolean(false);
-                packet.WriteInteger(BadgesRankUnknown);
+                packet.WriteInteger(user.BadgesRank);
             }
             else if (user.IsPet) {
                 packet.WriteInteger(user.PetType);
                 packet.WriteInteger(user.OwnerId);
                 packet.WriteString(user.OwnerName);
-                packet.WriteInteger(1);
+                packet.WriteInteger(user.Plant?.Rarity ?? 1);
                 packet.WriteBoolean(user.HasSaddle);
                 packet.WriteBoolean(user.IsRidden);
+                packet.WriteBoolean(user.Plant?.CanBreed ?? false);
                 packet.WriteBoolean(false);
-                packet.WriteBoolean(false);
-                packet.WriteBoolean(false);
-                packet.WriteBoolean(false);
+                packet.WriteBoolean(user.Plant?.CanRevive ?? false);
+                packet.WriteBoolean(user.Plant?.BreedingPermission ?? user.HasBreedingPermission);
                 packet.WriteInteger(user.PetLevel);
-                packet.WriteString("");
+                packet.WriteString(user.Plant?.Posture ?? "");
             }
             else {
                 packet.WriteString(user.Gender);

@@ -57,6 +57,7 @@ public class RoomUser
     public bool Freezed;
     public bool FreezeInteracting;
     public int FreezeLives;
+    public int FreezeExitTicks;
     public bool Frozen;
     public uint GateId;
 
@@ -87,6 +88,7 @@ public class RoomUser
 
     public int PrevTime;
     public bool RidingHorse = false;
+    public int RidingEffect = HorseProducts.DefaultRidingEffect;
 
     // The swim effects. A swimming avatar cannot sit or lay.
     private static readonly int[] SwimEffects = [29, 30, 185];
@@ -99,6 +101,12 @@ public class RoomUser
     public int RotHead; //byte
 
     public bool SetStep;
+
+    /// <summary>The effect a vending machine gave this user. It starts on the user's next step and stays until then.</summary>
+    public int PendingVendingEffect;
+
+    /// <summary>The effect this user got in this room from a vending machine or from the effects inventory. It ends when the user leaves the room.</summary>
+    public int RoomEffect;
     public int SetX; //byte
     public int SetY; //byte
     public double SetZ;
@@ -234,19 +242,9 @@ public class RoomUser
                 return true;
             }
 
-            if (habbo.Access.Can(PermissionKeys.ModerationTool) || GetRoom().OwnerId == HabboId) {
-                return false;
-            }
+            var room = GetRoom();
 
-            if (GetRoom().Id == 1649919) {
-                return false;
-            }
-
-            if (IdleTime >= 7200) {
-                return true;
-            }
-
-            return false;
+            return !IdleKickExemption.Applies(room, habbo) && room.Behavior.IdleAutokickTicks is { } ticks && IdleTime >= ticks;
         }
     }
 
@@ -475,7 +473,7 @@ public class RoomUser
     {
         var room = GetRoom();
 
-        if (room == null || !IsBot && Stress == null) {
+        if (room == null || !IsBot && Stress == null || IsPet && room.Behavior.MuteAllPets) {
             return;
         }
 
@@ -835,8 +833,11 @@ public class RoomUser
     }
 
 
-    public void ApplyEffect(int effectId)
+    public void ApplyEffect(int effectId) => ApplyEffect(effectId, 0);
+
+    public void ApplyEffect(int effectId, int delay)
     {
+        RoomEffect = 0;
         var room = GetRoom();
 
         if (room == null) {
@@ -845,7 +846,7 @@ public class RoomUser
 
         if (IsBot || Stress != null) {
             _botEffect = effectId;
-            room.SendPacket(new AvatarEffectComposer(VirtualId, effectId));
+            room.SendPacket(new AvatarEffectComposer(VirtualId, effectId, delay));
 
             return;
         }
@@ -856,7 +857,7 @@ public class RoomUser
             return;
         }
 
-        effects.ApplyEffect(effectId);
+        effects.ApplyEffect(effectId, delay);
     }
 
 

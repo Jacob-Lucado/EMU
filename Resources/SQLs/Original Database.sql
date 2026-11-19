@@ -29,7 +29,7 @@ CREATE TABLE `achievements` (
   `progress_needed` int(11) NOT NULL DEFAULT '1',
   `game_id` int(11) NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=529 DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB AUTO_INCREMENT=529 DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
 
 -- ----------------------------
 -- Records of achievements
@@ -522,7 +522,7 @@ CREATE TABLE `badge_definitions` (
   `required_right` varchar(191) NOT NULL DEFAULT '',
   PRIMARY KEY (`code`),
   UNIQUE KEY `code` (`code`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
 
 -- ----------------------------
 -- Records of badge_definitions
@@ -5909,7 +5909,7 @@ CREATE TABLE `bots_petdata` (
   `gnome_clothing` varchar(85) DEFAULT '-1',
   PRIMARY KEY (`id`),
   UNIQUE KEY `id` (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
 
 -- ----------------------------
 -- Records of bots_petdata
@@ -12828,7 +12828,7 @@ CREATE TABLE `catalog_marketplace_data` (
   `sold` int(7) NOT NULL DEFAULT '0',
   `avgprice` int(9) NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
 
 -- ----------------------------
 -- Records of catalog_marketplace_data
@@ -13450,7 +13450,7 @@ CREATE TABLE `catalog_vouchers` (
   `max_uses` int(11) NOT NULL DEFAULT '1',
   `enabled` tinyint(1) DEFAULT '1',
   PRIMARY KEY (`voucher`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
 
 -- ----------------------------
 -- Records of catalog_vouchers
@@ -21952,7 +21952,7 @@ CREATE TABLE `items_groups` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `id` (`id`),
   KEY `group_id` (`group_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
 
 -- ----------------------------
 -- Records of items_groups
@@ -22056,7 +22056,7 @@ CREATE TABLE `messenger_offline_messages` (
   `message` varchar(255) NOT NULL,
   `timestamp` datetime(6) NULL DEFAULT NULL,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
 
 -- ----------------------------
 -- Records of messenger_offline_messages
@@ -22089,7 +22089,7 @@ CREATE TABLE `moderation_presets` (
   `message` text NOT NULL,
   `enabled` int(11) DEFAULT '1',
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
 
 -- ----------------------------
 -- Records of moderation_presets
@@ -22110,7 +22110,7 @@ CREATE TABLE `moderation_preset_action_categories` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `caption` varchar(32) NOT NULL DEFAULT '',
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
 
 -- ----------------------------
 -- Records of moderation_preset_action_categories
@@ -22137,7 +22137,7 @@ CREATE TABLE `moderation_preset_action_messages` (
   `trade_lock_days` int(11) NOT NULL DEFAULT '0',
   `notice` text NOT NULL,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=21 DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB AUTO_INCREMENT=21 DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
 
 -- ----------------------------
 -- Records of moderation_preset_action_messages
@@ -22199,7 +22199,7 @@ CREATE TABLE `moderation_topics` (
   `id` int(11) unsigned NOT NULL AUTO_INCREMENT,
   `caption` varchar(225) NOT NULL DEFAULT '',
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
 
 -- ----------------------------
 -- Records of moderation_topics
@@ -22227,7 +22227,7 @@ CREATE TABLE `moderation_topic_actions` (
   `ip_time` int(11) NOT NULL,
   `trade_lock_time` int(11) NOT NULL,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=37 DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB AUTO_INCREMENT=37 DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
 
 -- ----------------------------
 -- Records of moderation_topic_actions
@@ -22346,13 +22346,13 @@ CREATE TABLE roles (
  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
  updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
  CHECK (security_level <= 7)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 CREATE TABLE acl_permissions (
  `key` VARCHAR(191) CHARACTER SET ascii COLLATE ascii_bin NOT NULL PRIMARY KEY,
  category VARCHAR(64) NOT NULL,
  description VARCHAR(255) NOT NULL DEFAULT '',
  is_orphan BOOLEAN NOT NULL DEFAULT FALSE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 CREATE TABLE role_permissions (
  role_id INT NOT NULL,
  permission_key VARCHAR(191) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
@@ -22379,7 +22379,7 @@ CREATE TABLE user_permissions (
  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
  PRIMARY KEY (user_id, permission_key),
  KEY expires_at (expires_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 CREATE TABLE role_limits (
  role_id INT NOT NULL,
  limit_key VARCHAR(191) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
@@ -22397,7 +22397,7 @@ CREATE TABLE acl_audit_log (
  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
  KEY target (target_type, target_id),
  KEY actor_created (actor_id, created_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 
 INSERT INTO roles (`id`,`slug`,`name`,`description`,`weight`,`security_level`,`badge_code`,`is_staff`,`is_hidden`) VALUES
@@ -23800,7 +23800,7 @@ CREATE TABLE `quests` (
   `timestamp_unlock` datetime(6) NULL DEFAULT NULL,
   `timestamp_lock` datetime(6) NULL DEFAULT NULL,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB AUTO_INCREMENT=182 DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB AUTO_INCREMENT=182 DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
 
 -- ----------------------------
 -- Records of quests
@@ -23933,7 +23933,7 @@ CREATE TABLE `room_bans` (
   PRIMARY KEY (`user_id`,`room_id`),
   KEY `user_id` (`user_id`),
   KEY `room_id` (`room_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
 
 -- ----------------------------
 -- Records of room_bans
@@ -24122,7 +24122,7 @@ CREATE TABLE `room_items_toner` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `id` (`id`),
   KEY `enabled` (`enabled`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
 
 -- ----------------------------
 -- Records of room_items_toner
@@ -24732,7 +24732,7 @@ CREATE TABLE `user_vouchers` (
   `voucher` varchar(45) NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `user_id, voucher` (`user_id`,`voucher`) USING BTREE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
 
 -- ----------------------------
 -- Records of user_vouchers

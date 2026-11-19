@@ -3,6 +3,7 @@ using Plus.Communication.Packets.Outgoing.Pets;
 using Plus.Communication.Packets.Outgoing.Rooms.AI.Pets;
 using Plus.Communication.Packets.Outgoing.Rooms.Chat;
 using Plus.HabboHotel.Quests;
+using Plus.HabboHotel.Rooms.AI.MonsterPlants;
 using Plus.HabboHotel.GameClients;
 using Plus.Utilities;
 
@@ -14,6 +15,7 @@ public class Pet
     private IGameClientManager? _clients;
     private IRewardTrackManager? _rewards;
     public int AnyoneCanRide;
+    public bool AllowBreeding;
     public string Color;
     public DateTimeOffset? CreatedAt;
     public PetDatabaseUpdateState DbState;
@@ -21,7 +23,7 @@ public class Pet
     public int Energy;
     public int Experience;
 
-    public int[] ExperienceLevels = { 100, 200, 400, 600, 1000, 1300, 1800, 2400, 3200, 4300, 7200, 8500, 10100, 13300, 17500, 23000, 51900, 75000, 128000, 150000 };
+    public int[] ExperienceLevels = { 100, 200, 400, 600, 900, 1300, 1800, 2400, 3200, 4300, 7200, 8500, 10100, 13300, 17500, 23000, 51900, 75000, 128000, 150000 };
 
     public string GnomeClothing;
     public int HairDye;
@@ -29,6 +31,9 @@ public class Pet
     public int Nutrition;
     public int OwnerId;
     public int PetHair;
+
+    /// <summary>The plant state of a monster plant (pet type 16); null for every other pet.</summary>
+    public MonsterPlant? Plant;
     public int PetId;
     public bool PlacedInRoom;
     public string Race;
@@ -117,27 +122,34 @@ public class Pet
         //will error index out of range (need to look into this sometime)
         ExperienceLevels[Level - 1];
 
-    public static int MaxEnergy => 100;
+    public int MaxEnergy => 100 + 20 * Level;
 
     public bool IsTired => Energy <= 10;
 
     public bool ObeysCommand(int commandId) => !IsTired && (Level > 15 || commandId == 8 || Random.Shared.Next(1, 9) < 6);
 
-    public static int MaxNutrition => 150;
+    public static int MaxNutrition => 100;
 
+
+    /// <summary>A pet's figure parts: its clothing, a horse's hair and saddle, or none, as Habbo sends them.</summary>
     public string CustomParts => !string.IsNullOrEmpty(GnomeClothing) && GnomeClothing != "-1"
         ? GnomeClothing
-        : Saddle > 0
-            ? $"3 2 {PetHair} {HairDye} 3 {PetHair} {HairDye} 4 {Saddle} 0"
-            : $"2 2 {PetHair} {HairDye} 3 {PetHair} {HairDye}";
+        : Type != HorseProducts.HorseType
+            ? ""
+            : Saddle > 0
+                ? $"3 2 {PetHair} {HairPalette} 3 {PetHair} {HairPalette} 4 {Saddle} 0"
+                : $"2 2 {PetHair} {HairPalette} 3 {PetHair} {HairPalette}";
 
-    public string Look => $"{Type} {Race} {Color} {CustomParts}";
+    private int HairPalette => HorseProducts.HairPalette(HairDye);
+
+    public string Look => CustomParts.Length == 0 ? $"{Type} {Race} {Color}" : $"{Type} {Race} {Color} {CustomParts}";
 
     public string OwnerName { get; set; }
 
     public void OnRespect()
     {
         Respect++;
+        Nutrition = Math.Min(MaxNutrition, Nutrition + 10);
         Room.SendPacket(new RespectPetNotificationComposer(VirtualId, PetId, Name, Color));
 
         if (DbState != PetDatabaseUpdateState.NeedsInsert) {
@@ -168,64 +180,71 @@ public class Pet
 
             if (Room != null) {
                 Room.SendPacket(new AddExperiencePointsComposer(PetId, VirtualId, amount));
-
-                if (Experience >= ExperienceGoal) {
-                    Room.SendChat(receiver => new ChatComposer(VirtualId, $"*leveled up to level {Level} *", 0, 0, receiver));
-                }
             }
         }
 
         var gained = Level - before;
 
-        if (gained < 1 || OwnerId <= 0) {
+        if (gained < 1) {
             return;
         }
 
-        var client = _clients?.GetClientByUserId(OwnerId);
+        var client = OwnerId > 0 ? _clients?.GetClientByUserId(OwnerId) : null;
 
         if (client != null) {
+            client.Send(new PetLevelNotificationComposer(PetId, Name, Level, Look));
+            client.Send(new PetTrainingPanelComposer(this));
             _rewards!.Progress(client, RewardTrackActions.PetLevel, gained);
+        }
+
+        if (Room != null && !Room.Behavior.MuteAllPets) {
+            Room.SendChat(receiver => new ChatComposer(VirtualId, LevelUpLine, 0, 0, receiver));
         }
     }
 
+    private static readonly Dictionary<int, string> LevelUpLines = new()
+    {
+        [1] = "*pet leveled up - new trick learned!*",
+        [11] = "Level up! Nice one!",
+        [17] = "I just leveled up! Awesome-sauce!",
+        [22] = "I just leveled up. My power grows!",
+        [28] = "YIPPEE - I just leveled up, {0}!"
+    };
+
+    private string LevelUpLine => string.Format(LevelUpLines.GetValueOrDefault(Type, "Leveling up"), OwnerName);
+
     public void PetEnergy(bool add)
     {
-        int maxE;
-
         if (add) {
-            if (Energy == 100) // If Energy is 100, no point.
-{
+            if (Energy >= MaxEnergy) {
                 return;
             }
 
-            if (Energy > 85) {
-                maxE = MaxEnergy - Energy;
+            Energy++;
+
+            if (DbState != PetDatabaseUpdateState.NeedsInsert) {
+                DbState = PetDatabaseUpdateState.NeedsUpdate;
             }
-            else {
-                maxE = 10;
-            }
-        }
-        else {
-            maxE = 15; // Remove Max Energy as 15
+
+            return;
         }
 
-        if (maxE <= 4) {
-            maxE = 15;
-        }
+        SpendEnergy(5);
+    }
 
-        var r = Random.Shared.Next(4, maxE + 1);
+    /// <summary>Food can push the energy above the maximum.</summary>
+    public void Feed(int energy)
+    {
+        Energy += energy;
 
-        if (!add) {
-            Energy = Energy - r;
+        if (DbState != PetDatabaseUpdateState.NeedsInsert) {
+            DbState = PetDatabaseUpdateState.NeedsUpdate;
+        }
+    }
 
-            if (Energy < 0) {
-                Energy = 1;
-                r = 1;
-            }
-        }
-        else {
-            Energy = Energy + r;
-        }
+    public void SpendEnergy(int amount)
+    {
+        Energy = Math.Max(0, Energy - amount);
 
         if (DbState != PetDatabaseUpdateState.NeedsInsert) {
             DbState = PetDatabaseUpdateState.NeedsUpdate;

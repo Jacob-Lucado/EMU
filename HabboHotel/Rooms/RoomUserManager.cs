@@ -19,6 +19,7 @@ using Plus.HabboHotel.Rooms.AI.Speech;
 using Plus.HabboHotel.Rooms.Chat.Emotions;
 using Plus.Core.FigureData;
 using Plus.HabboHotel.Rooms.Games.Teams;
+using Plus.HabboHotel.Rooms.AI.MonsterPlants;
 using Plus.HabboHotel.Rooms.PathFinding;
 using Plus.HabboHotel.Rooms.Trading;
 using Plus.Utilities;
@@ -197,7 +198,7 @@ public partial class RoomUserManager
         }
 
         user.BotData = bot;
-        user.BotAi = _botAiFactory.Create(bot.AiType, user.VirtualId);
+        user.BotAi = pet?.Type == MonsterPlant.PetType ? new MonsterPlantBot(_clock) : _botAiFactory.Create(bot.AiType, user.VirtualId);
 
         if (user.IsPet) {
             user.BotAi.Init(bot.BotId, user.VirtualId, _room.RoomId, user, _room);
@@ -448,17 +449,35 @@ public partial class RoomUserManager
             return 4;
         }
 
-        if (_room.Group == null) {
-            return _room.CheckRights(session, false) ? 1 : 0;
+        if (_room.IsGroupAdmin(session)) {
+            return 3;
         }
 
-        var habboId = session.GetHabbo().Id;
-
-        if (!_room.Group.IsAdmin(habboId) && _room.UsersWithRights.Contains(habboId)) {
+        if (_room.CheckRights(session, false)) {
             return 1;
         }
 
-        return _room.CheckRights(session, false, true) ? 3 : 0;
+        return _room.CheckRights(session, false, true) ? 2 : 0;
+    }
+
+    public void RefreshControllerRights(GameClient session)
+    {
+        if (GetRoomUserByHabbo(session.GetHabbo().Id) is not { } user) {
+            return;
+        }
+
+        var level = ControllerLevel(session);
+        user.RemoveStatus("flatctrl");
+        user.RemoveStatus("flatctrl 1");
+        user.RemoveStatus("flatctrl 3");
+
+        if (level > 0) {
+            user.SetStatus("flatctrl", level.ToString());
+        }
+
+        user.UpdateNeeded = true;
+        session.Send(new YouAreControllerComposer(_room.Id, level));
+        _room.GetWired()?.SendPermissions(session);
     }
 
     // The entrant's controller level and Wired permissions follow the room's labels, then YouAreOwner for the owner.
@@ -560,6 +579,10 @@ public partial class RoomUserManager
                             teamEffects.CurrentEffect = 0;
                         }
                     }
+                }
+
+                if (user.RoomEffect != 0 && session.GetHabbo().Effects is { } roomEffects && roomEffects.CurrentEffect == user.RoomEffect) {
+                    roomEffects.CurrentEffect = 0;
                 }
 
                 // A football gate outfit belongs to its room: the user's own figure is given back on leaving.
@@ -936,20 +959,25 @@ public partial class RoomUserManager
         return user.GetClient()?.GetHabbo()?.CurrentRoom == _room;
     }
 
+    /// <summary>The CloseConnection reason for an idle kick or a walk onto the door tile.</summary>
+    internal const short HotelViewCloseReason = 2;
+
     internal bool ValidateMovementActor(RoomUser actor)
     {
         if (_disposed) {
             return false;
         }
 
-        if (IsValid(actor) && !actor.NeedsAutokick) {
+        var valid = IsValid(actor);
+
+        if (valid && !actor.NeedsAutokick) {
             return true;
         }
 
         var client = actor.GetClient();
 
         if (client?.GetHabbo()?.CurrentRoom == _room) {
-            RemoveUserFromRoom(client, true);
+            RemoveUserFromRoom(client, true, closeReason: valid ? HotelViewCloseReason : null);
         }
         else {
             RemoveAbandonedRoomUser(actor);
@@ -1336,10 +1364,6 @@ public partial class RoomUserManager
             }
 
             if (cyclegameitems) {
-                if (_room.GotSoccer()) {
-                    _room.GetSoccer().OnUserWalk(user);
-                }
-
                 if (_room.GotBanzai()) {
                     _room.GetBanzai().OnUserWalk(user);
                 }

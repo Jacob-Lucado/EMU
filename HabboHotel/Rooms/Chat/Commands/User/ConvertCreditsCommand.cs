@@ -1,7 +1,6 @@
-using Dapper;
+using Plus.HabboHotel.Catalog.Marketplace;
 using Plus.Communication.Packets.Outgoing.Inventory.Furni;
 using Plus.Communication.Packets.Outgoing.Inventory.Purse;
-using Plus.Database;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Items;
 using Plus.HabboHotel.Users.Inventory.Furniture;
@@ -10,16 +9,16 @@ namespace Plus.HabboHotel.Rooms.Chat.Commands.User;
 
 internal class ConvertCreditsCommand : IChatCommand
 {
-    private readonly IDatabase _database;
+    private readonly IItemRedemptionStore _store;
     public string Key => "convertcredits";
 
     public string Parameters => "";
 
     public string Description => "Convert your exchangeable furniture into actual credits.";
 
-    public ConvertCreditsCommand(IDatabase database)
+    public ConvertCreditsCommand(IItemRedemptionStore store)
     {
-        _database = database;
+        _store = store;
     }
 
     public void Execute(GameClient session, Room room, string[] parameters)
@@ -28,64 +27,59 @@ internal class ConvertCreditsCommand : IChatCommand
 
         try {
             var habbo = session.GetHabbo();
-            InventoryItem[] deletedItems;
 
             // The exchanged items are read from and removed out of the loaded inventory, so nothing is converted without one.
             if (habbo.Inventory is not { } inventory) {
                 return;
             }
 
-            lock (habbo.WalletSync) {
-                using var connection = _database.Connection();
-                var itemIds = connection.Query<uint>("SELECT id FROM items WHERE user_id=@userId AND room_id=0",
-                    new { userId = habbo.Id }).ToArray();
+            lock (habbo.InventoryMutationSync)
+                lock (habbo.WalletSync) {
+                    if (habbo.WalletClosed || habbo.Credits == int.MaxValue) {
+                        return;
+                    }
 
-                if (itemIds.Length == 0) {
-                    session.SendWhisper("You currently have no items in your inventory!");
+                    var items = inventory.Furniture.AllItems.ToArray();
 
-                    return;
-                }
+                    if (items.Length == 0) {
+                        session.SendWhisper("You currently have no items in your inventory!");
 
-                var exchangeItems = itemIds.Select(inventory.Furniture.GetItem)
-                    .Where(item => item?.Definition.InteractionType == InteractionType.Exchange)
-                    .ToArray();
-                var deleted = new List<InventoryItem>(exchangeItems.Length);
-                connection.Open();
+                        return;
+                    }
 
-                using (var transaction = connection.BeginTransaction()) {
-                    foreach (var item in exchangeItems) {
-                        var affected = connection.Execute(
-                            "DELETE FROM items WHERE id=@id AND user_id=@userId AND room_id=0 LIMIT 1",
-                            new { item.Id, userId = habbo.Id }, transaction);
+                    var reserved = new List<InventoryItem>();
 
-                        if (affected == 1) {
-                            deleted.Add(item);
+                    try {
+                        foreach (var item in items) {
+                            if (item.Definition.RedeemableForCredits && item.Definition.BehaviourData > 0 && item.TryReserve()) {
+                                reserved.Add(item);
+                            }
+                        }
+
+                        var candidates = reserved.ToDictionary(item => item.Id, item => new ExchangeRedemption(item.Id, item.Definition.BehaviourData));
+                        var redeemed = candidates.Count == 0 ? [] : MarketplaceCommit.Guard(habbo, () =>
+                            _store.RedeemInventoryExchanges(habbo.Id, habbo.Credits, candidates.Values.ToArray()));
+                        totalValue = redeemed.Sum(id => candidates[id].Credits);
+                        habbo.Credits = checked(habbo.Credits + totalValue);
+
+                        foreach (var id in redeemed) {
+                            inventory.Furniture.RemoveItem(id);
+                        }
+
+                        foreach (var id in redeemed) {
+                            session.Send(new FurniListRemoveComposer(id));
+                        }
+
+                        if (totalValue > 0) {
+                            session.Send(new CreditBalanceComposer(habbo.Credits));
                         }
                     }
-
-                    transaction.Commit();
-                }
-
-                deletedItems = deleted.ToArray();
-
-                foreach (var item in deletedItems) {
-                    var value = item.Definition.BehaviourData;
-                    totalValue += value;
-
-                    if (value > 0) {
-                        habbo.Credits += value;
+                    finally {
+                        foreach (var item in reserved) {
+                            item.ReleaseReservation();
+                        }
                     }
                 }
-            }
-
-            foreach (var item in deletedItems) {
-                inventory.Furniture.RemoveItem(item.Id);
-                session.Send(new FurniListRemoveComposer(item.Id));
-            }
-
-            if (totalValue > 0) {
-                session.Send(new CreditBalanceComposer(habbo.Credits));
-            }
 
             if (totalValue > 0) {
                 session.SendNotification($"All credits have successfully been converted!\r\r(Total value: {totalValue} credits!");

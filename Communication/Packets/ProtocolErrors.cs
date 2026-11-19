@@ -66,6 +66,7 @@ public enum PetPlacementError
 public enum MarketplaceOfferEligibility
 {
     Allowed = 1,
+    NoTradingPass = 3,
     TradingLocked = 6
 }
 
@@ -89,7 +90,9 @@ public enum IgnoreStatus
 public enum PetPackageNameError
 {
     None = 0,
-    InvalidName = 1
+    TooLong = 1,
+    TooShort = 2,
+    InvalidCharacters = 3
 }
 
 public enum BullyReportResult

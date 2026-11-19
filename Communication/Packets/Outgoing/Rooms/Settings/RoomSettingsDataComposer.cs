@@ -30,12 +30,12 @@ public sealed class RoomSettingsDataComposer(RoomSettingsSnapshot data) : IServe
         packet.WriteInteger(data.WallThickness);
         packet.WriteInteger(data.FloorThickness);
         packet.WriteInteger(data.ExtraFlood); // Chat flood sensitivity, the only chat setting the client reads.
-        packet.WriteBoolean(false); // Leave on door tile.
-        packet.WriteBoolean(false); // Idle sleep.
-        packet.WriteInteger(0); // Idle sleep timeout seconds.
-        packet.WriteBoolean(false); // Idle autokick.
-        packet.WriteInteger(0); // Idle autokick timeout seconds.
-        packet.WriteBoolean(false); // Mute all pets.
+        packet.WriteBoolean(data.Behavior.LeaveOnDoorTile);
+        packet.WriteBoolean(data.Behavior.IdleSleepEnabled);
+        packet.WriteInteger(data.Behavior.IdleSleepTimeoutSeconds);
+        packet.WriteBoolean(data.Behavior.IdleAutokickEnabled);
+        packet.WriteInteger(data.Behavior.IdleAutokickTimeoutSeconds);
+        packet.WriteBoolean(data.Behavior.MuteAllPets);
         packet.WriteInteger(data.WhoCanMute);
         packet.WriteInteger(data.WhoCanKick);
         packet.WriteInteger(data.WhoCanBan);

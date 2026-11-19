@@ -49,6 +49,7 @@ public sealed class HabbiconService(IDatabase database, TimeProvider clock) : IH
         foreach (var row in connection.Query("SELECT * FROM habbicon_collections ORDER BY id", transaction: transaction)) {
             int id = row.id, rewardId = row.reward_id;
             var members = items.Values.Where(item => item.CollectionId == id && item.Id != rewardId).ToArray();
+            // A claimable member counts as collected, as in the client.
             bool complete = members.Length > 0 && members.All(item => item.Collected);
             items.TryGetValue(rewardId, out var reward);
 
@@ -235,15 +236,34 @@ public sealed class HabbiconService(IDatabase database, TimeProvider clock) : IH
         return new(Load(connection, userId, transaction), changed, balances);
     }
 
+    public HabbiconChange Grant(IDbConnection connection, IDbTransaction transaction, int userId, int id)
+    {
+        var before = Load(connection, userId, transaction);
+
+        if (!before.RequireItem(id).Owned) {
+            Save(connection, transaction, userId, id, HabbiconState.Owned, true);
+        }
+
+        return Changed(connection, transaction, userId, before, null);
+    }
+
     public bool Use(int userId, int id)
     {
         var now = clock.GetUtcNow().ToUniversalTime();
 
         return Transact(userId, (connection, transaction, _) =>
         {
-            var item = Load(connection, userId, transaction).Items.GetValueOrDefault(id);
+            // The collection join keeps the same icons that Load lists.
+            var state = connection.QuerySingleOrDefault<int?>(
+                """
+                SELECT COALESCE(u.state, CASE WHEN h.default_owned <> 0 THEN 2 ELSE 0 END)
+                FROM habbicons h
+                JOIN habbicon_collections c ON c.id = h.collection_id
+                LEFT JOIN users_habbicons u ON u.user_id = @userId AND u.habbicon_id = h.id
+                WHERE h.id = @id
+                """, new { userId, id }, transaction);
 
-            if (item == null || !item.Owned) {
+            if (state is not (HabbiconState.Owned or HabbiconState.Favorite)) {
                 return false;
             }
 
@@ -251,13 +271,15 @@ public sealed class HabbiconService(IDatabase database, TimeProvider clock) : IH
                 "SELECT MAX(last_used) FROM users_habbicons WHERE user_id = @userId",
                 new { userId }, transaction);
             var lastUsed = NextUsageTime(now, previous);
-            Save(connection, transaction, userId, id, item.State, false);
             connection.Execute(
-                "UPDATE users_habbicons SET last_used = @lastUsed WHERE user_id = @userId AND habbicon_id = @id",
-                new { lastUsed = lastUsed.UtcDateTime, userId, id }, transaction);
+                """
+                INSERT INTO users_habbicons (user_id, habbicon_id, state, unseen, last_used)
+                VALUES (@userId, @id, @state, FALSE, @lastUsed)
+                ON DUPLICATE KEY UPDATE last_used = VALUES(last_used)
+                """, new { lastUsed = lastUsed.UtcDateTime, userId, id, state }, transaction);
 
             return true;
-        });
+        }, readBalances: false);
     }
 
     public void ClearUnseen(int userId, IReadOnlyList<int> ids)
@@ -325,14 +347,16 @@ public sealed class HabbiconService(IDatabase database, TimeProvider clock) : IH
             ON DUPLICATE KEY UPDATE state = VALUES(state), unseen = unseen OR VALUES(unseen)
             """, new { userId, id, state, unseen }, transaction);
 
-    private T Transact<T>(int userId, Func<IDbConnection, IDbTransaction, HabbiconBalances, T> work)
+    private T Transact<T>(int userId, Func<IDbConnection, IDbTransaction, HabbiconBalances, T> work, bool readBalances = true)
     {
         using var connection = database.Connection();
         connection.Open();
         using var transaction = connection.BeginTransaction();
         var credits = connection.QuerySingleOrDefault<int?>("SELECT credits FROM users WHERE id = @userId FOR UPDATE", new { userId }, transaction) ??
             throw new HabbiconRejected(HabbiconActionError.InvalidRequest);
-        var balances = new HabbiconBalances(credits, UserCurrencyStore.Load(connection, userId, transaction).ToDictionary());
+        var balances = new HabbiconBalances(credits, readBalances
+            ? UserCurrencyStore.Load(connection, userId, transaction).ToDictionary()
+            : new Dictionary<int, int>());
         var result = work(connection, transaction, balances);
         transaction.Commit();
 

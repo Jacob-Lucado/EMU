@@ -1,6 +1,9 @@
+using System.Globalization;
+using Dapper;
 using Microsoft.Extensions.Logging;
 using Plus.Database;
 using Plus.HabboHotel.Catalog.Utilities;
+using Plus.HabboHotel.Items;
 using Plus.HabboHotel.Rooms.AI;
 using Plus.Utilities.DependencyInjection;
 
@@ -9,10 +12,19 @@ namespace Plus.HabboHotel.Catalog;
 public sealed record GnomePackageRequest(uint ItemId, uint BaseItem, int OwnerId, string OwnerName, uint RoomId,
     int X, int Y, double Z, string Name, string Clothing, DateTimeOffset CreatedAt);
 
+/// <summary>Opening a pet package: the pet, and the furni that takes the package's place at the same spot.</summary>
+public sealed record PetPackageRequest(uint ItemId, uint BaseItem, int OwnerId, string OwnerName, uint RoomId,
+    int X, int Y, double Z, string Name, PetPackageFigure Figure, double PetZ, uint? FurniBaseItem, int FurniRotation, DateTimeOffset CreatedAt);
+
+public sealed record PetPackageOpening(Pet Pet, uint? FurniId);
+
 [Singleton]
 public interface IGnomePackageStore
 {
     Pet? Open(GnomePackageRequest request);
+
+    /// <summary>Creates the pet, deletes the package and adds its furni, if any, in one transaction; null when nothing was written.</summary>
+    PetPackageOpening? OpenPetPackage(PetPackageRequest request);
 }
 
 public sealed class GnomePackageStore(IDatabase database, ILogger<GnomePackageStore> logger) : IGnomePackageStore
@@ -37,6 +49,42 @@ public sealed class GnomePackageStore(IDatabase database, ILogger<GnomePackageSt
         }
         catch (Exception exception) {
             logger.LogError(exception, "Could not open gnome package {ItemId} for user {OwnerId} in room {RoomId}",
+                request.ItemId, request.OwnerId, request.RoomId);
+
+            return null;
+        }
+    }
+
+    public PetPackageOpening? OpenPetPackage(PetPackageRequest request)
+    {
+        try {
+            using var connection = database.Connection();
+            connection.Open();
+            using var transaction = connection.BeginTransaction();
+            var pet = PetUtility.CreatePet(connection, transaction, request.CreatedAt, request.OwnerName, request.OwnerId, request.Name,
+                request.Figure.Type, request.Figure.Palette.ToString(CultureInfo.InvariantCulture), request.Figure.Colour,
+                new(request.ItemId, request.BaseItem, request.RoomId, request.X, request.Y, request.PetZ));
+
+            if (pet == null) {
+                return null;
+            }
+
+            uint? furniId = null;
+
+            if (request.FurniBaseItem is { } furniBaseItem) {
+                connection.Execute(
+                    "INSERT INTO `items` (base_item,user_id,room_id,x,y,z,wall_pos,rot,extra_data) VALUES (@baseItem,@ownerId,@roomId,@x,@y,@z,'',@rotation,'')",
+                    new { baseItem = furniBaseItem, ownerId = request.OwnerId, roomId = request.RoomId, x = request.X, y = request.Y, z = request.Z, rotation = request.FurniRotation },
+                    transaction);
+                furniId = connection.QuerySingle<uint>("SELECT LAST_INSERT_ID()", transaction: transaction);
+            }
+
+            transaction.Commit();
+
+            return new(pet, furniId);
+        }
+        catch (Exception exception) {
+            logger.LogError(exception, "Could not open pet package {ItemId} for user {OwnerId} in room {RoomId}",
                 request.ItemId, request.OwnerId, request.RoomId);
 
             return null;

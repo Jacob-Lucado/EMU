@@ -13,6 +13,7 @@ public static class ServerPacketHeader
     public const uint UserPerksComposer = 420;
     public const uint KickbackInfoComposer = 3923;
     public const uint UserRightsComposer = 2446;
+    public const uint GamePlayerValueComposer = 1727;
     public const uint GenericErrorComposer = 2097;
     public const uint DisconnectReasonComposer = 4000;
     public const uint SetUniqueIdComposer = 65511;
@@ -67,6 +68,8 @@ public static class ServerPacketHeader
     public const uint AvatarEffectComposer = 1839;
 
     // Room Chat
+    public const uint UserPurchasableChatStylesComposer = 470;
+    public const uint UserPurchasableChatStyleChangedComposer = 916;
     public const uint ChatComposer = 3477;
     public const uint ShoutComposer = 1206;
     public const uint WhisperComposer = 2229;
@@ -109,6 +112,7 @@ public static class ServerPacketHeader
     // Room Settings
     public const uint RoomSettingsDataComposer = 933;
     public const uint RoomSettingsSavedComposer = 1000;
+    public const uint RoomSettingsSaveErrorComposer = 889;
     public const uint FlatControllerRemovedComposer = 3184;
     public const uint FlatControllerAddedComposer = 1907;
     public const uint RoomRightsListComposer = 3347;
@@ -173,9 +177,11 @@ public static class ServerPacketHeader
     // Inventory
     public const uint CreditBalanceComposer = 231;
     public const uint BadgesComposer = 2887;
+    public const uint BadgeLeaderboardComposer = 2114;
     public const uint FurniListAddComposer = 2857;
     public const uint FurniListNotificationComposer = 178;
     public const uint FurniListRemoveComposer = 883;
+    public const uint FurniListRemoveMultipleComposer = 1778;
     public const uint FurniListComposer = 2911;
     public const uint FurniListUpdateComposer = 1426;
     public const uint AvatarEffectsComposer = 1353;
@@ -271,6 +277,7 @@ public static class ServerPacketHeader
 
     public const uint UserTagsComposer = 65514;
     public const uint CampaignComposer = 653;
+    public const uint BonusRareInfoComposer = 1841;
     public const uint RoomEventComposer = 3909;
     public const uint MarketplaceItemStatsComposer = 1275;
     public const uint HabboSearchResultComposer = 3423;
@@ -290,6 +297,7 @@ public static class ServerPacketHeader
     public const uint JoinQueueComposer = 65499;
     public const uint MarketPlaceOwnOffersComposer = 374;
     public const uint PetBreedingComposer = 2572;
+    public const uint GoToBreedingNestFailureComposer = 1064;
     public const uint SubmitBullyReportComposer = 49;
     public const uint UserNameChangeComposer = 1162;
     public const uint FriendFurniStartConfirmationComposer = 2425;
@@ -300,9 +308,13 @@ public static class ServerPacketHeader
     public const uint FriendListUpdateComposer = 1054;
 
     public const uint UserFlatCatsComposer = 2513;
-    public const uint UpdateFreezeLivesComposer = 1929;
     public const uint UnbanUserFromRoomComposer = 2136;
     public const uint PetTrainingPanelComposer = 2476;
+    public const uint PetAddedToInventoryComposer = 3793;
+    public const uint PetRemovedFromInventoryComposer = 2622;
+    public const uint PetLevelNotificationComposer = 1774;
+    public const uint PetStatusUpdateComposer = 1835;
+    public const uint PetLevelUpdateComposer = 415;
     public const uint FlatAccessDeniedComposer = 1964;
     public const uint LatencyPingResponseComposer = 3231;
     public const uint HabboUserBadgesComposer = 3377;

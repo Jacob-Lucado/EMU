@@ -45,6 +45,7 @@ public sealed class CatalogPurchaseService : ICatalogPurchaseService
     private readonly ICatalogManager _catalogManager;
     private readonly IPlannedShutdown? _plannedShutdown;
     private readonly IHabbiconService _habbicons;
+    private readonly IHabbiconAchievementService? _habbiconAchievements;
     private readonly ISettingsManager _settingsManager;
     private readonly IAchievementManager _achievementManager;
     private readonly IItemDataManager _itemManager;
@@ -74,12 +75,13 @@ public sealed class CatalogPurchaseService : ICatalogPurchaseService
         IClubMembershipService clubMemberships, IClubRewards clubRewards, IRewardTrackManager rewardTracks, IAvatarEffectStore avatarEffects,
         IGroupManager groups, IGroupForumStore forums,
         TimeProvider clock, ILogger<CatalogPurchaseService> logger, IBuildersClubService? buildersClub = null,
-        IPlannedShutdown? plannedShutdown = null)
+        IPlannedShutdown? plannedShutdown = null, IHabbiconAchievementService? habbiconAchievements = null)
     {
         _plannedShutdown = plannedShutdown;
         _buildersClub = buildersClub;
         _catalogManager = catalogManager;
         _habbicons = habbicons;
+        _habbiconAchievements = habbiconAchievements;
         _settingsManager = settingsManager;
         _achievementManager = achievementManager;
         _itemManager = itemManager;
@@ -152,6 +154,7 @@ public sealed class CatalogPurchaseService : ICatalogPurchaseService
                 var change = _habbicons.BuyCatalog(session.GetHabbo(), product.HabbiconId, offer.CostCredits, offer.CostPoints, offer.PointsType);
                 HabbiconMessages.Publish(session, change);
                 session.Send(new PurchaseOKComposer());
+                _habbiconAchievements?.Reconcile(session, change.Snapshot);
             }
             catch (HabbiconRejected rejected) {
                 session.Send(new PurchaseErrorComposer((PurchaseError)rejected.Code));
@@ -268,8 +271,8 @@ public sealed class CatalogPurchaseService : ICatalogPurchaseService
                         {
                             generatedGenericItems = offer.IsBundle
                                 ? offer.Products.Where(bundled => bundled.Type == CatalogProductType.Furni)
-                                    .SelectMany(bundled => CreateFurni(connection, transaction, session, bundled.Definition!, "", bundled.Amount, 0, 0)).ToList()
-                                : CreateFurni(connection, transaction, session, product.Definition!, extraData, amountPurchase, limitedEditionSells, limitedEditionStack);
+                                    .SelectMany(bundled => FurniDelivery.Create(_itemFactory, connection, transaction, session.GetHabbo(), bundled.Definition!, "", bundled.Amount, 0, 0)).ToList()
+                                : FurniDelivery.Create(_itemFactory, connection, transaction, session.GetHabbo(), product.Definition!, extraData, amountPurchase, limitedEditionSells, limitedEditionStack);
 
                             return generatedGenericItems.Count > 0;
                         })) {
@@ -498,56 +501,6 @@ public sealed class CatalogPurchaseService : ICatalogPurchaseService
             && !group.ForumEnabled && _forums.Enable(groupId)) {
             group.ForumEnabled = true;
         }
-    }
-
-    private List<Item> CreateFurni(System.Data.IDbConnection connection, System.Data.IDbTransaction transaction, GameClient session, ItemDefinition definition,
-        string extraData, int amount, uint limitedEditionSells, uint limitedEditionStack)
-    {
-        var items = new List<Item>();
-
-        switch (definition.InteractionType) {
-            case InteractionType.GuildGate:
-            case InteractionType.GuildItem:
-            case InteractionType.GuildForum:
-                var groupId = int.TryParse(extraData, NumberStyles.Integer, CultureInfo.InvariantCulture, out var group) ? group : 0;
-
-                if (amount > 1) {
-                    items.AddRange(_itemFactory.CreateMultipleItems(connection, transaction, definition, session.GetHabbo().Id, extraData, amount, groupId));
-                }
-                else if (_itemFactory.CreateSingleItemNullable(connection, transaction, definition, session.GetHabbo(), extraData, groupId) is { } guildItem) {
-                    items.Add(guildItem);
-                }
-
-                break;
-            case InteractionType.Arrow:
-            case InteractionType.Teleport:
-            case InteractionType.WiredRoomLinker:
-                for (var i = 0; i < amount; i++) {
-                    items.AddRange(_itemFactory.CreateTeleporterItems(connection, transaction, definition, session.GetHabbo()));
-                }
-
-                break;
-            default:
-                if (amount > 1) {
-                    items.AddRange(_itemFactory.CreateMultipleItems(connection, transaction, definition, session.GetHabbo().Id, extraData, amount));
-                }
-                else if (_itemFactory.CreateSingleItemNullable(connection, transaction, definition, session.GetHabbo(), extraData, 0, limitedEditionSells, limitedEditionStack) is { } item) {
-                    items.Add(item);
-                }
-
-                break;
-        }
-
-        foreach (var item in items) {
-            if (definition.InteractionType == InteractionType.Moodlight) {
-                _itemFactory.CreateMoodlightData(connection, transaction, item);
-            }
-            else if (definition.InteractionType == InteractionType.Toner) {
-                _itemFactory.CreateTonerData(connection, transaction, item);
-            }
-        }
-
-        return items;
     }
 
     private void PurchaseClubOffer(GameClient session, int offerId, DateTimeOffset utcNow)

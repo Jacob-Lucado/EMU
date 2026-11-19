@@ -46,6 +46,7 @@ public sealed class PristineStagedLoaderDatabaseTests
     {
         PristineStagedDatabase.Run(["catalog_marketplace_offers", "catalog_marketplace_data"], (database, connection) =>
         {
+            connection.Execute(File.ReadAllText(HabbiconPacketTests.Repo("Database/Migrations/136_MarketplaceSales.sql")));
             var market = new MarketplaceManager(database, null!, null!, TimeProvider.System);
             var empty = market.OwnOffers(7);
             Assert.Empty(empty.Offers);

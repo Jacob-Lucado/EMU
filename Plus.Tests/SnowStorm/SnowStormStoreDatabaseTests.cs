@@ -108,6 +108,42 @@ public class SnowStormStoreDatabaseTests
         });
     }
 
+    [SnowStormDatabaseFact]
+    public void PurchaseKeepsAGameRefundedWhileItWaitsForTheWallet()
+    {
+        WithSchema(connectionString =>
+        {
+            var store = new SnowStormStore(new HabbiconDatabaseTests.TestDatabase(connectionString));
+            var habbo = new Habbo { Id = 1, Credits = 50 };
+            store.RefundGame(1);
+
+            // Holding the account row lets the purchase read its offer before a cancelled game gives its token back.
+            using var gate = new MySqlConnection(connectionString);
+            gate.Open();
+            using var hold = gate.BeginTransaction();
+            gate.Execute("SELECT id FROM users WHERE id = 1 FOR UPDATE", transaction: hold);
+            var purchase = Task.Run(() => store.Purchase(habbo, 1));
+            using var observer = new MySqlConnection(connectionString);
+            var waiting = 0L;
+
+            for (var elapsed = System.Diagnostics.Stopwatch.StartNew(); waiting == 0 && elapsed.Elapsed < TimeSpan.FromSeconds(10); Thread.Sleep(200)) {
+                waiting = observer.ExecuteScalar<long>("""
+                    SELECT COUNT(*) FROM information_schema.INNODB_LOCK_WAITS w
+                    JOIN information_schema.INNODB_TRX blocking ON blocking.trx_id = w.blocking_trx_id
+                    WHERE blocking.trx_mysql_thread_id = @blocker
+                    """, new { blocker = gate.ServerThread });
+            }
+
+            store.RefundGame(1);
+            hold.Rollback();
+            Assert.Equal(10, purchase.GetAwaiter().GetResult()!.Games);
+            Assert.Equal(1, waiting);
+            Assert.Equal(12, store.GetAccount(1, Today).Tokens);
+            Assert.Equal(40, habbo.Credits);
+            Assert.Equal(40, observer.QuerySingle<int>("SELECT credits FROM users WHERE id = 1"));
+        });
+    }
+
     private static void WithSchema(Action<string> body)
     {
         var server = Environment.GetEnvironmentVariable(Variable)!;

@@ -2,7 +2,6 @@ namespace Plus.HabboHotel.Rooms.PathFinding;
 
 internal sealed class CommandIntake(MovementContext context, ForcePlacementService placement)
 {
-    private readonly Route _probe = new();
     public void Consume(RoomUser actor)
     {
         var state = actor.Movement;
@@ -53,23 +52,9 @@ internal sealed class CommandIntake(MovementContext context, ForcePlacementServi
     // A click on a tile with no free spot, such as one an avatar occupies, counts as having no route.
     private bool IgnoresClick(RoomUser actor, MoveCommand command)
     {
-        var state = actor.Movement;
-
-        if (command.Origin != MoveOrigin.User || command.Approach != null
-            || context.Navigation.Settings.UnreachablePolicy == "nearest") {
-            return false;
-        }
-
-        var grid = context.Grid;
-        var profile = context.Profiles.Refresh(actor);
-        var start = new NavPosition(actor.X, actor.Y, state.SupportZ);
-        var goal = GoalResolver.ResolveClick(grid, profile, start, command.X, command.Y, context.Occupancy(actor));
-        using var lease = PathWorkspacePool.Rent(grid.SlotCapacity,
-            profile.LegacyOverride ? grid.SlotCapacity : grid.ActiveNodeCount);
-
-        return new PathSearch(grid, context.Navigation.Settings).Find(new(profile, start, command.X, command.Y, Goals: goal,
-                View: OccupancyView.InitialPlanning), lease.Workspace, _probe)
-            is PathOutcome.InvalidGoal or PathOutcome.Unreachable;
+        return command.Origin == MoveOrigin.User && command.Approach == null
+            && context.Navigation.Settings.UnreachablePolicy != "nearest"
+            && !context.HasRoute(actor, command.X, command.Y);
     }
 
     private void ResolveGoal(RoomUser actor)

@@ -4,6 +4,8 @@ public sealed class ActorProfile
 {
     public bool LegacyOverride { get; set; }
     public bool IgnoreStepHeight { get; set; }
+    // A rider never takes a seat or a bed as a walk goal.
+    public bool Rider { get; set; }
     public bool IgnoreUsers { get; set; }
     // Plus's inverted RoomBlockingEnabled: true means walkthrough.
     public bool Walkthrough { get; set; }

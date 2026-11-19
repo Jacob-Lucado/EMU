@@ -62,6 +62,11 @@ public class Room
     internal int CycleSlot;
     private object? _navigationSync;
     internal object NavigationSync => LazyInitializer.EnsureInitialized(ref _navigationSync);
+    // Only the entrant count and the idle close are decided under this lock, so a room tick may take it while it holds NavigationSync.
+    private object? _entrySync;
+    private object EntrySync => LazyInitializer.EnsureInitialized(ref _entrySync);
+    private int _entrants;
+    private bool _closingIdle;
     public bool RoomMuted;
 
     public TeamManager Teambanzai;
@@ -231,6 +236,7 @@ public class Room
     public bool ReverseRollers { get => Data.ReverseRollers; set => Data.ReverseRollers = value; }
     public bool LayEnabled { get => Data.LayEnabled; set => Data.LayEnabled = value; }
     public bool HideWired { get => Data.HideWired; set => Data.HideWired = value; }
+    public RoomBehaviorSettings Behavior { get => Data.Behavior; set => Data.Behavior = value; }
     public bool DiagonalSqueeze { get => Data.DiagonalSqueeze; set => Data.DiagonalSqueeze = value; }
     public RoomModel Model { get => Data.Model; set => Data.Model = value; }
     public RoomPromotion Promotion { get => Data.Promotion; set => Data.Promotion = value; }
@@ -365,7 +371,7 @@ public class Room
                 return false;
             }
 
-            if (session.GetHabbo().Username == OwnerName && Type == "private") {
+            if (session.GetHabbo().Id == OwnerId && Type == "private") {
                 return true;
             }
 
@@ -378,12 +384,12 @@ public class Room
                     return true;
                 }
 
-                if (UsersWithRights.Contains(session.GetHabbo().Id)) {
+                if (UsersWithRights?.Contains(session.GetHabbo().Id) == true) {
                     return true;
                 }
             }
 
-            if (checkForGroups && Type == "private") {
+            if (!requireOwnership && checkForGroups && Type == "private") {
                 if (Group == null) {
                     return false;
                 }
@@ -393,7 +399,7 @@ public class Room
                 }
 
                 if (Group.AdminOnlyDeco == 0) {
-                    if (Group.IsAdmin(session.GetHabbo().Id)) {
+                    if (Group.IsMember(session.GetHabbo().Id)) {
                         return true;
                     }
                 }
@@ -406,39 +412,16 @@ public class Room
         return false;
     }
 
-    public void OnUserShoot(RoomUser user, Item ball)
+    // Group membership alone only lets a member decorate. Admin powers need a group admin.
+    public bool IsGroupAdmin(GameClient? session) =>
+        Type == "private" && Group != null && session?.GetHabbo() is { } habbo && Group.IsAdmin(habbo.Id);
+
+    internal void OnGoalScored(RoomUser kicker)
     {
-        Func<Item, bool>? predicate = null;
-        string? key = null;
-
-        foreach (var item in GetRoomItemHandler().GetFurniObjects(ball.GetX, ball.GetY).ToList()) {
-            if (item.Definition.ItemName.StartsWith("fball_goal_")) {
-                key = item.Definition.ItemName.Split(new[] { '_' })[2];
-                user.UnIdle();
-                user.DanceId = 0;
-                _achievements.ProgressAchievement(user.GetClient(), "ACH_FootballGoalScored", 1);
-                SendPacket(new ActionComposer(user.VirtualId, 1));
-            }
-        }
-
-        if (key != null) {
-            if (predicate == null) {
-                predicate = p => p.Definition.ItemName == $"fball_score_{key}";
-            }
-
-            foreach (var item2 in GetRoomItemHandler().GetFloor.Where(predicate).ToList()) {
-                if (item2.Definition.ItemName == $"fball_score_{key}") {
-                    if (!string.IsNullOrEmpty(item2.LegacyDataString)) {
-                        item2.LegacyDataString = (Convert.ToInt32(item2.LegacyDataString) + 1).ToString();
-                    }
-                    else {
-                        item2.LegacyDataString = "1";
-                    }
-
-                    item2.UpdateState();
-                }
-            }
-        }
+        kicker.UnIdle();
+        kicker.DanceId = 0;
+        _achievements.ProgressAchievement(kicker.GetClient(), "ACH_FootballGoalScored", 1);
+        SendPacket(new ActionComposer(kicker.VirtualId, 1));
     }
 
     internal void ProcessWiredOnly()
@@ -505,6 +488,7 @@ public class Room
             RunRoomPhase(CycleRollers);
             RunRoomPhase(() => GetWired().OnRoomTickEnd());
             RunRoomPhase(() => _gameItemHandler?.OnCycle());
+            RunRoomPhase(() => _banzai?.OnCycle());
             RunRoomPhase(CycleWired);
         }
         catch (Exception error) {
@@ -523,6 +507,27 @@ public class Room
     // An empty room unloads after about 33 seconds: 66 cycles of 500 ms.
     private const int IdleCyclesBeforeUnload = 66;
 
+    // A user entering keeps the room open until the entry ends, so the idle unload never closes the room under them.
+    internal bool TryBeginEntry()
+    {
+        lock (EntrySync) {
+            if (_closingIdle || MDisposed) {
+                return false;
+            }
+
+            _entrants++;
+
+            return true;
+        }
+    }
+
+    internal void EndEntry()
+    {
+        lock (EntrySync) {
+            _entrants--;
+        }
+    }
+
     private bool KeepRoomActive()
     {
         if (GetRoomUserManager().GetRoomUsers().Count == 0) {
@@ -538,6 +543,14 @@ public class Room
 
         if (IdleTime < IdleCyclesBeforeUnload || HasActivePromotion) {
             return true;
+        }
+
+        lock (EntrySync) {
+            if (_entrants > 0 || UserCount > 0) {
+                return true;
+            }
+
+            _closingIdle = true;
         }
 
         _rooms.UnloadRoom(Id);
@@ -944,9 +957,10 @@ public class Room
     }
 
     // Clients whose revision does not map the data composer get the full update instead; the mapping is checked before anything is sent to a client.
-    internal void SendObjectData(Item item, string data, bool batch)
+    internal void SendObjectData(Item item, string data, bool batch) => SendObjectData(item, FurnitureWireData.ForState(item.ExtraData, data), batch);
+
+    internal void SendObjectData(Item item, FurnitureDataSnapshot wire, bool batch)
     {
-        var wire = FurnitureWireData.ForState(item.ExtraData, data);
         IServerPacket packet = batch ? new ObjectsDataUpdateComposer([(item.Id, wire)]) : new ObjectDataUpdateComposer(item.Id, wire);
 
         try {

@@ -17,7 +17,7 @@ public interface IHabbiconPresentationService
 }
 
 public sealed class HabbiconPresentationService(IHabbiconService habbicons,
-    ILogger<HabbiconPresentationService> logger) : IHabbiconPresentationService
+    ILogger<HabbiconPresentationService> logger, IHabbiconAchievementService? achievements = null) : IHabbiconPresentationService
 {
     public void ShowShop(GameClient session) => Execute(session, false, () =>
     {
@@ -34,10 +34,12 @@ public sealed class HabbiconPresentationService(IHabbiconService habbicons,
         var purchase = action is HabbiconAction.Buy or HabbiconAction.BuyCollection or HabbiconAction.Claim;
         Execute(session, purchase, () =>
         {
-            HabbiconMessages.Publish(session, habbicons.Change(session.GetHabbo(), action, id));
+            var change = habbicons.Change(session.GetHabbo(), action, id);
+            HabbiconMessages.Publish(session, change);
 
             if (purchase) {
                 session.Send(new PurchaseOKComposer());
+                achievements?.Reconcile(session, change.Snapshot);
             }
         });
     }

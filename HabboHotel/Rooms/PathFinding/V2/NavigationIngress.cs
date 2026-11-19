@@ -26,6 +26,14 @@ public sealed partial class RoomNavigation
         => Inputs.Read(item.Id) is { Removed: false } record
             ? new(item.Id, record.Version, ApproachDescriptor.Unresolved, actionKind, item.StateGeneration) : null;
 
+    /// <summary>Whether the actor can walk to the tile now. Run as the room owner.</summary>
+    internal bool HasRoute(RoomUser actor, int x, int y)
+    {
+        ApplyDirty();
+
+        return Executor.Context.HasRoute(actor, x, y);
+    }
+
     internal void ItemStateChanged(uint itemId) => _executor?.Context.Approaches.CancelItem(itemId);
 
     /// <summary>

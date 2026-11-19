@@ -72,6 +72,60 @@ public sealed class TradeSettingsDependencyTests
     }
 
     [Fact]
+    public void OverflowLeavesTheVoucherWithTheSender()
+    {
+        using var fixture = new TradeConfirmationServiceTests.TradeFixture(new TestRoomSettings(new() { ["trading.auto_exchange_redeemables"] = "1" }));
+        var alice = fixture.Join(1, 7);
+        var bob = fixture.Join(2, 8);
+        bob.Habbo.Credits = int.MaxValue;
+        var voucher = new InventoryItem { Id = 100, OwnerId = 1, Definition = new ItemDefinition { InteractionType = InteractionType.Exchange, BehaviourData = 1 } };
+        Assert.True(alice.Habbo.Inventory.Furniture.AddItem(voucher));
+        var trade = fixture.Start(alice, bob);
+        trade.Users[0].OfferedItems.Add(voucher.Id, voucher);
+
+        trade.Finish();
+
+        Assert.Same(voucher, alice.Habbo.Inventory.Furniture.GetItem(voucher.Id));
+        Assert.Equal(int.MaxValue, bob.Habbo.Credits);
+        Assert.Empty(fixture.Store.Logged);
+    }
+
+    [Fact]
+    public void AutoRedeemHandsOverNonRedeemableCreditFurniAsFurni()
+    {
+        var settings = new TestRoomSettings(new() { ["trading.auto_exchange_redeemables"] = "1" });
+        using var fixture = new TradeConfirmationServiceTests.TradeFixture(settings);
+        var alice = fixture.Join(1, 7);
+        var bob = fixture.Join(2, 8);
+        bob.Habbo.Credits = 7;
+        var coin = new InventoryItem
+        {
+            Id = 102,
+            OwnerId = 1,
+            Definition = new ItemDefinition
+            {
+                Type = ItemType.Floor,
+                ItemName = "CFC_100_coin_gold",
+                InteractionType = InteractionType.Exchange,
+                SpriteId = 2796,
+                BehaviourData = 100
+            }
+        };
+        Assert.True(Assert.IsType<Plus.HabboHotel.Users.Inventory.InventoryComponent>(alice.Habbo.Inventory).Furniture.AddItem(coin));
+        alice.Packets.Clear();
+        bob.Packets.Clear();
+        var trade = fixture.Start(alice, bob);
+        trade.Users[0].OfferedItems.Add(coin.Id, coin);
+
+        trade.Finish();
+
+        Assert.Equal(7, bob.Habbo.Credits);
+        Assert.Same(coin, Assert.IsType<Plus.HabboHotel.Users.Inventory.InventoryComponent>(bob.Habbo.Inventory).Furniture.GetItem(coin.Id));
+        Assert.Equal(new uint[] { ServerPacketHeader.FurniListAddComposer, ServerPacketHeader.FurniListNotificationComposer,
+            ServerPacketHeader.TradingFinishComposer }, bob.Sent);
+    }
+
+    [Fact]
     public void RecipientCanListReceivedItemWithoutReauthenticating()
     {
         using var fixture = new TradeConfirmationServiceTests.TradeFixture(new TestRoomSettings());

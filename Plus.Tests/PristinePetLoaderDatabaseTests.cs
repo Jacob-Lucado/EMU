@@ -29,6 +29,7 @@ public sealed class PristinePetLoaderDatabaseTests
     {
         PristineStagedDatabase.Run(["users", "bots", "bots_petdata"], (database, connection) =>
         {
+            connection.Execute(File.ReadAllText(HabbiconPacketTests.Repo("Database/Migrations/155_PetBreedingPermission.sql")));
             var loader = new PetLoader(database);
             Assert.Empty(loader.GetPetsForUser(7));
             connection.Execute("INSERT INTO users(id,username,auth_ticket) VALUES (7,'owner','ticket'); ALTER TABLE bots_petdata MODIFY createstamp INT NULL");
@@ -47,6 +48,7 @@ public sealed class PristinePetLoaderDatabaseTests
                 INSERT INTO bots_petdata (id) VALUES (11), (12), (13);
                 """);
             connection.Execute(File.ReadAllText(HabbiconPacketTests.Repo("Database/Migrations/20_UseUtcPetCreationTime.sql")));
+            connection.Execute("UPDATE bots_petdata SET allow_breeding = 1 WHERE id = 10");
 
             var pets = loader.GetPetsForUser(7);
             Assert.Equal([10, 15], pets.Select(pet => pet.PetId).OrderBy(id => id));
@@ -55,6 +57,7 @@ public sealed class PristinePetLoaderDatabaseTests
             Assert.Equal((4, 5, 6, 7, (DateTimeOffset?)DateTimeOffset.FromUnixTimeSeconds(1487474034)), (pet.Experience, pet.Energy, pet.Nutrition, pet.Respect, pet.CreatedAt));
             Assert.Equal((1, 2, 3d, 1, 0, 9, 10, "hat"), (pet.X, pet.Y, pet.Z, pet.Saddle, pet.AnyoneCanRide, pet.HairDye, pet.PetHair, pet.GnomeClothing));
             Assert.Equal("owner", pet.OwnerName);
+            Assert.True(pet.AllowBreeding);
             var nullable = Assert.Single(pets, row => row.PetId == 15);
             Assert.Equal(("", "", ""), (nullable.Race, nullable.Color, nullable.GnomeClothing));
             Assert.Empty(loader.GetPetsForUser(9));

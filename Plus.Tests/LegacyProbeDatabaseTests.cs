@@ -9,6 +9,7 @@ public sealed class LegacyProbeDatabaseTests : IDisposable
 {
     private const string WiredFurniture = "79_WiredFurnitureAndCatalogue.sql";
     private const string WiredArchiveText = "83_WiredArchiveText.sql";
+    private const string CatalogAdminEditor = "Updates/21_CatalogAdminEditor.sql";
     private const string ArchiveText = "Archived Wired boxes that are still available for legacy reasons, but are not recommended to use in new Wired setups";
 
     private readonly MySqlConnectionStringBuilder _server;
@@ -110,6 +111,22 @@ public sealed class LegacyProbeDatabaseTests : IDisposable
     public void WiredArchiveTextIsNotAppliedBeforeWiredCatalogueParity()
     {
         Assert.False(Applied(WiredArchiveText));
+    }
+
+    [SchemaMigrationDatabaseFact]
+    public void CatalogAdminEditorIsNotAppliedWhenOnlyTheRoleTablesExist()
+    {
+        Execute("CREATE TABLE roles (id INT PRIMARY KEY)");
+
+        Assert.False(Applied(CatalogAdminEditor));
+    }
+
+    [SchemaMigrationDatabaseFact]
+    public void CatalogAdminEditorIsAppliedWhenItsLogTableExists()
+    {
+        Execute("CREATE TABLE catalog_admin_log (id INT PRIMARY KEY)");
+
+        Assert.True(Applied(CatalogAdminEditor));
     }
 
     private bool Applied(string migration)

@@ -76,6 +76,35 @@ public class MarketplaceListingTests
     }
 
     [Theory]
+    [InlineData(1, false)]
+    [InlineData(2, true)]
+    [InlineData(99999, true)]
+    [InlineData(100000, false)]
+    public void ConfiguredPriceBoundsApplyToDirectListings(int price, bool accepted)
+    {
+        var store = new RecordingStore();
+        var (habbo, item) = Owner(ItemType.Floor);
+        var policy = new MarketplaceFeePolicy(new TestRoomSettings(new()
+        {
+            ["catalog.marketplace.price.minimum"] = "2",
+            ["catalog.marketplace.price.maximum"] = "99999"
+        }));
+        Assert.Equal(accepted, new MarketplaceListingService(store, policy, new FixedClock(Now), Settings()).TryList(habbo, [item.Id], 1, price));
+        Assert.Equal(accepted ? 1 : 0, store.Listings.Count);
+    }
+
+    [Fact]
+    public void ActiveTradingSanctionRejectsDirectListing()
+    {
+        var store = new RecordingStore();
+        var (habbo, item) = Owner(ItemType.Floor);
+        habbo.TradingLockExpiresAt = Now.AddMinutes(1);
+        Assert.False(new MarketplaceListingService(store, Fee(), new FixedClock(Now), Settings()).TryList(habbo, [item.Id], 1, 100));
+        Assert.Empty(store.Listings);
+        Assert.NotNull(habbo.Inventory!.Furniture.GetItem(item.Id));
+    }
+
+    [Theory]
     [InlineData("foreign-owner")]
     [InlineData("trade-locked")]
     [InlineData("not-marketable")]
@@ -149,6 +178,19 @@ public class MarketplaceListingTests
     }
 
     [Fact]
+    public async Task ARolledBackListingIsRejectedAndKeepsTheFurni()
+    {
+        var store = new RecordingStore { BeforeWrite = () => throw new MarketplaceCommitFailedException(new InvalidOperationException("rolled back")) };
+        var (habbo, item) = Owner(ItemType.Floor);
+        var (client, sent) = HabbiconTestSupport.Client(habbo);
+
+        await Offer(store).Parse(client, Packet(100, 1, 1, (int)item.Id));
+
+        Assert.NotNull(Assert.IsType<InventoryComponent>(habbo.Inventory).Furniture.GetItem(item.Id));
+        Assert.Equal(new byte[] { 0, 0, 0, 0 }, Assert.Single(sent).Payload);
+    }
+
+    [Fact]
     public void RealStoreCommitsTheOfferAndFurniDeleteTogether()
     {
         var database = new GroupManagementTests.RecordingDatabase();
@@ -160,7 +202,8 @@ public class MarketplaceListingTests
         Assert.Equal(new[] { "commit", "dispose" }, database.Transactions);
         Assert.Collection(database.Writes,
             write => Assert.StartsWith("INSERT INTO `catalog_marketplace_offers`", write.Sql),
-            write => Assert.StartsWith("DELETE FROM `items`", write.Sql));
+            write => Assert.StartsWith("DELETE FROM `items`", write.Sql),
+            write => Assert.StartsWith("INSERT INTO marketplace_operations", write.Sql));
         Assert.Equal(7, database.Writes[0].Parameters["UserId"]);
         Assert.Equal(100, database.Writes[0].Parameters["TotalPrice"]);
         Assert.Equal(99, database.Writes[0].Parameters["AskingPrice"]);
@@ -223,7 +266,8 @@ public class MarketplaceListingTests
                 "catalog.marketplace.only_rare_ltd" => enabled?.Invoke() == true ? "1" : "0",
                 "catalog.marketplace.fee.percentage" => (percentage ?? int.Parse((string)args[1]!)).ToString(),
                 "catalog.marketplace.fee.half_tax_limit" => (halfTaxLimit ?? int.Parse((string)args[1]!)).ToString(),
-                "catalog.marketplace.fee.revenue_limit" => (string)args[1]!,
+                "catalog.marketplace.fee.revenue_limit" or "catalog.marketplace.commission" or "catalog.marketplace.price.minimum"
+                    or "catalog.marketplace.price.maximum" or "catalog.marketplace.expiration_hours" or "catalog.marketplace.batch_limit" => (string)args[1]!,
                 _ => throw new InvalidOperationException((string)args[0]!)
             });
 
@@ -232,7 +276,18 @@ public class MarketplaceListingTests
     private static MakeOfferEvent Offer(IMarketplaceOfferStore store) =>
         new(new MarketplaceListingService(store, Fee(), new FixedClock(Now), Settings()));
 
-    private static (Habbo Habbo, InventoryItem Item) Owner(ItemType type)
+    [Fact]
+    public void AUserWithoutTradingPassOrCitizenshipCanListFurni()
+    {
+        var store = new RecordingStore();
+        var (habbo, item) = Owner(ItemType.Floor);
+        var listing = new MarketplaceListingService(store, Fee(), new FixedClock(Now), Settings());
+        Assert.True(listing.TryList(habbo, [item.Id], 1, 100));
+        Assert.Single(store.Listings);
+        Assert.Null(habbo.Inventory!.Furniture.GetItem(item.Id));
+    }
+
+    private static (Habbo Habbo, InventoryItem Item) Owner(ItemType type, bool staffTest = false)
     {
         var item = new InventoryItem
         {

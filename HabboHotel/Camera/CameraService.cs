@@ -74,7 +74,7 @@ public sealed class CameraService : ICameraService, IDisposable
             return false;
         }
 
-        return !thumbnail || room.CheckRights(session, true, true);
+        return !thumbnail || room.CheckRights(session, true);
     }
     private void Expire(State state)
     {

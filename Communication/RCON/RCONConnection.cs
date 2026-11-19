@@ -29,20 +29,20 @@ public sealed class RconConnection : IDisposable
     private readonly byte[] _buffer = new byte[1024];
     private readonly object _gate = new();
     private readonly MemoryStream _request = new();
-    private readonly Timer _timeout;
+    private readonly ITimer _timeout;
     private Socket? _socket;
     private bool _jsonRequest;
     private RequestState _state;
     private int _disposed;
 
-    public RconConnection(Socket socket, ILogger<RconConnection> logger) : this(socket, logger, null) { }
+    public RconConnection(Socket socket, ILogger<RconConnection> logger) : this(socket, logger, null, TimeProvider.System) { }
 
-    internal RconConnection(Socket socket, ILogger<RconConnection> logger, ICommandManager? commands)
+    internal RconConnection(Socket socket, ILogger<RconConnection> logger, ICommandManager? commands, TimeProvider time)
     {
         _socket = socket;
         _logger = logger;
         _commands = commands;
-        _timeout = new Timer(_ => TimeoutRequest(), null, RequestTimeout, Timeout.InfiniteTimeSpan);
+        _timeout = time.CreateTimer(_ => TimeoutRequest(), null, RequestTimeout, Timeout.InfiniteTimeSpan);
         Receive();
     }
 

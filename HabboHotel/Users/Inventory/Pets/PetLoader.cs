@@ -3,6 +3,7 @@ using System.Data;
 using Plus.Database;
 using Plus.HabboHotel.Rooms;
 using Plus.HabboHotel.Rooms.AI;
+using Plus.HabboHotel.Rooms.AI.MonsterPlants;
 
 namespace Plus.HabboHotel.Users.Inventory.Pets;
 
@@ -12,15 +13,22 @@ internal sealed class PetLoader(IDatabase database) : IPetLoader
     {
         using var connection = database.Connection();
 
-        return Load(connection, userId).Select(row => new Pet(checked((int)row.Id), checked((int)row.UserId), row.RoomId, row.Name, checked((int)row.Type), row.Race,
+        var rows = Load(connection, userId).AsList();
+        var plants = MonsterPlantStore.LoadForPets(connection, rows.Where(row => row.Type == MonsterPlant.PetType).Select(row => checked((int)row.Id)));
+
+        return rows.Select(row => new Pet(checked((int)row.Id), checked((int)row.UserId), row.RoomId, row.Name, checked((int)row.Type), row.Race,
                 row.Color, row.Experience, row.Energy, row.Nutrition, row.Respect, row.CreatedAt,
-                row.X, row.Y, row.Z, row.HaveSaddle, row.AnyoneRide, row.Hairdye, row.Pethair, row.GnomeClothing, row.OwnerName)).ToList();
+                row.X, row.Y, row.Z, row.HaveSaddle, row.AnyoneRide, row.Hairdye, row.Pethair, row.GnomeClothing, row.OwnerName)
+        {
+            AllowBreeding = row.AllowBreeding,
+            Plant = plants.GetValueOrDefault(checked((int)row.Id))
+        }).ToList();
     }
 
     internal static IEnumerable<PetRow> Load(IDbConnection connection, int userId) => connection.Query<PetRow>("""
             SELECT bots.id, bots.user_id AS UserId, COALESCE(owner.username, '') AS OwnerName, bots.room_id AS RoomId, bots.name, bots.x, bots.y, bots.z,
                    pet.type, pet.race, pet.color, pet.experience, pet.energy, pet.nutrition, pet.respect,
-                   pet.createstamp AS CreatedAt, pet.have_saddle AS HaveSaddle, pet.anyone_ride AS AnyoneRide,
+                   pet.createstamp AS CreatedAt, pet.have_saddle AS HaveSaddle, pet.anyone_ride AS AnyoneRide, pet.allow_breeding AS AllowBreeding,
                    pet.hairdye, pet.pethair, pet.gnome_clothing AS GnomeClothing
             FROM bots JOIN bots_petdata pet ON pet.id = bots.id
             LEFT JOIN users owner ON owner.id = bots.user_id
@@ -47,6 +55,7 @@ internal sealed class PetLoader(IDatabase database) : IPetLoader
         public DateTimeOffset? CreatedAt { get; set; }
         public int HaveSaddle { get; set; }
         public int AnyoneRide { get; set; }
+        public bool AllowBreeding { get; set; }
         public int Hairdye { get; set; }
         public int Pethair { get; set; }
         public string GnomeClothing { get; set; } = "";

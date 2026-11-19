@@ -138,5 +138,7 @@ public enum InteractionType
     WiredLabel,
     WiredLink,
     Recolorable,
-    EffectBox
+    EffectBox,
+    SnowboardSlope,
+    SnowboardJump
 }

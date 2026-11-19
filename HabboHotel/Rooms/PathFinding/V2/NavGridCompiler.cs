@@ -180,7 +180,7 @@ internal readonly record struct CompatSurface(double Z, NavFlags Flags, uint Sup
 
         if (t == grid.DoorTile) {
             // A user on the door tile stands on walkable furni that Wired moves there.
-            var doorZ = top is { } onDoor && SurfaceRules.ItemCandidate(onDoor) is { Standable: true } standable
+            var doorZ = top is { } onDoor && SurfaceRules.ItemCandidate(onDoor, t) is { Standable: true } standable
                 ? Math.Max(grid.DoorZ, standable.Z) : grid.DoorZ;
 
             return new(doorZ, NavFlags.Door, 0, SurfaceKind.Door, 0, [], legacyZ);
@@ -199,7 +199,7 @@ internal readonly record struct CompatSurface(double Z, NavFlags Flags, uint Sup
             return new(floorZ, floor?.Flags ?? NavFlags.None, 0, SurfaceKind.Floor, 0, [], legacyZ);
         }
 
-        var item = SurfaceRules.ItemCandidate(top);
+        var item = SurfaceRules.ItemCandidate(top, t);
         // K=1 retains each pillow slot; ResolveClick selects the acceptable pillow nearest the click.
         var pillows = item.Kind == SurfaceKind.BedBase ? SurfaceRules.PillowRow(top, grid.Width) : [];
 

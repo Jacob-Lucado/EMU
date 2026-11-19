@@ -52,18 +52,19 @@ public sealed class UserPersistenceService(IDatabase database, TimeProvider cloc
         connection.Open();
         using var transaction = connection.BeginTransaction();
         connection.Execute(
-            "UPDATE `users` SET `online` = `online` AND @replaced, `last_online` = @now, `credits` = @Credits, " +
+            "UPDATE `users` SET `online` = `online` AND @replaced, `last_online` = @now, `credits` = IF(@uncertain, `credits`, @Credits), " +
             "`time_muted` = @TimeMuted, `bubble_id` = @CustomBubbleId WHERE `id` = @Id; " +
             "UPDATE `users_settings` SET `home_room` = @HomeRoom, `friend_bar_state` = @FriendbarState WHERE `user_id` = @Id; " +
             "UPDATE `user_statistics` SET `roomvisits` = @RoomVisits, `onlineTime` = `onlineTime` + @SessionSeconds, " +
-            "`respect` = @Respect, `respectGiven` = @RespectGiven, `giftsGiven` = @GiftsGiven, `giftsReceived` = @GiftsReceived, " +
+            "`respect` = @Respect, `respectGiven` = @RespectGiven, " +
             "`dailyRespectPoints` = @DailyRespectPoints, `dailyPetRespectPoints` = @DailyPetRespectPoints, " +
-            "`AchievementScore` = @AchievementPoints, `quest_id` = @QuestId, `quest_progress` = @QuestProgress, " +
-            "`groupid` = @FavouriteGroupId, `forum_posts` = @ForumPosts WHERE `id` = @Id",
+            "`AchievementScore` = @AchievementPoints, `quest_id` = @QuestId, " +
+            "`groupid` = @FavouriteGroupId WHERE `id` = @Id",
             new
             {
                 habbo.Id,
                 habbo.Credits,
+                uncertain = habbo.CurrencyPersistenceUncertain,
                 habbo.TimeMuted,
                 habbo.CustomBubbleId,
                 habbo.HomeRoom,
@@ -72,20 +73,18 @@ public sealed class UserPersistenceService(IDatabase database, TimeProvider cloc
                 SessionSeconds = Math.Max(0L, (long)(now - habbo.SessionStartedAt).TotalSeconds),
                 stats.Respect,
                 stats.RespectGiven,
-                stats.GiftsGiven,
-                stats.GiftsReceived,
                 stats.DailyRespectPoints,
                 stats.DailyPetRespectPoints,
                 stats.AchievementPoints,
                 stats.QuestId,
-                stats.QuestProgress,
                 stats.FavouriteGroupId,
-                stats.ForumPosts,
                 now = now.UtcDateTime,
                 replaced
             }, transaction);
 
-        UserCurrencyStore.SetMany(connection, habbo.Id, habbo.Currencies.Snapshot(), transaction);
+        if (!habbo.CurrencyPersistenceUncertain) {
+            UserCurrencyStore.SetMany(connection, habbo.Id, habbo.Currencies.Snapshot(), transaction);
+        }
 
         // Achievement progress without a level-up is only kept in memory until the session is saved; levels are written when unlocked.
         var achievements = habbo.Achievements.Values.Where(achievement => achievement.ProgressUnsaved).ToList();

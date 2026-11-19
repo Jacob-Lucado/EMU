@@ -831,9 +831,10 @@ public partial class PlacedFurniRoomTests
         Exception? failure = null;
         var sawTypedScope = false;
         var waitedForEngine = false;
+        // The game start sets the score counters to 0 in one ObjectsDataUpdate.
         _client.BeforeCapture = header =>
         {
-            if (header != Plus.Communication.Packets.Outgoing.ServerPacketHeader.ObjectUpdateComposer || outsider != null) {
+            if (header != Plus.Communication.Packets.Outgoing.ServerPacketHeader.ObjectsDataUpdateComposer || outsider != null) {
                 return;
             }
 
@@ -901,7 +902,7 @@ public partial class PlacedFurniRoomTests
         Assert.False(_room.GetSoccer().GameIsStarted);
         Assert.Equal(new uint[] { 501, 502 }, failedBoards); // Room.SendPacket logs and swallows each failed board broadcast.
         Console.WriteLine("Actual ObjectUpdate IDs: " + string.Join(",", objectUpdates));
-        Assert.Equal(new uint[] { 311, 312 }, objectUpdates.Except(failedBoards).Order()); // Existing stop-stack flashes are not board notifications.
+        Assert.Empty(objectUpdates.Except(failedBoards)); // Box flashes go out in the batched data update, so only the boards send object updates.
         Assert.True(installedTogether);
         Assert.Equal(1, store.Commits);
         _client.SendCallback = _ => false;
@@ -1183,7 +1184,8 @@ public partial class PlacedFurniRoomTests
             _room.RunFastPass(() => Assert.True(controller.Control(game.Timer, 2, game.Clock.Now.ToUnixTimeMilliseconds())));
         }
 
-        Assert.Equal(30000L, controller.ReadMilliseconds(game.Timer));
+        // The reset button of a timer that has not run since its last reset moves its saved 30 seconds on to 60.
+        Assert.Equal(gui ? 60000L : 30000L, controller.ReadMilliseconds(game.Timer));
         game.Actor.OnChat(0, "start", false);
         Assert.True(controller.IsRunning(game.Timer));
         Assert.Equal(17, _room.GetGameManager().Points[1]);

@@ -17,7 +17,7 @@ public partial class PlacedFurniRoomTests
         var (petUser, pet) = HighLevelPet(energy);
 
         var owner = LegacyRider();
-        var ai = new PetBot(petUser.VirtualId, new RecordingLocale(), new RecordingCommands(3));
+        var ai = new PetBot(petUser.VirtualId, new RecordingLocale(), new RecordingCommands(1));
         ai.Init(50, petUser.VirtualId, RoomId, petUser, _room);
 
         ai.OnUserSay(owner, "horse sit");
@@ -33,7 +33,7 @@ public partial class PlacedFurniRoomTests
         var (petUser, pet) = HighLevelPet(100);
 
         var owner = LegacyRider();
-        var ai = new PetBot(petUser.VirtualId, new RecordingLocale(), new RecordingCommands(3));
+        var ai = new PetBot(petUser.VirtualId, new RecordingLocale(), new RecordingCommands(1));
         ai.Init(50, petUser.VirtualId, RoomId, petUser, _room);
 
         ai.OnUserSay(owner, "horse sit");

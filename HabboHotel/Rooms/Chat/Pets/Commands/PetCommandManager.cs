@@ -26,8 +26,8 @@ public class PetCommandManager : IPetCommandManager, IStartable
         _petCommands.Clear();
 
         foreach (var row in commands) {
-            foreach (var command in row.Input.Split(',')) {
-                _petCommands.Add(command, new(row.Id, command));
+            foreach (var command in row.Input.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)) {
+                _petCommands.TryAdd(command.ToLowerInvariant(), new(row.Id, command));
             }
         }
     }
@@ -38,6 +38,6 @@ public class PetCommandManager : IPetCommandManager, IStartable
             return command.Id;
         }
 
-        return 0;
+        return -1;
     }
 }

@@ -82,10 +82,11 @@ public sealed class PetPlacementService(
             var speeches = new List<RandomSpeech>();
             var roomBot = new RoomBot(pet.PetId, pet.RoomId, "pet", "freeroam", pet.Name, "", pet.Look,
                 x, y, z, 0, 0, 0, 0, 0, ref speeches, "", 0, pet.OwnerId, false, 0, false, 0);
-            room.GetRoomUserManager().DeployBot(roomBot, pet);
+            var placed = room.GetRoomUserManager().DeployBot(roomBot, pet);
             pet.DbState = PetDatabaseUpdateState.Updated;
             inventory.Pets.RemovePet(pet.PetId);
-            session.Send(new PetInventoryComposer(PetAppearanceSnapshots.Inventory(inventory.Pets.Pets.Values)));
+            session.Send(new PetRemovedFromInventoryComposer(pet.PetId));
+            (placed.BotAi as Types.PetBot)?.Greet();
         }
     }
 
@@ -128,7 +129,7 @@ public sealed class PetPlacementService(
 
             // The pet is already back in storage; an owner whose inventory is not loaded picks it up later.
             if (owner?.GetHabbo()?.Inventory is { } ownerInventory && ownerInventory.Pets.AddPet(data)) {
-                owner.Send(new PetInventoryComposer(PetAppearanceSnapshots.Inventory(ownerInventory.Pets.Pets.Values)));
+                owner.Send(new PetAddedToInventoryComposer(PetAppearanceSnapshots.Inventory([data]).Pets[0]));
             }
 
             room.GetRoomUserManager().RemoveBot(pet.VirtualId, false);
@@ -189,7 +190,7 @@ public sealed class PetPlacementService(
     private static void RestoreAvatarPet(Room room, GameClient session, int petId)
     {
         if (!room.CheckRights(session) && room.WhoCanKick != 2 && room.Group == null
-            || room.Group != null && !room.CheckRights(session, false, true)) {
+            || room.Group != null && !room.CheckRights(session) && !room.IsGroupAdmin(session)) {
             return;
         }
 

@@ -3,6 +3,7 @@ using Plus.Communication.Packets.Outgoing.Rooms.Avatar;
 using Plus.HabboHotel.Achievements;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Quests;
+using Plus.HabboHotel.Rooms.AI.MonsterPlants;
 
 namespace Plus.HabboHotel.Rooms.AI;
 
@@ -12,12 +13,19 @@ public interface IPetRespectService
 }
 
 public sealed class PetRespectService(IAchievementManager achievements, IQuestManager quests,
-    IRewardTrackManager rewards) : IPetRespectService
+    IRewardTrackManager rewards, IMonsterPlantStore? plants = null, TimeProvider? clock = null) : IPetRespectService
 {
     public void Respect(Room room, GameClient session, int petId)
     {
         var habbo = session.GetHabbo();
         var stats = habbo.HabboStats;
+
+        if (ReferenceEquals(habbo.CurrentRoom, room) && room.GetRoomUserManager().TryGetPet(petId, out var plantUser)
+            && plantUser.PetData is { Plant: { } plant } plantPet && plantUser.RoomId == room.Id) {
+            Treat(room, session, plantUser, plantPet, plant);
+
+            return;
+        }
 
         if (!ReferenceEquals(habbo.CurrentRoom, room) || stats == null || stats.DailyPetRespectPoints <= 0) {
             return;
@@ -73,7 +81,33 @@ public sealed class PetRespectService(IAchievementManager achievements, IQuestMa
         actor.CarryItemId = 999999999;
         actor.CarryTimer = 5;
         pet.PetData.OnRespect();
+        pet.Statusses["gst"] = "joy";
+        pet.UpdateNeeded = true;
+        PetVocals.Say(pet, PetVocal.Scratched);
         rewards.Progress(session, RewardTrackActions.PetRespect);
         room.SendPacket(new CarryObjectComposer(actor.VirtualId, actor.CarryItemId));
+    }
+
+    /// <summary>Treating a plant uses no daily respect point: it refills a living plant's wellbeing and counts as respect.</summary>
+    private void Treat(Room room, GameClient session, RoomUser user, Pet pet, MonsterPlant plant)
+    {
+        var now = (clock ?? TimeProvider.System).GetUtcNow();
+
+        if (plants == null || plant.AfterTreat(now) is not { } treated) {
+            return;
+        }
+
+        plants.Save(treated);
+        pet.Plant = treated;
+        pet.Respect++;
+
+        if (pet.DbState != PetDatabaseUpdateState.NeedsInsert) {
+            pet.DbState = PetDatabaseUpdateState.NeedsUpdate;
+        }
+
+        room.SendPacket(new PetTreatedComposer(pet.Respect, pet.OwnerId, pet.PetId, pet.Name, pet.Type,
+            int.TryParse(pet.Race, out var race) ? race : 0, pet.Color, pet.CustomParts, treated.Level(now), treated.Rarity));
+        achievements.ProgressAchievement(session, "ACH_MonsterPlantTreater", 1);
+        rewards.Progress(session, RewardTrackActions.TreatMonsterPlant);
     }
 }

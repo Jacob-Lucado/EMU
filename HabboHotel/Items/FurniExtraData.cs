@@ -58,7 +58,7 @@ internal static class FurniExtraData
     {
         ["offsetX"] = (-10000, 10000),
         ["offsetY"] = (-10000, 10000),
-        ["offsetZ"] = (-1000, 1000),
+        ["offsetZ"] = (int.MinValue, int.MaxValue),
         ["scale"] = (10, 500),
         ["alpha"] = (0, 100)
     };
@@ -204,6 +204,8 @@ internal static class FurniExtraData
                 }
             case InteractionType.AreaHide:
                 return AreaHide.AreaHideState.Load(stored);
+            case InteractionType.Toner when Data.Toner.TonerState.Load(stored) is { } toner:
+                return toner;
             case InteractionType.Background: {
                     var data = definition.CreateData();
 

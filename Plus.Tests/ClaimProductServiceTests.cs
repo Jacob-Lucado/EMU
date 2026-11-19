@@ -249,7 +249,7 @@ public sealed class ClaimProductServiceTests
 
             var claimed = store.Claim(request);
             Assert.Equal(ClaimProductResult.Claimed, claimed.Result);
-            Assert.Equal("37 1 ffffff 2 2 -1 0 3 -1 0", Assert.IsType<Pet>(claimed.Grant?.Pet).Look);
+            Assert.Equal("37 1 ffffff", Assert.IsType<Pet>(claimed.Grant?.Pet).Look);
             Assert.True(store.HasClaimed(7, Dragon));
             Assert.Equal(1, connection.QuerySingle<int>("SELECT choice FROM user_claimed_products WHERE user_id = 7"));
 

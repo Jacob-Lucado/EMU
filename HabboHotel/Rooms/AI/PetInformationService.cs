@@ -1,12 +1,17 @@
 using Plus.Communication.Packets.Outgoing.Rooms.AI.Pets;
 using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Rooms.AI.MonsterPlants;
 using Plus.HabboHotel.Users;
 
 namespace Plus.HabboHotel.Rooms.AI;
 
 public sealed record PetInformationSnapshot(int Id, string Name, int Level, int MaxLevel, int Experience,
     int ExperienceGoal, int Energy, int MaxEnergy, int Nutrition, int MaxNutrition, int Respect, int OwnerId,
-    int AgeInDays, string OwnerName, bool HasSaddle, int AnyoneCanRide);
+    int AgeInDays, string OwnerName, bool HasSaddle, int AnyoneCanRide, IReadOnlyList<int> SkillThresholds, bool HasBreedingPermission = false, PetPlantInformation? Plant = null);
+
+/// <summary>The monster plant fields of the pet information window.</summary>
+public sealed record PetPlantInformation(int BreedId, bool CanBreed, bool CanRevive, int Rarity, int MaxWellbeingSeconds,
+    int RemainingWellbeingSeconds, int RemainingGrowthSeconds, bool BreedingPermission);
 
 public interface IPetInformationService
 {
@@ -17,6 +22,11 @@ public interface IPetInformationService
 
 public sealed class PetInformationService(TimeProvider clock) : IPetInformationService
 {
+    private const int HorseType = 15;
+
+    // The levels at which a horse's jump skill bar starts again.
+    private static readonly int[] HorseJumpSkillLevels = [0, 2, 6, 10, 14];
+
     public void SendInformation(GameClient session, int petId)
     {
         var habbo = session.GetHabbo();
@@ -62,11 +72,11 @@ public sealed class PetInformationService(TimeProvider clock) : IPetInformationS
             return;
         }
 
-        if (pet.RoomId != room.RoomId || pet.PetData == null) {
+        if (pet.RoomId != room.RoomId || pet.PetData == null || pet.PetData.OwnerId != session.GetHabbo().Id) {
             return;
         }
 
-        session.Send(new PetTrainingPanelComposer(pet.PetData.PetId, pet.PetData.Level));
+        session.Send(new PetTrainingPanelComposer(pet.PetData));
     }
 
     public PetInformationSnapshot Capture(Pet pet)
@@ -75,9 +85,18 @@ public sealed class PetInformationService(TimeProvider clock) : IPetInformationS
         var age = pet.CreatedAt is { } createdAt ? (now - createdAt).Ticks / TimeSpan.TicksPerDay : 0;
         var days = (int)Math.Clamp(age, 0, int.MaxValue);
 
+        if (pet.Plant is { } plant) {
+            return new(pet.PetId, pet.Name, plant.Level(now), MonsterPlant.AdultLevel, plant.Experience(now),
+                plant.ExperienceGoal(now), plant.Energy(now), MonsterPlant.BarMaximum, 100, 100, pet.Respect, pet.OwnerId,
+                days, pet.OwnerName, false, pet.AnyoneCanRide, [],
+                Plant: new(int.TryParse(pet.Race, out var breed) ? breed : 0, plant.CanBreedNow(now), plant.IsDead(now), plant.Rarity,
+                    (int)plant.MaxWellbeing(now).TotalSeconds, (int)Math.Ceiling(plant.RemainingWellbeing(now).TotalSeconds),
+                    (int)Math.Ceiling(plant.RemainingGrowth(now).TotalSeconds), plant.BreedingPermission));
+        }
+
         return new(pet.PetId, pet.Name, pet.Level, Pet.MaxLevel, pet.Experience, pet.ExperienceGoal,
-            pet.Energy, Pet.MaxEnergy, pet.Nutrition, Pet.MaxNutrition, pet.Respect, pet.OwnerId,
-            days, pet.OwnerName, pet.Saddle > 0, pet.AnyoneCanRide);
+            pet.Energy, pet.MaxEnergy, pet.Nutrition, Pet.MaxNutrition, pet.Respect, pet.OwnerId,
+            days, pet.OwnerName, pet.Saddle > 0, pet.AnyoneCanRide, pet.Type == HorseType ? HorseJumpSkillLevels : [], pet.AllowBreeding);
     }
 
     internal static PetInformationSnapshot Capture(Habbo habbo, DateTimeOffset now)
@@ -86,6 +105,6 @@ public sealed class PetInformationService(TimeProvider clock) : IPetInformationS
         var age = (int)Math.Clamp(days, 0, int.MaxValue);
 
         return new(habbo.Id, habbo.Username, habbo.Access.SecurityLevel, 10, 0, 0, 100, 100, 100, 100,
-            habbo.HabboStats?.Respect ?? 0, habbo.Id, age, habbo.Username, false, 0);
+            habbo.HabboStats?.Respect ?? 0, habbo.Id, age, habbo.Username, false, 0, []);
     }
 }

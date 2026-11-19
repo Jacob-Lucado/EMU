@@ -130,6 +130,56 @@ public sealed partial class AccessControlDatabaseTests : IDisposable
         Assert.True(_access.RevokeRole(_actor, Target, PeerRole));
     }
 
+    [AccessControlDatabaseTheory]
+    [InlineData(null)]
+    [InlineData(Peer)]
+    public void StaffCannotRevokeARoleWithTheirOwnWeightThatTheyDidNotGive(int? grantedBy)
+    {
+        using var connection = _database.Connection();
+        connection.Execute("INSERT INTO user_roles (user_id, role_id, granted_by) VALUES (@Target, @PeerRole, @grantedBy)", new { Target, PeerRole, grantedBy });
+        _access.Reload();
+        _sent.Clear();
+
+        Assert.False(_access.RevokeRole(_actor, Target, PeerRole));
+        Assert.Equal(1, connection.ExecuteScalar<int>("SELECT COUNT(*) FROM user_roles WHERE user_id = @Target AND role_id = @PeerRole", new { Target, PeerRole }));
+        Assert.Equal(0, connection.ExecuteScalar<int>("SELECT COUNT(*) FROM acl_audit_log WHERE actor_id = @Actor AND target_id = @Target", new { Actor, Target }));
+        Assert.Empty(_sent);
+    }
+
+    [AccessControlDatabaseFact]
+    public void StaffCannotRevokeAnExpiredOwnWeightRoleWithoutAGrantor()
+    {
+        using var connection = _database.Connection();
+        connection.Execute("INSERT INTO user_roles (user_id, role_id, expires_at) VALUES (@Target, @PeerRole, UTC_TIMESTAMP() - INTERVAL 1 HOUR)", new { Target, PeerRole });
+
+        Assert.False(_access.RevokeRole(_actor, Target, PeerRole));
+        Assert.Equal(1, connection.ExecuteScalar<int>("SELECT COUNT(*) FROM user_roles WHERE user_id = @Target AND role_id = @PeerRole", new { Target, PeerRole }));
+    }
+
+    [AccessControlDatabaseFact]
+    public void StaffCannotRevokeTheirOwnGrantFromAUserWhoIsStillTheirPeerWithoutIt()
+    {
+        Assert.True(_access.AssignRole(_actor, Target, PeerRole));
+        using var connection = _database.Connection();
+        connection.Execute("INSERT INTO user_roles (user_id, role_id) VALUES (@Target, @ActorRole)", new { Target, ActorRole });
+        _access.Reload();
+
+        Assert.False(_access.RevokeRole(_actor, Target, PeerRole));
+        Assert.Equal(1, connection.ExecuteScalar<int>("SELECT COUNT(*) FROM user_roles WHERE user_id = @Target AND role_id = @PeerRole", new { Target, PeerRole }));
+    }
+
+    [AccessControlDatabaseFact]
+    public void StaffCannotRevokeAHigherWeightRoleEvenIfTheyGaveIt()
+    {
+        using var connection = _database.Connection();
+        connection.Execute("UPDATE roles SET weight = 300 WHERE id = @PeerRole; INSERT INTO user_roles (user_id, role_id, granted_by) VALUES (@Target, @PeerRole, @Actor)",
+            new { Target, PeerRole, Actor });
+        _access.Reload();
+
+        Assert.False(_access.RevokeRole(_actor, Target, PeerRole));
+        Assert.Equal(1, connection.ExecuteScalar<int>("SELECT COUNT(*) FROM user_roles WHERE user_id = @Target AND role_id = @PeerRole", new { Target, PeerRole }));
+    }
+
     [AccessControlDatabaseFact]
     public async Task AccessChangesAndTheirScheduledExpiryResendBothLists()
     {
@@ -182,10 +232,13 @@ public sealed partial class AccessControlDatabaseTests : IDisposable
     [AccessControlDatabaseFact]
     public void MutationChecksStoredActorGrantsAndCannotUseAStaleInMemoryPrivilege()
     {
+        using var connection = _database.Connection();
+        connection.Execute("UPDATE roles SET weight = 300 WHERE id = @PeerRole", new { PeerRole });
+        _access.Reload();
+        _sent.Clear();
         Assert.False(_access.AssignRole(_actor, Actor, LimitedRole));
         Assert.False(_access.AssignRole(_actor, Peer, LimitedRole));
         Assert.False(_access.AssignRole(_actor, Target, PeerRole));
-        using var connection = _database.Connection();
         connection.Execute("INSERT INTO user_permissions (user_id, permission_key, effect) VALUES (@Actor, 'camera.use', 'deny')", new { Actor });
         Assert.True(_actor.Access.Can(PermissionKeys.CameraUse)); // deliberately stale session
         Assert.False(_access.AssignRole(_actor, Target, LimitedRole));

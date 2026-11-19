@@ -21,6 +21,7 @@ public sealed class TradeCommitDatabaseTests
             var database = new ProbeDatabase(new MySqlConnectionStringBuilder(root) { Database = schema }.ConnectionString);
             using var connection = database.Connection();
             connection.Execute("""
+                CREATE TABLE marketplace_operations (operation_ref CHAR(36) PRIMARY KEY, user_id INT, kind VARCHAR(12), created_at DATETIME(6));
                 CREATE TABLE items (id INT UNSIGNED PRIMARY KEY, user_id INT NOT NULL, room_id INT UNSIGNED NOT NULL DEFAULT 0);
                 CREATE TABLE users (id INT PRIMARY KEY, credits INT NOT NULL);
                 CREATE TABLE logs_client_trade (id INT AUTO_INCREMENT PRIMARY KEY, `1id` INT, `2id` INT, `1items` TEXT, `2items` TEXT, `timestamp` DATETIME(6) NULL);

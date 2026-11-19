@@ -62,23 +62,28 @@ public sealed class RecyclerPacketTests
         Assert.Equal("recycle:", Assert.Single(recycler.Calls));
     }
 
-    [Fact]
-    public void EcotronInventoryCategorySurvivesReloadWithoutMutatingSharedFurnitureDefinitions()
+    [Theory]
+    [InlineData("matic_box", 4692, "2040-02-03")]
+    [InlineData("ecotron_box", 3095, "3-2-2040")]
+    public void FurniMaticBoxesAreListedAsBoxesWithoutTheirDateWithoutMutatingSharedFurnitureDefinitions(string name, int sprite, string date)
     {
-        var definition = new ItemDefinition { ItemName = "ecotron_box", SpriteId = 3095, Type = Plus.HabboHotel.Users.Inventory.Furniture.ItemType.Floor };
+        var definition = new ItemDefinition { ItemName = name, SpriteId = sprite, Type = Plus.HabboHotel.Users.Inventory.Furniture.ItemType.Floor };
 
         foreach (var id in new uint[] { 10, 11 }) {
             var item = new Plus.HabboHotel.Users.Inventory.Furniture.InventoryItem
             {
                 Id = id,
                 Definition = definition,
-                ExtraData = new Plus.HabboHotel.Items.DataFormat.LegacyDataFormat { Data = "3-2-2040" }
+                ExtraData = new Plus.HabboHotel.Items.DataFormat.LegacyDataFormat { Data = date }
             };
             var snapshot = Plus.HabboHotel.Users.Inventory.Furniture.InventoryItemSnapshot.Capture(item);
             Assert.Equal(Plus.HabboHotel.Users.Inventory.Furniture.FurniCategory.EcotronBox, snapshot.Category);
             var packet = new HabbiconTestSupport.RecordingPacket();
             new Plus.Communication.Packets.Outgoing.Inventory.Furni.FurniListAddComposer(snapshot).Compose(packet);
             Assert.Equal(10, packet.Writes[5]);
+            Assert.Equal((object)0, packet.Writes[6]);
+            Assert.Equal("", packet.Writes[7]);
+            Assert.Equal(date, item.ExtraData.Serialize());
         }
 
         Assert.Equal(Plus.HabboHotel.Users.Inventory.Furniture.FurniCategory.Default, definition.Category);
@@ -87,21 +92,21 @@ public sealed class RecyclerPacketTests
     }
 
     [Fact]
-    public void PrizeDrawsUseTheReferenceDescendingInverseDenominatorsAndUniformWithinLevel()
+    public void PrizeDrawsUseAbsoluteInverseDenominatorsAndUniformWithinLevel()
     {
         var configuration = new RecyclerConfiguration(true, 5, 0, [new(1, 1, [new(1, 10)]), new(2, 4, [new(2, 20), new(3, 21)]), new(5, 2000, [new(4, 50)])]);
-        var random = new RecyclerTestRandom([1999, 0]);
-        var service = new RecyclerService(null!, null!, TimeProvider.System, random, TestLogging.For<RecyclerService>());
+        var random = new RecyclerTestRandom([0, 0]);
+        var service = new RecyclerService(null!, null!, TimeProvider.System, random, TestLogging.For<RecyclerService>(), null!);
         Assert.Equal(50u, service.Pick(configuration).ItemId);
         Assert.Equal(new[] { 2000, 1 }, random.Bounds);
-        random = new([0, 3, 1]);
-        service = new(null!, null!, TimeProvider.System, random, TestLogging.For<RecyclerService>());
+        random = new([1, 1]);
+        service = new(null!, null!, TimeProvider.System, random, TestLogging.For<RecyclerService>(), null!);
         Assert.Equal(21u, service.Pick(configuration).ItemId);
-        Assert.Equal(new[] { 2000, 4, 2 }, random.Bounds);
-        random = new([0, 0, 0]);
-        service = new(null!, null!, TimeProvider.System, random, TestLogging.For<RecyclerService>());
+        Assert.Equal(new[] { 2000, 2 }, random.Bounds);
+        random = new([501, 0]);
+        service = new(null!, null!, TimeProvider.System, random, TestLogging.For<RecyclerService>(), null!);
         Assert.Equal(10u, service.Pick(configuration).ItemId);
-        Assert.Equal(new[] { 2000, 4, 1 }, random.Bounds);
+        Assert.Equal(new[] { 2000, 1 }, random.Bounds);
     }
 
     private sealed class Recorder : IRecyclerService

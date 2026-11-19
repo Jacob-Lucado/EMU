@@ -74,7 +74,7 @@ public sealed class TypedFurnitureStateTests
         var world = TonerWorld();
         new RoomItemMetadataService(new Metadata(), null!).SetToner(world.Room, world.Client, new(100, 120, 141, 120));
         var data = Assert.IsType<FurnitureDataSnapshot.Integers>(RoomItemSnapshot.Capture(world.Chest).Data);
-        Assert.Equal(new[] { 1, 120, 141, 120 }, data.Values);
+        Assert.Equal(new[] { 0, 120, 141, 120 }, data.Values);
     }
 
     [Fact]
@@ -200,7 +200,11 @@ public sealed class TypedFurnitureStateTests
         AssertToner(item, [0, 120, 141, 120]);
         var service = new RoomItemMetadataService(metadata, null!);
         service.SetToner(world.Room, world.Client, new(100, 0, 255, 17));
+        AssertToner(item, [0, 0, 255, 17]);
+        Assert.Equal("0\n0\n255\n17", fixture.Connection.ExecuteScalar<string>("SELECT extra_data FROM items WHERE id=100"));
+        use.Use(world.Room, world.Client, new(100, 0));
         AssertToner(item, [1, 0, 255, 17]);
+        Assert.Equal("1\n0\n255\n17", fixture.Connection.ExecuteScalar<string>("SELECT extra_data FROM items WHERE id=100"));
         world.Room.TonerData = null!;
         var reloaded = new RoomFurnitureLoader(fixture.Database, definitions).Load(42).Single(item => item.Id == 100);
         world.Room.GetRoomItemHandler().LoadFurniture([reloaded]);
@@ -217,7 +221,7 @@ public sealed class TypedFurnitureStateTests
         Assert.Empty(world.Packets);
     }
 
-    private static void PrepareItems(WiredChestDatabaseTests.Fixture fixture) => fixture.Connection.Execute("ALTER TABLE users ADD username VARCHAR(100) NOT NULL DEFAULT ''; ALTER TABLE items ADD x INT DEFAULT 1,ADD y INT DEFAULT 1,ADD z DOUBLE DEFAULT 0,ADD rot INT DEFAULT 0,ADD wall_pos TEXT; CREATE TABLE items_groups(id INT UNSIGNED PRIMARY KEY,group_id INT)");
+    private static void PrepareItems(WiredChestDatabaseTests.Fixture fixture) => fixture.Connection.Execute("ALTER TABLE items ADD x INT DEFAULT 1,ADD y INT DEFAULT 1,ADD z DOUBLE DEFAULT 0,ADD rot INT DEFAULT 0,ADD wall_pos TEXT; CREATE TABLE items_groups(id INT UNSIGNED PRIMARY KEY,group_id INT); CREATE TABLE items_builders_club(item_id INT UNSIGNED PRIMARY KEY,user_id INT)");
     private static void AssertToner(Item item, int[] expected) => Assert.Equal(expected, Assert.IsType<FurnitureDataSnapshot.Integers>(RoomItemSnapshot.Capture(item).Data).Values);
 
     internal static WiredChestProtocolTests.World TonerWorld()

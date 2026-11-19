@@ -23,7 +23,7 @@ public sealed class ActorTickService(Room room)
         // A sign lasts its own time while the avatar stands still too.
         room.GetRoomUserManager().UpdateSignStatus(actor);
 
-        if (!actor.IsBot && !actor.IsAsleep && actor.IdleTime >= 600) {
+        if (!actor.IsBot && !actor.IsAsleep && room.Behavior.IdleSleepTicks is { } sleepTicks && actor.IdleTime >= sleepTicks) {
             actor.IsAsleep = true;
             room.SendPacket(new SleepComposer(actor.VirtualId, true));
         }
@@ -84,8 +84,18 @@ public sealed class ActorTickService(Room room)
     }
     public void AfterMovement(RoomUser actor)
     {
-        if (actor.RidingHorse && !actor.IsBot && actor.GetClient()?.GetHabbo()?.Effects is { CurrentEffect: not 77 }) {
-            actor.ApplyEffect(77);
+        if (actor.PendingVendingEffect > 0 && actor.SetStep) {
+            var effect = actor.PendingVendingEffect;
+            actor.PendingVendingEffect = 0;
+
+            if (actor.CurrentEffect != effect) {
+                actor.ApplyEffect(effect);
+                actor.RoomEffect = effect;
+            }
+        }
+
+        if (actor.RidingHorse && !actor.IsBot && actor.GetClient()?.GetHabbo()?.Effects is { } effects && effects.CurrentEffect != actor.RidingEffect) {
+            actor.ApplyEffect(actor.RidingEffect);
         }
 
         if (actor.IsBot && actor.BotAi != null) {

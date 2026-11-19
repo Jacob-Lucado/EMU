@@ -99,9 +99,16 @@ public class ItemDataManager : IItemDataManager, IStartable
                         EffectId = Convert.ToInt32(row["effect_id"]),
                         IsRare = FurnitureNumbers.BooleanFromCell(row["is_rare"]),
                         ExtraRot = FurnitureNumbers.BooleanFromCell(row["extra_rot"]),
+                        FurniLine = row.Table.Columns.Contains("furni_line") ? Convert.ToString(row["furni_line"], CultureInfo.InvariantCulture) ?? "" : "",
                         Directions = FurnitureDirections.For(Convert.ToString(row["item_name"])),
                         DefaultDirection = row.Table.Columns.Contains("default_dir") && row["default_dir"] is not DBNull ? Convert.ToInt32(row["default_dir"], CultureInfo.InvariantCulture) : 0,
                         FigureSetIds = ReadFigureSetIds(row.Table.Columns.Contains("custom_params") ? row["custom_params"] : null),
+                        BreedingPetType = ReadBreedingPetType(Convert.ToString(row["item_name"]), row.Table.Columns.Contains("custom_params") ? row["custom_params"] : null),
+                        PetPackage = ReadPetPackage(row.Table.Columns.Contains("custom_params") ? row["custom_params"] : null)
+                                     ?? PetPackage.Hatchling(Convert.ToString(row["item_name"]) ?? ""),
+                        Revision = row.Table.Columns.Contains("revision") && row["revision"] is not DBNull ? Convert.ToInt32(row["revision"], CultureInfo.InvariantCulture) : 0,
+                        CustomParams = row.Table.Columns.Contains("custom_params") ? Convert.ToString(row["custom_params"], CultureInfo.InvariantCulture) ?? "" : "",
+                        SpecialType = row.Table.Columns.Contains("special_type") && row["special_type"] is not DBNull ? Convert.ToInt32(row["special_type"], CultureInfo.InvariantCulture) : 1,
                     };
 
                     // Rows sharing a classname take the defaultdir of its furnidata row.
@@ -167,6 +174,18 @@ public class ItemDataManager : IItemDataManager, IStartable
         return InteractionTypes.GetTypeFromString(interactionType);
     }
 
+    // A breeding box is a pet_breeding_ classname; its customparams start with the pet type it is for, as in "0,10,29".
+    internal static int? ReadBreedingPetType(string? itemName, object? cell)
+    {
+        if (itemName?.StartsWith("pet_breeding_", StringComparison.Ordinal) != true) {
+            return null;
+        }
+
+        var first = (Convert.ToString(cell, CultureInfo.InvariantCulture) ?? string.Empty).Split(',')[0].Trim();
+
+        return int.TryParse(first, NumberStyles.Integer, CultureInfo.InvariantCulture, out var type) ? type : null;
+    }
+
     // Habbo writes clothing customparams as "3442, 3443" or "3592," as well as "3375".
     internal static IReadOnlyList<int> ReadFigureSetIds(object? cell)
     {
@@ -179,6 +198,16 @@ public class ItemDataManager : IItemDataManager, IStartable
         }
 
         return ids;
+    }
+
+    /// <summary>Habbo writes a pet package's customparams as "pet type, furni name", such as "1 newbie_nest".</summary>
+    internal static PetPackage? ReadPetPackage(object? cell)
+    {
+        var parts = (Convert.ToString(cell, CultureInfo.InvariantCulture) ?? string.Empty).Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+        return parts.Length >= 2 && int.TryParse(parts[0], NumberStyles.None, CultureInfo.InvariantCulture, out var petType)
+            ? new PetPackage(petType, parts[1])
+            : null;
     }
 
     internal static WiredBoxType ReadWiredType(object cell)

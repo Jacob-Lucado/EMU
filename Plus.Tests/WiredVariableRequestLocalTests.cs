@@ -156,7 +156,7 @@ public sealed class WiredVariableRequestLocalTests
                             scope.World.Habbo.CurrentRoom = null!;
                         }
                         else {
-                            scope.World.Habbo.Username = "Guest";
+                            scope.World.Room.OwnerId = 2;
                         }
                     });
                     Read(scope, kind, exact);
@@ -265,14 +265,14 @@ public sealed class WiredVariableRequestLocalTests
         internal Scope(bool persistent = false)
         {
             if (persistent) {
-                Database.Connection.Execute("ALTER TABLE users ADD COLUMN username VARCHAR(32) NOT NULL DEFAULT ''; ALTER TABLE furniture ADD COLUMN public_name VARCHAR(100) NOT NULL DEFAULT '';");
+                Database.Connection.Execute("ALTER TABLE furniture ADD COLUMN public_name VARCHAR(100) NOT NULL DEFAULT '';");
                 Database.Connection.Execute(File.ReadAllText(HabbiconPacketTests.Repo("Database/Migrations/15_AddWiredVariableValues.sql")));
                 Database.Connection.Execute(File.ReadAllText(HabbiconPacketTests.Repo("Database/Migrations/39_UseUtcWiredVariableTimes.sql")));
                 Database.Connection.Execute(File.ReadAllText(HabbiconPacketTests.Repo("Database/Migrations/66_WiredVariableValueWidth.sql")));
             }
 
-            var config = new WiredConfiguration { Text = "exact_score", IntParams = [persistent ? 10 : 1, 0] };
-            Database.Connection.Execute("INSERT INTO items(id,user_id,room_id,base_item,extra_data) VALUES(10,1,42,1,''); INSERT INTO wired_item_configurations VALUES(10,'wf_var_room',@config)", new { config = JsonSerializer.Serialize(config) });
+            var (config, row) = RoomVariable(persistent ? 10 : 1);
+            Database.Connection.Execute("INSERT INTO items(id,user_id,room_id,base_item,extra_data) VALUES(10,1,42,1,''); INSERT INTO wired_item_configurations VALUES(10,'wf_var_room',@row)", new { row });
             World = new(Database.Database);
             World.Room.Type = "private";
             World.Room.OwnerName = "Owner";
@@ -295,6 +295,16 @@ public sealed class WiredVariableRequestLocalTests
             typeof(WiredRoomVariables).GetField("<Module>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(World.Room.GetWired().Variables, module);
         }
         public void Dispose() => Database.Dispose();
+    }
+
+    // Item 10 is the room variable "exact_score", compiled from its native editor form as the hotel stores it.
+    internal static (WiredConfiguration Runtime, string Row) RoomVariable(int availability)
+    {
+        Assert.True(WiredBoxRegistry.TryGet("wf_var_room", out var descriptor));
+        var native = WiredNativeEditorProjection.DefaultNative(descriptor) with { OwnedIntParams = [availability], Text = "exact_score" };
+        Assert.True(WiredNativeEditorProjection.TryCompile(10, descriptor, native, out var runtime, storedRow: true));
+
+        return (runtime, JsonSerializer.Serialize(native));
     }
 
     private sealed class BoundaryStore(IWiredVariableStore inner, Action onRead) : IWiredVariableStore

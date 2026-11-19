@@ -30,6 +30,7 @@ public sealed class RoomLoaderPristineDatabaseTests
             connection.Execute("INSERT INTO users(id,username,auth_ticket) VALUES (9,'owner','ticket')");
             connection.Execute(CreateTable(pristine, "bots"));
             connection.Execute(CreateTable(pristine, "bots_petdata"));
+            connection.Execute(File.ReadAllText(HabbiconPacketTests.Repo("Database/Migrations/155_PetBreedingPermission.sql")));
 
             Assert.Multiple(
                 () => Assert.Empty(RoomBotsComponent.Load(connection, 42)),

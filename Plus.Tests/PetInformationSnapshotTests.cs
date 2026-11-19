@@ -28,8 +28,8 @@ public sealed class PetInformationSnapshotTests
         pet.AnyoneCanRide = 1;
         pet.CreatedAt = now.AddDays(-2);
         var composer = new PetInformationComposer(new PetInformationService(new FixedClock(now)).Capture(pet));
-        var expected = new object[] { 42, "Horse", 3, 20, 300, 400, 55, 100, 60, 150, 8, 7, 2, "Owner", 1,
-            true, false, 0, 1, false, true, false, 0, -1, -1, -1, false };
+        var expected = new object[] { 42, "Horse", 3, 20, 300, 400, 55, 160, 60, 100, 8, 7, 2, "Owner", 1,
+            true, false, 0, 1, false, false, false, 0, -1, -1, -1, false };
         Assert.Equal(expected, Writes(composer));
         pet.Name = "Changed";
         pet.Experience = 0;
@@ -65,7 +65,7 @@ public sealed class PetInformationSnapshotTests
             Id = 7,
             Username = "Owner",
             AccountCreatedAt = created.HasValue ? DateTimeOffset.FromUnixTimeSeconds(created.Value) : null,
-            HabboStats = new(0, 0, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, "", 0)
+            HabboStats = new(0, 0, 8, 0, 0, 0, 0, 0, 0, "")
         };
         var snapshot = PetInformationService.Capture(habbo, DateTimeOffset.FromUnixTimeSeconds(2_200_000_000));
         Assert.Equal(expectedAge, snapshot.AgeInDays);
@@ -79,7 +79,7 @@ public sealed class PetInformationSnapshotTests
     public void AccountAgeCountsCompleteDaysAcrossOffsetsAndFractionalSeconds(int ticksFromDay, int expected)
     {
         var createdAt = new DateTimeOffset(2040, 1, 2, 0, 0, 0, TimeSpan.FromHours(9)).AddTicks(9_000_000);
-        var habbo = new Habbo { AccountCreatedAt = createdAt, HabboStats = new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, "", 0) };
+        var habbo = new Habbo { AccountCreatedAt = createdAt, HabboStats = new(0, 0, 0, 0, 0, 0, 0, 0, 0, "") };
         var now = createdAt.ToOffset(TimeSpan.FromHours(-7)).AddDays(1).AddTicks(ticksFromDay);
         Assert.Equal(expected, PetInformationService.Capture(habbo, now).AgeInDays);
     }
@@ -92,7 +92,7 @@ public sealed class PetInformationSnapshotTests
         var pet = (Pet)RuntimeHelpers.GetUninitializedObject(typeof(Pet));
         pet.ExperienceLevels = [100];
         pet.CreatedAt = created;
-        var habbo = new Habbo { AccountCreatedAt = created, HabboStats = new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, "", 0) };
+        var habbo = new Habbo { AccountCreatedAt = created, HabboStats = new(0, 0, 0, 0, 0, 0, 0, 0, 0, "") };
         Assert.Equal(2_999_999, new PetInformationService(new FixedClock(now)).Capture(pet).AgeInDays);
         Assert.Equal(2_999_999, PetInformationService.Capture(habbo, now).AgeInDays);
     }

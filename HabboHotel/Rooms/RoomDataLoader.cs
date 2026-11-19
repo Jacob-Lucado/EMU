@@ -72,7 +72,7 @@ public sealed class RoomDataLoader(IDatabase database, IRoomManager rooms, IGrou
 
 internal static class RoomDataMapping
 {
-    internal const string SelectRoom = "SELECT rooms.`allow_pets` AS AllowPets, rooms.`allow_pets_eat` AS AllowPetsEat, rooms.`room_blocking_disabled` AS RoomBlockingDisabled, rooms.`allow_hidewall` AS AllowHidewall, rooms.`push_enabled` AS PushEnabled, rooms.`pull_enabled` AS PullEnabled, rooms.`spush_enabled` AS SpushEnabled, rooms.`spull_enabled` AS SpullEnabled, rooms.`enables_enabled` AS EnablesEnabled, rooms.`respect_notifications_enabled` AS RespectNotificationsEnabled, rooms.`pet_morphs_allowed` AS PetMorphsAllowed, rooms.`lay_enabled` AS LayEnabled, rooms.`hide_wired` AS HideWired, rooms.`diagonal_squeeze` AS DiagonalSqueeze, rooms.`id` AS Id, rooms.`caption` AS Caption, rooms.`model_name` AS ModelName, users.`username` AS Username, rooms.`owner` AS Owner, users.`account_level` AS OwnerAccountLevel, rooms.`password` AS Password, rooms.`score` AS Score, rooms.`roomtype` AS Roomtype, rooms.`state` AS State, rooms.`users_now` AS UsersNow, rooms.`users_max` AS UsersMax, rooms.`category` AS Category, rooms.`description` AS Description, rooms.`tags` AS Tags, rooms.`floor` AS Floor, rooms.`landscape` AS Landscape, rooms.`wallthick` AS Wallthick, rooms.`floorthick` AS Floorthick, rooms.`wallpaper` AS Wallpaper, rooms.`mute_settings` AS MuteSettings, rooms.`ban_settings` AS BanSettings, rooms.`kick_settings` AS KickSettings, rooms.`chat_mode` AS ChatMode, rooms.`chat_size` AS ChatSize, rooms.`chat_speed` AS ChatSpeed, rooms.`chat_extra_flood` AS ChatExtraFlood, rooms.`chat_hearing_distance` AS ChatHearingDistance, rooms.`trade_settings` AS TradeSettings, rooms.`group_id` AS GroupId, rooms.`sale_price` AS SalePrice FROM `users` INNER JOIN `rooms` ON rooms.owner = users.id ";
+    internal const string SelectRoom = "SELECT rooms.`allow_pets` AS AllowPets, rooms.`allow_pets_eat` AS AllowPetsEat, rooms.`room_blocking_disabled` AS RoomBlockingDisabled, rooms.`allow_hidewall` AS AllowHidewall, rooms.`push_enabled` AS PushEnabled, rooms.`pull_enabled` AS PullEnabled, rooms.`spush_enabled` AS SpushEnabled, rooms.`spull_enabled` AS SpullEnabled, rooms.`enables_enabled` AS EnablesEnabled, rooms.`respect_notifications_enabled` AS RespectNotificationsEnabled, rooms.`pet_morphs_allowed` AS PetMorphsAllowed, rooms.`lay_enabled` AS LayEnabled, rooms.`hide_wired` AS HideWired, rooms.`diagonal_squeeze` AS DiagonalSqueeze, rooms.`leave_on_door_tile` AS LeaveOnDoorTile, rooms.`idle_sleep_enabled` AS IdleSleepEnabled, rooms.`idle_sleep_timeout_seconds` AS IdleSleepTimeoutSeconds, rooms.`idle_autokick_enabled` AS IdleAutokickEnabled, rooms.`idle_autokick_timeout_seconds` AS IdleAutokickTimeoutSeconds, rooms.`mute_all_pets` AS MuteAllPets, rooms.`id` AS Id, rooms.`caption` AS Caption, rooms.`model_name` AS ModelName, users.`username` AS Username, rooms.`owner` AS Owner, users.`account_level` AS OwnerAccountLevel, rooms.`password` AS Password, rooms.`score` AS Score, rooms.`roomtype` AS Roomtype, rooms.`state` AS State, rooms.`users_now` AS UsersNow, rooms.`users_max` AS UsersMax, rooms.`category` AS Category, rooms.`description` AS Description, rooms.`tags` AS Tags, rooms.`floor` AS Floor, rooms.`landscape` AS Landscape, rooms.`wallthick` AS Wallthick, rooms.`floorthick` AS Floorthick, rooms.`wallpaper` AS Wallpaper, rooms.`mute_settings` AS MuteSettings, rooms.`ban_settings` AS BanSettings, rooms.`kick_settings` AS KickSettings, rooms.`chat_mode` AS ChatMode, rooms.`chat_size` AS ChatSize, rooms.`chat_speed` AS ChatSpeed, rooms.`chat_extra_flood` AS ChatExtraFlood, rooms.`chat_hearing_distance` AS ChatHearingDistance, rooms.`trade_settings` AS TradeSettings, rooms.`group_id` AS GroupId, rooms.`sale_price` AS SalePrice FROM `users` INNER JOIN `rooms` ON rooms.owner = users.id ";
 
     internal static RoomData CreateData(RoomDataRow row, RoomModel model, bool fallbackOwnerName) => new(
         row.Id, row.Caption, row.ModelName,
@@ -87,7 +87,9 @@ internal static class RoomDataMapping
     {
         OwnerAccountLevel = row.OwnerAccountLevel,
         HideWired = row.HideWired,
-        DiagonalSqueeze = row.DiagonalSqueeze
+        DiagonalSqueeze = row.DiagonalSqueeze,
+        Behavior = new(row.LeaveOnDoorTile, row.IdleSleepEnabled, row.IdleSleepTimeoutSeconds, row.IdleAutokickEnabled,
+            row.IdleAutokickTimeoutSeconds, row.MuteAllPets)
     };
 }
 
@@ -107,6 +109,12 @@ internal sealed class RoomDataRow
     public bool LayEnabled { get; set; }
     public bool HideWired { get; set; }
     public bool DiagonalSqueeze { get; set; }
+    public bool LeaveOnDoorTile { get; set; } = RoomBehaviorSettings.Default.LeaveOnDoorTile;
+    public bool IdleSleepEnabled { get; set; } = RoomBehaviorSettings.Default.IdleSleepEnabled;
+    public int IdleSleepTimeoutSeconds { get; set; } = RoomBehaviorSettings.Default.IdleSleepTimeoutSeconds;
+    public bool IdleAutokickEnabled { get; set; } = RoomBehaviorSettings.Default.IdleAutokickEnabled;
+    public int IdleAutokickTimeoutSeconds { get; set; } = RoomBehaviorSettings.Default.IdleAutokickTimeoutSeconds;
+    public bool MuteAllPets { get; set; } = RoomBehaviorSettings.Default.MuteAllPets;
     public uint Id { get; set; }
     public string Caption { get; set; } = string.Empty;
     public string ModelName { get; set; } = string.Empty;

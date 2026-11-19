@@ -90,7 +90,7 @@ public class HabbiconDatabaseTests
     [HabbiconDatabaseFact]
     public void ClaimableMembersCompleteCollectionsAndUnlockTheRewardClaim()
     {
-        Execute("UPDATE habbicons SET cost_credits = 0 WHERE collection_id = 6 AND id <> 71");
+        Execute("INSERT INTO users_habbicons (user_id, habbicon_id, state, unseen) SELECT 910001, id, 1, FALSE FROM habbicons WHERE collection_id = 6 AND id <> 71");
         var collection = _service.Load(UserId).Collections.Single(set => set.Id == 6);
 
         foreach (var item in collection.Items.Where(item => item.Id != 61)) {
@@ -177,7 +177,7 @@ public class HabbiconDatabaseTests
     }
 
     [HabbiconDatabaseFact]
-    public void StarterUnavailableFreeClaimAndOwnershipSurviveNewServiceInstance()
+    public void StarterUnavailableBuyAndOwnershipSurviveNewServiceInstance()
     {
         var snapshot = _service.Load(UserId);
         Assert.Equal(55, snapshot.Items.Count);
@@ -187,12 +187,37 @@ public class HabbiconDatabaseTests
         Execute("UPDATE habbicons SET available = FALSE WHERE id = 61");
         Assert.Equal(HabbiconState.Unavailable, _service.Load(UserId).RequireItem(61).State);
         Assert.Equal(1, Assert.Throws<HabbiconRejected>(() => _service.Change(UserId, HabbiconAction.Buy, 61)).Code);
-        Execute("UPDATE habbicons SET available = TRUE, cost_credits = 0 WHERE id = 61");
-        Assert.Equal(HabbiconState.Claimable, _service.Load(UserId).RequireItem(61).State);
-        _service.Change(UserId, HabbiconAction.Claim, 61);
+        Execute("UPDATE habbicons SET available = TRUE WHERE id = 61");
+        Assert.Equal(HabbiconState.NotOwned, _service.Load(UserId).RequireItem(61).State);
+        _service.Change(UserId, HabbiconAction.Buy, 61);
         Assert.True(new HabbiconService(_database, _clock).Load(UserId).RequireItem(61).Owned);
-        Assert.Equal(100, Scalar("SELECT credits FROM users WHERE id = 910001"));
+        Assert.Equal(95, Scalar("SELECT credits FROM users WHERE id = 910001"));
         Assert.Equal(4, Assert.Throws<HabbiconRejected>(() => _service.Change(UserId, HabbiconAction.Claim, 61)).Code);
+    }
+
+    [HabbiconDatabaseFact]
+    public void AnIconWithoutAPriceIsOnlyEarnedAndCannotBeClaimedBoughtOrUsed()
+    {
+        Execute("UPDATE habbicons SET cost_credits = 0 WHERE id = 61");
+        var item = _service.Load(UserId).RequireItem(61);
+        Assert.Equal(HabbiconState.Reward, item.State);
+        Assert.False(item.Collected);
+        Assert.Equal(4, Assert.Throws<HabbiconRejected>(() => _service.Change(UserId, HabbiconAction.Claim, 61)).Code);
+        Assert.Equal(1, Assert.Throws<HabbiconRejected>(() => _service.Change(UserId, HabbiconAction.Buy, 61)).Code);
+        Assert.False(_service.Use(UserId, 61));
+        Assert.Equal(HabbiconState.Reward, _service.Load(UserId).RequireItem(61).State);
+        Assert.Equal(100, Scalar("SELECT credits FROM users WHERE id = 910001"));
+    }
+
+    [HabbiconDatabaseFact]
+    public void ALockedCollectionRewardIsUnavailableUntilTheSetIsComplete()
+    {
+        var before = _service.Load(UserId);
+        Assert.Equal(HabbiconState.Unavailable, before.Collections.Single(set => set.Id == 6).RewardState);
+        Assert.Equal(HabbiconState.Unavailable, before.RequireItem(71).State);
+        var after = _service.Change(UserId, HabbiconAction.BuyCollection, 6).Snapshot;
+        Assert.Equal(HabbiconState.Claimable, after.Collections.Single(set => set.Id == 6).RewardState);
+        Assert.Equal(HabbiconState.Claimable, after.RequireItem(71).State);
     }
 
     [HabbiconDatabaseFact]

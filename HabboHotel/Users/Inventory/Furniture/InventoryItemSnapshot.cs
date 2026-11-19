@@ -7,6 +7,8 @@ public sealed record InventoryItemSnapshot(uint Id, string Type, int SpriteId, F
     FurnitureDataSnapshot Data, uint UniqueNumber, uint UniqueSeries, bool Recyclable, bool Tradeable,
     bool Stackable, bool StackableWhenAdded, bool MarketplaceSellable, bool IsWallItem)
 {
+    public static InventoryItemSnapshot Capture(InventoryItem item, GuildFurnitureAppearance? guild) => Capture(item);
+
     public static InventoryItemSnapshot Capture(InventoryItem item)
     {
         var definition = item.Definition;

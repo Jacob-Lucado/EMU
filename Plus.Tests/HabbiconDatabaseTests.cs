@@ -106,6 +106,10 @@ public class HabbiconDatabaseTests
             Assert.Equal(12, snapshot.RequireItem(62).Points);
             Assert.Equal(23, snapshot.Collections.Single(set => set.Name == "birds").Credits);
             Assert.Equal(HabbiconState.Reward, snapshot.RequireItem(29).State);
+
+            var purchase = _service.Change(UserId, HabbiconAction.BuyCollection, 7);
+            Assert.True(purchase.Snapshot.RequireItem(29).Owned);
+            Assert.Equal(77, purchase.Balances!.Credits);
         }
         finally {
             Execute("UPDATE habbicon_collections SET name = 'toast' WHERE id = 6");

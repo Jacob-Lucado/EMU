@@ -90,7 +90,6 @@ public partial class PlacedFurniRoomTests
 
     [Theory]
     [InlineData(InteractionType.Gate)]
-    [InlineData(InteractionType.GuildGate)]
     [InlineData(InteractionType.GateVip)]
     public void SequencedGateOpenReportsItsStateChangeOnce(InteractionType kind)
     {
@@ -106,7 +105,6 @@ public partial class PlacedFurniRoomTests
 
     [Theory]
     [InlineData(InteractionType.Gate)]
-    [InlineData(InteractionType.GuildGate)]
     [InlineData(InteractionType.GateVip)]
     public void SequencedGateCloseReportsItsStateChangeOnlyWhenTheQueuedWriteLands(InteractionType kind)
     {

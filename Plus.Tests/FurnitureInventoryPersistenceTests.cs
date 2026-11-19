@@ -237,13 +237,13 @@ public sealed class FurnitureInventoryPersistenceTests
                 CREATE TABLE wired_chests (item_id INT UNSIGNED PRIMARY KEY, coins INT UNSIGNED NOT NULL DEFAULT 0);
                 INSERT INTO users VALUES (1),(2);
                 INSERT INTO items VALUES
-                    (10,1,0,100,'legacy-a',4,40),(11,1,0,999,'unknown',5,50),(12,1,0,101,'legacy-b',6,60),
+                    (10,1,0,100,'1',4,40),(11,1,0,999,'unknown',5,50),(12,1,0,101,'legacy-b',6,60),
                     (13,1,9,100,'room',7,70),(14,2,0,100,'other',8,80);
                 INSERT INTO items_groups VALUES (10,3);
                 """);
             await connection.ExecuteAsync(RoomMusicDatabaseTests.Fixture.SchemaSql);
             var definitions = new Definitions(
-                new ItemDefinition { Id = 100, Type = ItemType.Floor },
+                new ItemDefinition { Id = 100, Type = ItemType.Floor, InteractionType = InteractionType.GuildItem, Modes = 2 },
                 new ItemDefinition { Id = 101, Type = ItemType.Wall },
                 new ItemDefinition { Id = 102, Type = ItemType.Wall, InteractionType = InteractionType.CameraPicture },
                 new ItemDefinition { Id = 103, Type = ItemType.Wall, InteractionType = InteractionType.Floor });
@@ -254,7 +254,10 @@ public sealed class FurnitureInventoryPersistenceTests
             Assert.Equal(new uint[] { 10, 12 }, loaded.Select(item => item.Id));
             Assert.Equal(new uint[] { 4, 6 }, loaded.Select(item => item.UniqueNumber));
             Assert.Equal(new uint[] { 40, 60 }, loaded.Select(item => item.UniqueSeries));
-            Assert.All(loaded, item => Assert.Equal("", item.ExtraData.Serialize()));
+            Assert.Equal(["1", ""], loaded.Select(item => item.ExtraData.Serialize()));
+            await connection.ExecuteAsync("UPDATE items SET extra_data='3' WHERE id=10");
+            var reloaded = await new FurnitureInventoryLoader(database, definitions).Load(1);
+            Assert.Equal("0", reloaded.Single(item => item.Id == 10).ExtraData.Serialize());
             Assert.Equal(new[] { 3, 0 }, loaded.Select(item => item.GroupId));
 
             var store = new InventoryClearStore(database, definitions);

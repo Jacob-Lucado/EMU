@@ -1,3 +1,5 @@
+using Plus.Communication.Flash;
+using Plus.Communication.Packets.Outgoing;
 using Plus.HabboHotel.Groups;
 using Plus.HabboHotel.Items;
 using Plus.HabboHotel.Items.Wired;
@@ -16,14 +18,24 @@ public partial class PlacedFurniRoomTests
     public async Task GroupFurniPlacedFromTheInventoryShowsItsGroup(InteractionType type)
     {
         GuildLook(5);
+        Viewer();
         Inventory(new InventoryItem { Id = 30, Definition = Furni(30, type, WiredBoxType.None).Definition, GroupId = 5 });
 
         await PlaceObject().Parse(_room, _client, ClientPacket("30 1 1 0"));
 
-        var placed = _room.GetRoomItemHandler().GetItem(30);
-        Assert.Equal(5, placed.GroupId);
-        var data = Assert.IsType<FurnitureDataSnapshot.Strings>(RoomItemSnapshot.Capture(placed).Data);
-        Assert.Equal(["5", "b01010s21084", "84de00", "9844e7"], data.Values.Skip(1));
+        var packet = Assert.Single(_client.Packets, sent => sent.Header == ServerPacketHeader.ObjectAddComposer);
+        var body = new FlashIncomingPacket { Buffer = packet.Body };
+        Assert.Equal(30u, body.ReadUInt());
+        body.ReadInt();
+        body.ReadInt();
+        body.ReadInt();
+        body.ReadInt();
+        body.ReadString();
+        body.ReadString();
+        body.ReadInt();
+        Assert.Equal(2, body.ReadInt());
+        Assert.Equal(5, body.ReadInt());
+        Assert.Equal(["0", "5", "b01010s21084", "84de00", "9844e7"], Enumerable.Range(0, 5).Select(_ => body.ReadString()));
     }
 
     [Fact]

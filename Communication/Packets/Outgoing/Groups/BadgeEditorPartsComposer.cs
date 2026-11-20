@@ -12,7 +12,7 @@ public class BadgeEditorPartsComposer(BadgeEditorPresentation presentation) : IS
         packet.WriteInteger(presentation.Bases.Length);
 
         foreach (var part in presentation.Bases) {
-            packet.WriteInteger(part.Id);
+            packet.WriteInteger(part.EditorId);
             packet.WriteString(part.AssetOne);
             packet.WriteString(part.AssetTwo);
         }
@@ -20,7 +20,7 @@ public class BadgeEditorPartsComposer(BadgeEditorPresentation presentation) : IS
         packet.WriteInteger(presentation.Symbols.Length);
 
         foreach (var part in presentation.Symbols) {
-            packet.WriteInteger(part.Id);
+            packet.WriteInteger(part.EditorId);
             packet.WriteString(part.AssetOne);
             packet.WriteString(part.AssetTwo);
         }

@@ -64,7 +64,8 @@ public sealed class GroupCreationPresentationTests
         var room = new RoomData { Id = 2, Name = "Alpha" };
         var source = new List<RoomData> { room };
         var presentation = new GroupCreationPresentation(20,
-            source.Select(value => new GroupCreationRoom(value.Id, value.Name)).ToImmutableArray());
+            source.Select(value => new GroupCreationRoom(value.Id, value.Name)).ToImmutableArray(),
+            [new(5, 11, 4), new(6, 11, 4), default, default, default]);
         var composer = new GroupCreationWindowComposer(presentation);
         var before = new HabbiconTestSupport.RecordingPacket();
         composer.Compose(before);

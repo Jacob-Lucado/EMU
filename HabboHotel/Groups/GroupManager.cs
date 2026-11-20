@@ -47,6 +47,8 @@ public class GroupManager : IGroupManager, IStartable
 
     public ICollection<GroupBadgeParts> BadgeSymbols => _symbols;
 
+    public GroupBadgePartIds BadgePartIds => throw new NotImplementedException();
+
     public ICollection<GroupColours> BadgeBaseColours => _baseColours;
 
     public ICollection<GroupColours> BadgeSymbolColours => _symbolColours.Values;
@@ -71,10 +73,10 @@ public class GroupManager : IGroupManager, IStartable
         foreach (var item in items) {
             switch (item.Type) {
                 case "base":
-                    _bases.Add(new(item.Id, item.FirstValue, item.SecondValue));
+                    _bases.Add(new(item.Id, item.FirstValue, item.SecondValue, item.Id));
                     break;
                 case "symbol":
-                    _symbols.Add(new(item.Id, item.FirstValue, item.SecondValue));
+                    _symbols.Add(new(item.Id, item.FirstValue, item.SecondValue, item.Id));
                     break;
                 case "color":
                     _baseColours.Add(new(item.Id, item.FirstValue));

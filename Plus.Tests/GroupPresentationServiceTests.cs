@@ -136,8 +136,8 @@ public sealed class GroupPresentationServiceTests
     [Fact]
     public void BadgeEditorComposerFreezesPartsAndColoursBeforeComposition()
     {
-        var bases = new List<GroupBadgeParts> { new(1, "base-a", "base-b") };
-        var symbols = new List<GroupBadgeParts> { new(2, "symbol-a", "symbol-b") };
+        var bases = new List<GroupBadgeParts> { new(1, "base-a", "base-b", 1) };
+        var symbols = new List<GroupBadgeParts> { new(2, "symbol-a", "symbol-b", 2) };
         var baseColours = new List<GroupColours> { new(3, "AA0000") };
         var symbolColours = new List<GroupColours> { new(4, "00AA00") };
         var backgrounds = new List<GroupColours> { new(5, "0000AA") };
@@ -154,8 +154,8 @@ public sealed class GroupPresentationServiceTests
         backgrounds.Clear();
 
         var presentation = new BadgeEditorPresentation(
-            [new BadgePartPresentation(1, "base-a", "base-b")],
-            [new BadgePartPresentation(2, "symbol-a", "symbol-b")],
+            [new BadgePartPresentation(1, 1, "base-a", "base-b")],
+            [new BadgePartPresentation(2, 2, "symbol-a", "symbol-b")],
             [new BadgeColourPresentation(3, "AA0000")],
             [new BadgeColourPresentation(4, "00AA00")],
             [new BadgeColourPresentation(5, "0000AA")]);

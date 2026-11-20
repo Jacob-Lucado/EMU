@@ -40,7 +40,7 @@ public sealed class MonsterPlantGenetics(Func<int, int> roll) : IMonsterPlantGen
             shape.Rarity + color.Rarity);
     }
 
-    public int BreedRarity(int first, int second) => throw new NotImplementedException();
+    public int BreedRarity(int first, int second) => Math.Min(first, second) + roll(Math.Abs(first - second) + 1);
 
     private (PlantColor Color, PlantShape Shape) LookOfRarity(int rarity)
     {

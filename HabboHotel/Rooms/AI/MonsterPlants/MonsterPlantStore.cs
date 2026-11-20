@@ -73,7 +73,30 @@ public sealed class MonsterPlantStore(IDatabase database, IItemFactory items, IL
         }
     }
 
-    public Item? Breed(MonsterPlant first, MonsterPlant second, ItemDefinition seed, Habbo owner, int rarity) => throw new NotImplementedException();
+    public Item? Breed(MonsterPlant first, MonsterPlant second, ItemDefinition seed, Habbo owner, int rarity)
+    {
+        try {
+            using var connection = database.Connection();
+            connection.Open();
+            using var transaction = connection.BeginTransaction();
+            var bred = connection.Execute("UPDATE bots_monsterplants SET can_breed = 0 WHERE pet_id IN @ids AND can_breed = 1",
+                new { ids = new[] { first.PetId, second.PetId } }, transaction);
+
+            if (bred != 2) {
+                return null;
+            }
+
+            var item = items.CreateSingleItemNullable(connection, transaction, seed, owner, MonsterPlantSeedRarity.Data(rarity));
+            transaction.Commit();
+
+            return item;
+        }
+        catch (Exception exception) {
+            logger.LogError(exception, "Could not breed plants {First} and {Second} for user {OwnerId}", first.PetId, second.PetId, owner.Id);
+
+            return null;
+        }
+    }
 
     internal static void Insert(IDbConnection connection, IDbTransaction? transaction, MonsterPlant plant) => connection.Execute("""
         INSERT INTO bots_monsterplants (pet_id, rarity, growth_started_at, wellbeing_until, can_breed, breeding_permission)

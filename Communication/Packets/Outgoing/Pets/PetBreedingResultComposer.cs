@@ -12,5 +12,20 @@ public sealed class PetBreedingResultComposer(PetBreedingResultSeed first, PetBr
 {
     public uint MessageId => ServerPacketHeader.PetBreedingResultComposer;
 
-    public void Compose(IOutgoingPacket packet) { }
+    public void Compose(IOutgoingPacket packet)
+    {
+        Write(packet, first);
+        Write(packet, second);
+    }
+
+    private static void Write(IOutgoingPacket packet, PetBreedingResultSeed seed)
+    {
+        packet.WriteInteger(seed.StuffId);
+        packet.WriteInteger(seed.ClassId);
+        packet.WriteString(seed.ProductCode);
+        packet.WriteInteger(seed.UserId);
+        packet.WriteString(seed.UserName);
+        packet.WriteInteger(seed.Rarity);
+        packet.WriteBoolean(seed.HasMutation);
+    }
 }

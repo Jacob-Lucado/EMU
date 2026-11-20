@@ -14,6 +14,9 @@ public static class MonsterPlantSeedRarity
             ? rarity
             : null;
 
+    public static string Data(int rarity) =>
+        new MapDataFormat(new() { [Key] = rarity.ToString(CultureInfo.InvariantCulture) }).Serialize();
+
     /// <summary>The stored seed data, or null when it holds no rarity.</summary>
     public static MapDataFormat? Load(string stored)
     {

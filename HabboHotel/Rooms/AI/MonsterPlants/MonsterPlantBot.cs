@@ -21,7 +21,18 @@ public sealed class MonsterPlantBot(TimeProvider clock) : BotAi
     public override void OnTimerTick() => Refresh(true);
 
     /// <summary>Tells the room at once when the plant's level or breeding or revival state changed.</summary>
-    public void Announce() { }
+    public void Announce() => Refresh(true);
+
+    /// <summary>A plant's gesture lasts one status update.</summary>
+    public void Gesture(string gesture)
+    {
+        if (GetRoomUser() is not { } user) {
+            return;
+        }
+
+        user.Statusses["gst"] = gesture;
+        user.UpdateNeeded = true;
+    }
 
     private void Refresh(bool announce)
     {
@@ -35,6 +46,10 @@ public sealed class MonsterPlantBot(TimeProvider clock) : BotAi
         if (!user.Statusses.ContainsKey(posture)) {
             user.Statusses.Clear();
             user.Statusses[posture] = "";
+            user.UpdateNeeded = true;
+        }
+
+        if (!user.UpdateNeeded && user.Statusses.Remove("gst")) {
             user.UpdateNeeded = true;
         }
 

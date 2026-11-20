@@ -134,10 +134,10 @@ public sealed class GroupPresentationServiceTests
     }
 
     [Fact]
-    public void BadgeEditorComposerFreezesPartsAndColoursBeforeComposition()
+    public void BadgeEditorSendsEditorIdsAndThenTheBadgeCodeIdsOfEveryPart()
     {
-        var bases = new List<GroupBadgeParts> { new(1, "base-a", "base-b", 1) };
-        var symbols = new List<GroupBadgeParts> { new(2, "symbol-a", "symbol-b", 2) };
+        var bases = new List<GroupBadgeParts> { new(21, "base-a", "base-b", 65) };
+        var symbols = new List<GroupBadgeParts> { new(1, "symbol-a", "symbol-b", 21), new(104, "symbol-c", "", 122) };
         var baseColours = new List<GroupColours> { new(3, "AA0000") };
         var symbolColours = new List<GroupColours> { new(4, "00AA00") };
         var backgrounds = new List<GroupColours> { new(5, "0000AA") };
@@ -154,24 +154,24 @@ public sealed class GroupPresentationServiceTests
         backgrounds.Clear();
 
         var presentation = new BadgeEditorPresentation(
-            [new BadgePartPresentation(1, 1, "base-a", "base-b")],
-            [new BadgePartPresentation(2, 2, "symbol-a", "symbol-b")],
+            [new BadgePartPresentation(65, 21, "base-a", "base-b")],
+            [new BadgePartPresentation(21, 1, "symbol-a", "symbol-b"), new BadgePartPresentation(122, 104, "symbol-c", "")],
             [new BadgeColourPresentation(3, "AA0000")],
             [new BadgeColourPresentation(4, "00AA00")],
             [new BadgeColourPresentation(5, "0000AA")]);
-        var first = Compose(new BadgeEditorPartsComposer(presentation));
-        var second = Compose(new BadgeEditorPartsComposer(presentation));
+        var expected = Compose(new BadgeEditorPartsComposer(presentation));
 
-        Assert.Equal(first, second);
         Assert.Equal(new object[]
         {
-            1, 1, "base-a", "base-b",
-            1, 2, "symbol-a", "symbol-b",
+            1, 65, "base-a", "base-b",
+            2, 21, "symbol-a", "symbol-b", 122, "symbol-c", "",
             1, 3, "AA0000",
             1, 4, "00AA00",
-            1, 5, "0000AA"
-        }, second);
-        Assert.NotEmpty(payload);
+            1, 5, "0000AA",
+            1, 21,
+            2, 1, 104
+        }, expected);
+        Assert.Equal(HabbiconTestSupport.Incoming(expected).Buffer.ToArray(), payload);
     }
 
     private static Group Group(GroupMembershipSnapshot membership, int creatorId = 1) => new(

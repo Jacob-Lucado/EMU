@@ -45,6 +45,10 @@ public class GroupPurchaseTests
         });
         var groups = Proxy<IGroupManager>((method, args) =>
         {
+            if (method == "get_BadgePartIds") {
+                return GroupBadgeTestIds.Habbo;
+            }
+
             Assert.Equal("TryCreateGroup", method);
             Assert.Equal(1000, _client.GetHabbo().Credits);
             Assert.Null(_room.Group);
@@ -108,6 +112,15 @@ public class GroupPurchaseTests
     public async Task MalformedBadgeDoesNotChargeOrCreate(int count, int parts)
     {
         await _handler.Parse(_client, PurchasePacket(count, parts));
+        AssertUnpurchased();
+    }
+
+    [Theory]
+    [InlineData(2)]
+    [InlineData(65)]
+    public async Task UnknownSymbolEditorIdDoesNotChargeOrCreate(int symbolId)
+    {
+        await _handler.Parse(_client, PurchasePacket(6, 2, symbolId));
         AssertUnpurchased();
     }
 
@@ -227,7 +240,7 @@ public class GroupPurchaseTests
         Assert.Empty(_client.Sent);
     }
 
-    private static FlashIncomingPacket PurchasePacket(int count, int parts)
+    private static FlashIncomingPacket PurchasePacket(int count, int parts, int symbolId = 22)
     {
         using var stream = new MemoryStream();
 
@@ -242,7 +255,7 @@ public class GroupPurchaseTests
         var values = new List<int> { 42, 1, 1, count };
 
         for (var part = 0; part < parts; part++) {
-            values.AddRange(new[] { part == 0 ? 1 : 2, part == 0 ? 1 : 2, 4 });
+            values.AddRange(new[] { part == 0 ? 1 : symbolId, part == 0 ? 1 : 2, 4 });
         }
 
         foreach (var value in values) {

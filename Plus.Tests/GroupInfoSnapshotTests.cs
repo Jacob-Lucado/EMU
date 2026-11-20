@@ -19,7 +19,7 @@ namespace Plus.Tests;
 public class GroupInfoSnapshotTests : IDisposable
 {
     // SHA-256 of the 120 pre-migration GroupInfoComposer payloads (type x viewer x newWindow x forum x adminOnlyDeco).
-    private const string BaselineSha256 = "b50ca1fc5454747df4f934099fbf05d22151c9b004328873e8f0c0c17797426c";
+    private const string BaselineSha256 = "96fa677aa7e8916372c09fe40690bc7e38001506b36af1f73bab88b2cfd053de";
 
     private static readonly FieldInfo DatabaseField = typeof(PlusEnvironment).GetField("_database", BindingFlags.Static | BindingFlags.NonPublic)!;
     private static readonly FieldInfo GameField = typeof(PlusEnvironment).GetField("_game", BindingFlags.Static | BindingFlags.NonPublic)!;
@@ -126,6 +126,20 @@ public class GroupInfoSnapshotTests : IDisposable
         new GroupInfoComposer(snapshot, newWindow).Compose(packet);
 
         return string.Join("|", packet.Writes.Select(write => $"{write.GetType().Name}:{write}"));
+    }
+
+    [Theory]
+    [InlineData(7, 1)]
+    [InlineData(4, 1)]
+    [InlineData(3, 1)]
+    [InlineData(5, 2)]
+    [InlineData(9, 0)]
+    public void TheOwnerIsShownAsAMember(int viewer, int status)
+    {
+        var packet = new HabbiconTestSupport.RecordingPacket();
+        new GroupInfoComposer(Service(_clients, _ => null).Capture(NewGroup(type: 0, forum: false, adminOnly: 0), viewer)).Compose(packet);
+
+        Assert.Equal(status, packet.Writes[8]);
     }
 
     [Fact]

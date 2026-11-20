@@ -186,6 +186,7 @@ namespace Plus.Tests
                     await connection.ExecuteAsync(dump[offerStart..(dump.IndexOf(';', offerStart) + 1)]);
                     var migration = SchemaSql;
                     await connection.ExecuteAsync(File.ReadAllText(HabbiconPacketTests.Repo("Database/Migrations/136_MarketplaceSales.sql")));
+                    await connection.ExecuteAsync(File.ReadAllText(HabbiconPacketTests.Repo("Database/Migrations/170_MarketplaceOfferGroup.sql")));
                     await connection.ExecuteAsync(migration);
                     await connection.ExecuteAsync(migration);
                     await connection.ExecuteAsync("""

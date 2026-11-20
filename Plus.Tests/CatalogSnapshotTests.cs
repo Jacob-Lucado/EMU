@@ -6,6 +6,7 @@ using Plus.Communication.Packets.Outgoing.Catalog;
 using Plus.HabboHotel.Catalog;
 using Plus.HabboHotel.Items;
 using Plus.HabboHotel.Subscriptions;
+using Plus.HabboHotel.Users;
 using Plus.HabboHotel.Users.Inventory.Furniture;
 using Xunit;
 
@@ -14,7 +15,7 @@ namespace Plus.Tests;
 public class CatalogSnapshotTests
 {
     // SHA-256 of the catalog payloads for every case in GoldenPayloads.
-    private const string BaselineSha256 = "a0d35dae1c196eef4dec3c2de22fca6db6801c670cc04c3615c2c44fd8f289ad";
+    private const string BaselineSha256 = "376d75e79a671fca45f7215e253d306cf517db142c169311f2b5a84bf6975db1";
 
     [Fact]
     public void ComposedCatalogPayloadsMatchPreMigrationBaseline()
@@ -33,6 +34,25 @@ public class CatalogSnapshotTests
         Assert.True(Snapshots().CaptureOffer(item).CanGift);
         item.Products = [Badge("ACH_Bonus"), chair];
         Assert.False(Snapshots().CaptureOffer(item).CanGift);
+    }
+
+    // Just like Habbo, an offer that costs points can only be gifted when it costs credits and the points are diamonds.
+    [Theory]
+    [InlineData(1, 225, ActivityPointType.Duckets, false)]
+    [InlineData(0, 75, ActivityPointType.Duckets, false)]
+    [InlineData(7, 10, ActivityPointType.Diamonds, true)]
+    [InlineData(0, 500, ActivityPointType.Diamonds, false)]
+    [InlineData(3, 4, 104, false)]
+    [InlineData(0, 4, 104, false)]
+    [InlineData(5, 0, ActivityPointType.Duckets, true)]
+    public void OnlyCreditOffersAndCreditOffersWithDiamondsCanBeGifted(int credits, int points, int pointsType, bool giftable)
+    {
+        var offer = Offer(31, "gld_gate", Furni(Def(InteractionType.None, "s", gift: true, type: ItemType.Floor)));
+        offer.CostCredits = credits;
+        offer.CostPoints = points;
+        offer.PointsType = pointsType;
+
+        Assert.Equal(giftable, Snapshots().CaptureOffer(offer).CanGift);
     }
 
     [Fact]

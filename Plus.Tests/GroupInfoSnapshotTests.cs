@@ -129,6 +129,25 @@ public class GroupInfoSnapshotTests : IDisposable
     }
 
     [Fact]
+    public void TheViewersFavouriteGroupIsMarked()
+    {
+        _clients[3].GetHabbo().HabboStats = new HabboStats(0, 0, 0, 0, 0, 0, 0, 0, 9, "");
+        _clients[4].GetHabbo().HabboStats = new HabboStats(0, 0, 0, 0, 0, 0, 0, 0, 12, "");
+        var service = Service(_clients, _ => null);
+        var group = NewGroup(type: 0, forum: false, adminOnly: 0);
+
+        Assert.Equal(new object[] { true, false, false }, new[] { 3, 4, 9 }.Select(viewer => Favourite(service.Capture(group, viewer))));
+    }
+
+    private static object Favourite(GroupInfoSnapshot snapshot)
+    {
+        var packet = new HabbiconTestSupport.RecordingPacket();
+        new GroupInfoComposer(snapshot).Compose(packet);
+
+        return packet.Writes[10];
+    }
+
+    [Fact]
     public void MissingRoomIsNamedNoRoomFound()
     {
         var snapshot = Service(_clients, _ => null).Capture(NewGroup(type: 0, forum: true, adminOnly: 0, withRoom: false), 9);

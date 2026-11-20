@@ -143,6 +143,19 @@ public class GroupInfoSnapshotTests : IDisposable
     }
 
     [Fact]
+    public void OwnerWithAPendingRequestStillHasMemberStatus()
+    {
+        var group = NewGroup(type: 1, forum: false, adminOnly: 0);
+        group.PublishJoin(group.CreatorId);
+        Assert.True(group.HasRequest(group.CreatorId));
+
+        var packet = new HabbiconTestSupport.RecordingPacket();
+        new GroupInfoComposer(Service(_clients, _ => null).Capture(group, group.CreatorId)).Compose(packet);
+
+        Assert.Equal(1, packet.Writes[8]);
+    }
+
+    [Fact]
     public void MissingRoomIsNamedNoRoomFound()
     {
         var snapshot = Service(_clients, _ => null).Capture(NewGroup(type: 0, forum: true, adminOnly: 0, withRoom: false), 9);

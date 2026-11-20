@@ -53,7 +53,10 @@ public abstract class GameClient
     }
 
     // A pong clears the ping counter without going through the deprecated property.
-    public void ResetPingCount() => _pingCount = 0;
+    public void ResetPingCount() => Interlocked.Exchange(ref _pingCount, 0);
+
+    /// <summary>Counts one more ping that has no answer yet and returns the new count.</summary>
+    internal int CountPing() => Interlocked.Increment(ref _pingCount);
 
     // The factory sets the internal revision before ClientHello replaces it; a client built without one cannot speak the protocol.
     public Revision? Revision { get; set; }

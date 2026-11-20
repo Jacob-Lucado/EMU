@@ -73,6 +73,7 @@ public static class Program
         services.AddConfiguration<EncryptionConfiguration>(configuration.GetSection("Encryption"));
         services.AddConfiguration<AirClientConfiguration>(configuration.GetSection("AirClient"));
         services.AddConfiguration<LoginThrottleConfiguration>(configuration.GetSection("LoginThrottle"));
+        services.AddConfiguration<ConnectionCheckConfiguration>(configuration.GetSection("ConnectionCheck"));
 
         // Dependency Injection
         services.AddDefaultRules(typeof(Program).Assembly);

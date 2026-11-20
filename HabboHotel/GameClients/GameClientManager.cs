@@ -1,8 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using Plus.HabboHotel.Permissions;
-using System.Collections;
 using System.Collections.Concurrent;
-using System.Diagnostics;
 using System.Text;
 using Dapper;
 using Microsoft.Extensions.Logging;
@@ -20,12 +18,13 @@ public class GameClientManager : IGameClientManager
 {
     private readonly IDatabase _database;
     private readonly ILogger<GameClientManager> _logger;
-
-    private readonly Stopwatch _clientPingStopwatch;
+    private readonly TimeProvider _clock;
+    private readonly TimeSpan _pingInterval;
+    private readonly int _maxUnansweredPings;
+    private long _lastPingCheck;
 
     private readonly ConcurrentDictionary<Guid, GameClient> _clients;
 
-    private readonly Queue _timedOutConnections;
     private readonly ConcurrentDictionary<int, GameClient> _userIdRegister;
     private readonly ConcurrentDictionary<string, GameClient> _usernameRegister;
     private readonly object _usernameSync = new();
@@ -38,20 +37,18 @@ public class GameClientManager : IGameClientManager
         _clients = new();
         _userIdRegister = new();
         _usernameRegister = new();
-        _timedOutConnections = new();
-        _clientPingStopwatch = new();
-        _clientPingStopwatch.Start();
+        _clock = clock ?? TimeProvider.System;
+        var check = connectionCheck?.Value ?? new ConnectionCheckConfiguration();
+        _pingInterval = TimeSpan.FromSeconds(check.PingIntervalSeconds);
+        _maxUnansweredPings = check.MaxUnansweredPings;
+        _lastPingCheck = _clock.GetTimestamp();
     }
 
     public int Count => _clients.Count;
 
     public ICollection<GameClient> GetClients => _clients.Values;
 
-    public void OnCycle()
-    {
-        TestClientConnections();
-        HandleTimeouts();
-    }
+    public void OnCycle() => PingClients();
 
     public GameClient? GetClientByUserId(int userId) => _userIdRegister.TryGetValue(userId, out var client) ? client : null;
 
@@ -303,61 +300,31 @@ public class GameClientManager : IGameClientManager
         _logger.LogInformation("Connections closed!");
     }
 
-    private void TestClientConnections()
+    /// <summary>
+    /// Pings every logged-in client each interval and disconnects one that left too many pings unanswered,
+    /// so a connection that died without a close does not keep the user online.
+    /// </summary>
+    private void PingClients()
     {
-        if (_clientPingStopwatch.ElapsedMilliseconds >= 30000) {
-            _clientPingStopwatch.Restart();
-
-            try {
-                var toPing = new List<GameClient>();
-
-                foreach (var client in _clients.Values.ToList()) {
-                    //if (client.PingCount < 6)
-                    //{
-                    //    client.PingCount++;
-                    //    toPing.Add(client);
-                    //}
-                    //else
-                    //{
-                    //    lock (_timedOutConnections.SyncRoot)
-                    //    {
-                    //        _timedOutConnections.Enqueue(client);
-                    //    }
-                    //}
-                }
-
-                foreach (var client in toPing.ToList()) {
-                    try {
-                        client.Send(new PingComposer());
-                    }
-                    catch {
-                        lock (_timedOutConnections.SyncRoot) {
-                            _timedOutConnections.Enqueue(client);
-                        }
-                    }
-                }
-            }
-            catch (Exception) {
-                //ignored
-            }
+        if (_clock.GetElapsedTime(_lastPingCheck) < _pingInterval) {
+            return;
         }
-    }
 
-    private void HandleTimeouts()
-    {
-        if (_timedOutConnections.Count > 0) {
-            lock (_timedOutConnections.SyncRoot) {
-                while (_timedOutConnections.Count > 0) {
-                    GameClient? client = null;
+        _lastPingCheck = _clock.GetTimestamp();
 
-                    if (_timedOutConnections.Count > 0) {
-                        client = (GameClient?)_timedOutConnections.Dequeue();
-                    }
+        foreach (var client in _clients.Values) {
+            try {
+                if (client.CountPing() > _maxUnansweredPings) {
+                    _logger.LogInformation("Disconnecting user {UserId}: {Pings} pings got no answer", client.GetHabbo()?.Id, _maxUnansweredPings);
+                    client.Disconnect();
 
-                    if (client != null) {
-                        client.Disconnect();
-                    }
+                    continue;
                 }
+
+                client.Send(new PingComposer());
+            }
+            catch (Exception exception) {
+                _logger.LogWarning(exception, "Failed to ping connection {ConnectionId}", client.Id);
             }
         }
     }

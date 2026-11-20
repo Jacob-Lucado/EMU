@@ -200,7 +200,7 @@ INSERT INTO migration_168_editor_ids (type, id, firstvalue, editor_id) VALUES
 ('symbol', 158, 'symbol_hc_part2.gif', 211);
 
 UPDATE groups_items i
-JOIN migration_168_editor_ids e ON e.type = i.type AND e.id = i.id AND e.firstvalue = i.firstvalue
+JOIN migration_168_editor_ids e ON e.type = i.type AND e.id = i.id AND BINARY e.firstvalue = BINARY i.firstvalue
 SET i.editor_id = e.editor_id
 WHERE i.editor_id IS NULL;
 

@@ -4,5 +4,5 @@ JOIN items_groups g ON g.id = i.id
 JOIN furniture f ON f.id = i.base_item
 SET i.extra_data = '0'
 WHERE f.interaction_type IN ('gld_item', 'gld_gate', 'guild_forum')
-  AND i.extra_data REGEXP '^[1-9][0-9]*$'
-  AND CAST(i.extra_data AS UNSIGNED) = g.group_id;
+  AND g.group_id > 0
+  AND BINARY i.extra_data = CAST(g.group_id AS BINARY);

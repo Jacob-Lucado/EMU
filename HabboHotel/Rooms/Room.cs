@@ -46,6 +46,8 @@ public class Room
     private Soccer _soccer;
     private IceTagGame? _iceTag;
 
+    internal object MonsterPlantSync { get; } = new();
+
     public bool IsCrashed;
     public DateTimeOffset? LastRegenerationAt;
     // The room's Wired timer, read by the elapsed-time conditions and @wired_timer. It starts when the room loads.

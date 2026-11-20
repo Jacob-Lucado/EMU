@@ -9,9 +9,9 @@ public sealed record RoomUserStatusSnapshot(int VirtualId, int X, int Y, string 
     int BodyRotation, string Status)
 {
     public static ImmutableArray<RoomUserStatusSnapshot> Capture(IEnumerable<RoomUser> users) =>
-        users.Select(Capture).ToImmutableArray();
+        users.Select(user => Capture(user)).ToImmutableArray();
 
-    private static RoomUserStatusSnapshot Capture(RoomUser user)
+    internal static RoomUserStatusSnapshot Capture(RoomUser user, string? gesture = null)
     {
         var statusText = new StringBuilder("/");
 
@@ -23,6 +23,10 @@ public sealed record RoomUserStatusSnapshot(int VirtualId, int X, int Y, string 
             }
 
             statusText.Append('/');
+        }
+
+        if (gesture != null) {
+            statusText.Append("gst ").Append(gesture).Append('/');
         }
 
         statusText.Append('/');

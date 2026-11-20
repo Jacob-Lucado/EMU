@@ -71,5 +71,8 @@ public sealed class MonsterPlantBreedingService(IMonsterPlantStore store, IMonst
         if (!room.Behavior.MuteAllPets) {
             room.SendChat(receiver => new ChatComposer(own.VirtualId, BredLine, 0, 0, receiver));
         }
+
+        achievements.ProgressAchievement(session, "ACH_MonsterPlantBreeder", 1);
+        rewards.Progress(session, RewardTrackActions.BreedMonsterPlant);
     }
 }

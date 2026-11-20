@@ -126,6 +126,7 @@ public sealed class GroupBadgePartMigrationTests
             Assert.True(groups.BadgePartIds.TryGetCodeId(false, 1300, out var custom));
             Assert.Equal(161, custom);
             Assert.Equal(1029, groups.BadgePartIds.GetEditorId(true, 29));
+            Assert.Equal(0, groups.BadgePartIds.GetEditorId(false, 300));
         });
     }
 

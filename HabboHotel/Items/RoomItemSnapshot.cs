@@ -112,7 +112,7 @@ public sealed record RoomItemSnapshot(
         InteractionType.VendingMachine or InteractionType.WfFloorSwitch1 or InteractionType.WfFloorSwitch2 => 2,
         InteractionType.Footballcounterred or InteractionType.Footballcounterblue or InteractionType.Footballcountergreen
             or InteractionType.Footballcounteryellow => 0,
-        InteractionType.Counter or InteractionType.Recolorable => 1,
+        InteractionType.Counter or InteractionType.Recolorable or InteractionType.GuildItem => 1,
         _ => definition.Modes > 1 ? 1 : 0
     };
 

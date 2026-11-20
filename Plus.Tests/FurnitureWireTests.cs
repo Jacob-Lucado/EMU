@@ -158,7 +158,7 @@ public class FurnitureWireTests
         public void WriteDouble(double value) => Writes.Add(value);
     }
 
-    // A fridge (vending machine) and Floor Switch are usable by anyone, a football score board by nobody, and a game counter and a one-state recolorable block by room controllers.
+    // A fridge (vending machine) and Floor Switch are usable by anyone, a football score board and a group gate by nobody, and a game counter, a one-state recolorable block and every other group furni by room controllers.
     [Theory]
     [InlineData(InteractionType.VendingMachine, 2, 2)]
     [InlineData(InteractionType.WfFloorSwitch1, 3, 2)]
@@ -171,6 +171,9 @@ public class FurnitureWireTests
     [InlineData(InteractionType.Recolorable, 1, 1)]
     [InlineData(InteractionType.None, 1, 0)]
     [InlineData(InteractionType.None, 5, 1)]
+    [InlineData(InteractionType.GuildItem, 1, 1)]
+    [InlineData(InteractionType.GuildItem, 11, 1)]
+    [InlineData(InteractionType.GuildGate, 4, 0)]
     public void FloorItemsCarryHabbosUsagePolicy(InteractionType type, int modes, int usage)
     {
         var item = Floor(type, userId: 4);

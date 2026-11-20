@@ -38,9 +38,11 @@ public class GameClientManager : IGameClientManager
         _userIdRegister = new();
         _usernameRegister = new();
         _clock = clock ?? TimeProvider.System;
-        var check = connectionCheck?.Value ?? new ConnectionCheckConfiguration();
-        _pingInterval = TimeSpan.FromSeconds(check.PingIntervalSeconds);
-        _maxUnansweredPings = check.MaxUnansweredPings;
+        var defaults = new ConnectionCheckConfiguration();
+        var check = connectionCheck?.Value ?? defaults;
+        // A zero or negative setting would disconnect every client right after login.
+        _pingInterval = TimeSpan.FromSeconds(check.PingIntervalSeconds >= 1 ? check.PingIntervalSeconds : defaults.PingIntervalSeconds);
+        _maxUnansweredPings = check.MaxUnansweredPings >= 1 ? check.MaxUnansweredPings : defaults.MaxUnansweredPings;
         _lastPingCheck = _clock.GetTimestamp();
     }
 

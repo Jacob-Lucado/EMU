@@ -7,7 +7,6 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Plus.Communication.Packets;
 using Plus.Core;
-using Plus.Communication.Packets.Outgoing.Handshake;
 using Plus.Communication.Packets.Outgoing.Notifications;
 using Plus.Database;
 using Plus.HabboHotel.Users.Messenger;
@@ -312,22 +311,20 @@ public class GameClientManager : IGameClientManager
             return;
         }
 
-        _lastPingCheck = _clock.GetTimestamp();
+        foreach (var entry in _clients) {
+            var client = entry.Value;
 
-        foreach (var client in _clients.Values) {
             try {
-                if (client.CountPing() > _maxUnansweredPings) {
+                if (!client.TryPing(_maxUnansweredPings)) {
                     _logger.LogInformation("Disconnecting user {UserId}: {Pings} pings got no answer", client.GetHabbo()?.Id, _maxUnansweredPings);
                     client.Disconnect();
-
-                    continue;
                 }
-
-                client.Send(new PingComposer());
             }
             catch (Exception exception) {
                 _logger.LogWarning(exception, "Failed to ping connection {ConnectionId}", client.Id);
             }
         }
+
+        _lastPingCheck = _clock.GetTimestamp();
     }
 }

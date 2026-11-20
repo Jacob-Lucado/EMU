@@ -5,6 +5,7 @@ using Plus.Communication.Abstractions;
 using Plus.Communication.Encryption.Crypto.Prng;
 using Plus.Communication.Flash;
 using Plus.Communication.Packets;
+using Plus.Communication.Packets.Outgoing.Handshake;
 using Plus.Communication.Revisions;
 using Plus.HabboHotel.Users;
 
@@ -55,8 +56,27 @@ public abstract class GameClient
     // A pong clears the ping counter without going through the deprecated property.
     public void ResetPingCount() => Interlocked.Exchange(ref _pingCount, 0);
 
-    /// <summary>Counts one more ping that has no answer yet and returns the new count.</summary>
-    internal int CountPing() => Interlocked.Increment(ref _pingCount);
+    internal bool TryPing(int maxUnansweredPings)
+    {
+        if (Closed.IsCancellationRequested) {
+            return true;
+        }
+
+        // Pongs wait behind the current receive handler, including room loads.
+        if (_receiveLock.CurrentCount == 0) {
+            ResetPingCount();
+
+            return true;
+        }
+
+        if (Volatile.Read(ref _pingCount) >= maxUnansweredPings) {
+            return false;
+        }
+
+        Send(new PingComposer(), countPing: true);
+
+        return true;
+    }
 
     // The factory sets the internal revision before ClientHello replaces it; a client built without one cannot speak the protocol.
     public Revision? Revision { get; set; }
@@ -274,7 +294,9 @@ public abstract class GameClient
     // The official hotel sends no such message, so a Flash socket session gets none.
     internal bool SkipsClientExtensions => _server is Plus.Communication.Flash.FlashServer;
 
-    public void Send(IServerPacket composer)
+    public void Send(IServerPacket composer) => Send(composer, countPing: false);
+
+    private void Send(IServerPacket composer, bool countPing)
     {
         if (composer is Plus.Communication.Packets.Outgoing.IClientExtensionPacket && SkipsClientExtensions) {
             return;
@@ -285,6 +307,11 @@ public abstract class GameClient
 
         if (encoded == null) {
             return;
+        }
+
+        // Start waiting only once the packet is ready, before the transport can deliver a reply.
+        if (countPing) {
+            Interlocked.Increment(ref _pingCount);
         }
 
         SendEncoded(encoded);

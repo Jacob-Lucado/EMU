@@ -85,7 +85,7 @@ public sealed class GroupBadgePartMigrationTests
                     ('base', 1, 'base_basic_1.gif', ''), ('base', 21, 'base_beams_part2.gif', 'base_beams_part1.gif'),
                     ('base', 29, 'base_custom.gif', ''), ('symbol', 1, 'symbol_background_1.gif', ''),
                     ('symbol', 68, 'symbol_0.gif', ''), ('symbol', 158, 'symbol_hc_part2.gif', 'symbol_hc_part1.gif'),
-                    ('symbol', 2, 'symbol_renamed.gif', ''), ('symbol', 159, 'symbol_custom.gif', ''),
+                    ('symbol', 3, 'SYMBOL_BACKGROUND_3_PART2.gif', ''), ('symbol', 2, 'symbol_renamed.gif', ''), ('symbol', 159, 'symbol_custom.gif', ''),
                     ('color', 1, 'ffd601', '');
                 """);
             var migration = File.ReadAllText(HabbiconPacketTests.Repo(EditorIdMigration));
@@ -96,7 +96,7 @@ public sealed class GroupBadgePartMigrationTests
             Assert.Equal(new (string, int, int?)[]
                 {
                     ("base", 1, 1), ("base", 21, 65), ("base", 29, null),
-                    ("symbol", 1, 21), ("symbol", 2, null), ("symbol", 68, 173), ("symbol", 158, 211), ("symbol", 159, null),
+                    ("symbol", 1, 21), ("symbol", 2, null), ("symbol", 3, null), ("symbol", 68, 173), ("symbol", 158, 211), ("symbol", 159, null),
                     ("color", 1, null)
                 },
                 connection.Query<(string, int, int?)>("SELECT type, id, editor_id FROM groups_items ORDER BY type, id"));

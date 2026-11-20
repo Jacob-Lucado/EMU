@@ -104,7 +104,7 @@ public sealed class GroupPurchaseService(
             room.GroupId != 0 || room.Group != null ||
             !int.TryParse(settings.TryGetValue("catalog.group.purchase.cost"), NumberStyles.Integer,
                 CultureInfo.InvariantCulture, out cost) || cost < 0 ||
-            !TryBuildBadge(request.BadgeParts, out var badge)) {
+            !TryBuildBadge(groups.BadgePartIds, request.BadgeParts, out var badge)) {
             return false;
         }
 
@@ -116,7 +116,7 @@ public sealed class GroupPurchaseService(
         return true;
     }
 
-    private static bool TryBuildBadge(ImmutableArray<GroupPurchaseBadgePart> parts, out string badge)
+    private static bool TryBuildBadge(GroupBadgePartIds ids, ImmutableArray<GroupPurchaseBadgePart> parts, out string badge)
     {
         badge = string.Empty;
 
@@ -126,8 +126,13 @@ public sealed class GroupPurchaseService(
 
         for (var index = 0; index < parts.Length; index++) {
             var part = parts[index];
+
+            if (!ids.TryGetCodeId(index == 0, part.Symbol, out var codeId)) {
+                return false;
+            }
+
             badge += BadgePartUtility.WorkBadgeParts(index == 0,
-                part.Symbol.ToString(CultureInfo.InvariantCulture),
+                codeId.ToString(CultureInfo.InvariantCulture),
                 part.Colour.ToString(CultureInfo.InvariantCulture),
                 part.Position.ToString(CultureInfo.InvariantCulture));
         }

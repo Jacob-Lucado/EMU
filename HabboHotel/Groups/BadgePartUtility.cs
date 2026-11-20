@@ -4,6 +4,8 @@ namespace Plus.HabboHotel.Groups;
 
 public static class BadgePartUtility
 {
+    public const string DefaultBadge = "b05114s06114";
+
     public static string WorkBadgeParts(bool isBase, string partId, string colour, string position)
     {
         var id = int.Parse(partId);

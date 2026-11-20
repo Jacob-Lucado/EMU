@@ -156,8 +156,9 @@ public sealed class GroupPresentationService(IGroupManager groups, ICacheManager
             .Select(room => new GroupCreationRoom(room.Id, room.Name))
             .ToImmutableArray();
         var price = Convert.ToInt32(settings.TryGetValue("catalog.group.purchase.cost"));
+        GroupManagementSnapshotService.TryParseBadge(BadgePartUtility.DefaultBadge, out var defaultBadge);
         session.Send(new GroupCreationWindowComposer(new GroupCreationPresentation(price, availableRooms,
-            [new(5, 11, 4), new(6, 11, 4), default, default, default])));
+            groups.BadgePartIds.ToEditorIds(defaultBadge))));
     }
 
     private List<CachedUser> ResolveUsers(Group group, int requestType)
@@ -189,7 +190,7 @@ public sealed class GroupPresentationService(IGroupManager groups, ICacheManager
         user.Look);
 
     private static BadgePartPresentation CapturePart(GroupBadgeParts part) =>
-        new(part.Id, part.Id, part.AssetOne, part.AssetTwo);
+        new(part.EditorId, part.Id, part.AssetOne, part.AssetTwo);
 
     private static BadgeColourPresentation CaptureColour(GroupColours colour) =>
         new(colour.Id, colour.Colour);

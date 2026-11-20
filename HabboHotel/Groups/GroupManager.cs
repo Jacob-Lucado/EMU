@@ -47,7 +47,7 @@ public class GroupManager : IGroupManager, IStartable
 
     public ICollection<GroupBadgeParts> BadgeSymbols => _symbols;
 
-    public GroupBadgePartIds BadgePartIds => throw new NotImplementedException();
+    public GroupBadgePartIds BadgePartIds { get; private set; } = new([], []);
 
     public ICollection<GroupColours> BadgeBaseColours => _baseColours;
 
@@ -63,7 +63,7 @@ public class GroupManager : IGroupManager, IStartable
     private async Task Load()
     {
         using var connection = _database.Connection();
-        var items = await connection.QueryAsync<(int Id, string Type, string FirstValue, string SecondValue)>("SELECT id, type, firstvalue, secondvalue FROM groups_items WHERE enabled = TRUE ORDER BY order_num, id");
+        var items = await connection.QueryAsync<(int Id, string Type, string FirstValue, string SecondValue, int? EditorId)>("SELECT id, type, firstvalue, secondvalue, editor_id FROM groups_items WHERE enabled = TRUE ORDER BY order_num, id");
         _bases.Clear();
         _symbols.Clear();
         _baseColours.Clear();
@@ -73,10 +73,9 @@ public class GroupManager : IGroupManager, IStartable
         foreach (var item in items) {
             switch (item.Type) {
                 case "base":
-                    _bases.Add(new(item.Id, item.FirstValue, item.SecondValue, item.Id));
-                    break;
                 case "symbol":
-                    _symbols.Add(new(item.Id, item.FirstValue, item.SecondValue, item.Id));
+                    AddBadgePart(item.Type == "base" ? _bases : _symbols, new(item.Id, item.FirstValue, item.SecondValue,
+                        item.EditorId ?? item.Id + GroupBadgeParts.CustomEditorIdOffset));
                     break;
                 case "color":
                     _baseColours.Add(new(item.Id, item.FirstValue));
@@ -89,6 +88,19 @@ public class GroupManager : IGroupManager, IStartable
                     break;
             }
         }
+
+        BadgePartIds = new(_bases, _symbols);
+    }
+
+    private void AddBadgePart(List<GroupBadgeParts> parts, GroupBadgeParts part)
+    {
+        if (parts.Any(listed => listed.EditorId == part.EditorId)) {
+            _logger.LogWarning("Group badge part {Id} ({Asset}) is left out because editor id {EditorId} is already used", part.Id, part.AssetOne, part.EditorId);
+
+            return;
+        }
+
+        parts.Add(part);
     }
 
     public bool TryGetGroup(int id, [NotNullWhen(true)] out Group? group)

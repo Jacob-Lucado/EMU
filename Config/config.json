@@ -35,6 +35,10 @@
         "WindowMinutes": 5,
         "BlockMinutes": 10
     },
+    "ConnectionCheck": {
+        "PingIntervalSeconds": 30,
+        "MaxUnansweredPings": 3
+    },
     "Rcon": {
         "Hostname": "127.0.0.1",
         "Port": 30001,

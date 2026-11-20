@@ -205,6 +205,26 @@ public class HabbiconPacketTests
         }
     }
 
+    [Theory]
+    [InlineData(HabboHotel.Habbicons.HabbiconAction.Buy)]
+    [InlineData(HabboHotel.Habbicons.HabbiconAction.BuyCollection)]
+    public async Task APurchaseTheUserCannotPayInCreditsAnswersNotEnoughBalance(HabboHotel.Habbicons.HabbiconAction action)
+    {
+        var service = new Service { Rejection = (int)Communication.Packets.HabbiconActionError.InsufficientCredits };
+        var (client, sent) = Client(new Habbo { Id = 1 });
+        var typeName = action == HabboHotel.Habbicons.HabbiconAction.BuyCollection ? "BuyHabbiconCollection" : "BuyHabbicon";
+        var type = typeof(HabbiconRequest).Assembly.GetType("Plus.Communication.Packets.Incoming.Habbicons." + typeName + "Event")!;
+        var handler = (HabbiconRequest)Activator.CreateInstance(type, new HabbiconPresentationService(service, NullLogger<HabbiconPresentationService>.Instance))!;
+
+        await handler.Parse(client, Incoming(61));
+
+        var reply = Assert.Single(sent);
+        var body = new Communication.Flash.FlashIncomingPacket { Buffer = reply.Payload };
+        Assert.Equal(ServerPacketHeader.PresentDeliverErrorComposer, reply.Header);
+        Assert.Equal((true, false, 0), (body.ReadBool(), body.ReadBool(), body.ReadInt()));
+        Assert.Equal(6, reply.Payload.Length);
+    }
+
     [Fact]
     public async Task UnseenResetsIgnoreOtherCategoriesEmptyOversizedAndTruncatedLists()
     {

@@ -61,7 +61,7 @@ public class GroupManager : IGroupManager, IStartable
     private async Task Load()
     {
         using var connection = _database.Connection();
-        var items = await connection.QueryAsync<(int Id, string Type, string FirstValue, string SecondValue)>("SELECT id, type, firstvalue, secondvalue FROM groups_items WHERE enabled = TRUE");
+        var items = await connection.QueryAsync<(int Id, string Type, string FirstValue, string SecondValue)>("SELECT id, type, firstvalue, secondvalue FROM groups_items WHERE enabled = TRUE ORDER BY order_num, id");
         _bases.Clear();
         _symbols.Clear();
         _baseColours.Clear();

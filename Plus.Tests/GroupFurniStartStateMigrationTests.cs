@@ -33,16 +33,16 @@ public sealed class GroupFurniStartStateMigrationTests
                     (4, 'gld_badgewall_tall', 'gld_item', 11), (5, 'chair', 'default', 4);
                 INSERT INTO items (id, user_id, room_id, base_item, extra_data) VALUES
                     (10, 1, 0, 1, '2'), (11, 1, 97, 2, '11'), (12, 1, 0, 3, '4'), (13, 1, 0, 4, '9'), (14, 1, 0, 1, '0'),
-                    (15, 1, 90, 3, '1'), (16, 1, 0, 5, '3'), (17, 1, 0, 4, '');
-                INSERT INTO items_groups (id, group_id) VALUES (10, 2), (11, 11), (12, 4), (13, 7), (14, 11), (16, 3), (17, 5);
+                    (15, 1, 90, 3, '1'), (16, 1, 0, 5, '3'), (17, 1, 0, 4, ''), (18, 1, 0, 4, REPEAT('9', 40));
+                INSERT INTO items_groups (id, group_id) VALUES (10, 2), (11, 11), (12, 4), (13, 7), (14, 11), (16, 3), (17, 5), (18, 5);
                 """);
             var migration = File.ReadAllText(HabbiconPacketTests.Repo(Migration));
 
             connection.Execute(migration);
             connection.Execute(migration);
 
-            Assert.Equal(new[] { "0", "0", "0", "9", "0", "1", "3", "" }, connection.Query<string>("SELECT extra_data FROM items ORDER BY id"));
-            Assert.Equal(7, connection.QuerySingle<int>("SELECT COUNT(*) FROM items_groups"));
+            Assert.Equal(new[] { "0", "0", "0", "9", "0", "1", "3", "", new string('9', 40) }, connection.Query<string>("SELECT extra_data FROM items ORDER BY id"));
+            Assert.Equal(8, connection.QuerySingle<int>("SELECT COUNT(*) FROM items_groups"));
         }
         finally {
             using var cleanup = new MySqlConnection(server);

@@ -173,6 +173,7 @@ public class FurnitureWireTests
     [InlineData(InteractionType.None, 5, 1)]
     [InlineData(InteractionType.GuildItem, 1, 1)]
     [InlineData(InteractionType.GuildItem, 11, 1)]
+    [InlineData(InteractionType.GuildForum, 1, 1)]
     [InlineData(InteractionType.GuildGate, 4, 0)]
     public void FloorItemsCarryHabbosUsagePolicy(InteractionType type, int modes, int usage)
     {

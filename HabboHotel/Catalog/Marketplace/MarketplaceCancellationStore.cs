@@ -16,7 +16,7 @@ public sealed class MarketplaceCancellationStore(IDatabase database)
         MarketplaceCommit.LockUser(connection, transaction, ownerId);
         var row = connection.QuerySingleOrDefault<OfferRow>(
             "SELECT state AS State,user_id AS UserId,furni_id AS FurniId,item_id AS ItemId,extra_data AS ExtraData," +
-            "limited_number AS LimitedNumber,limited_stack AS LimitedStack FROM catalog_marketplace_offers WHERE offer_id=@offerId FOR UPDATE",
+            "limited_number AS LimitedNumber,limited_stack AS LimitedStack,group_id AS GroupId FROM catalog_marketplace_offers WHERE offer_id=@offerId FOR UPDATE",
             new { offerId }, transaction);
 
         if (row is null || row.UserId != ownerId || row.State != "1" || row.FurniId == 0
@@ -25,11 +25,12 @@ public sealed class MarketplaceCancellationStore(IDatabase database)
         }
 
         var delivery = new MarketplaceDelivery(row.FurniId, row.ItemId, row.ExtraData,
-            (uint)row.LimitedNumber, (uint)row.LimitedStack, definition);
+            (uint)row.LimitedNumber, (uint)row.LimitedStack, definition, MarketplaceCommit.LockGroup(connection, transaction, row.GroupId));
         var item = prepare(delivery);
         connection.Execute("INSERT INTO items(id,base_item,user_id,room_id,x,y,z,wall_pos,rot,extra_data,limited_number,limited_stack) " +
             "VALUES(@FurniId,@ItemId,@ownerId,0,0,0,0,'',0,@ExtraData,@LimitedNumber,@LimitedStack)",
             new { delivery.FurniId, delivery.ItemId, ownerId, delivery.ExtraData, delivery.LimitedNumber, delivery.LimitedStack }, transaction);
+        MarketplaceCommit.LinkGroup(connection, transaction, delivery.FurniId, delivery.GroupId);
 
         if (connection.Execute("DELETE FROM catalog_marketplace_offers WHERE offer_id=@offerId AND user_id=@ownerId AND state='1'",
             new { offerId, ownerId }, transaction) != 1) {
@@ -50,5 +51,6 @@ public sealed class MarketplaceCancellationStore(IDatabase database)
         public string ExtraData { get; set; } = "";
         public int LimitedNumber { get; set; }
         public int LimitedStack { get; set; }
+        public uint GroupId { get; set; }
     }
 }

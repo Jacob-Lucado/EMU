@@ -516,6 +516,7 @@ CREATE TABLE `catalog_marketplace_offers` (
   `furni_id` int(10) unsigned NOT NULL,
   `limited_number` int(11) NOT NULL DEFAULT 0,
   `limited_stack` int(11) NOT NULL DEFAULT 0,
+  `group_id` int(10) unsigned NOT NULL DEFAULT 0,
   PRIMARY KEY (`offer_id`),
   KEY `user_state` (`user_id`,`state`),
   KEY `state_listed` (`state`,`listed_at`),

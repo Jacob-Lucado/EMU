@@ -73,7 +73,7 @@ public sealed class MarketplacePurchaseService(IMarketplacePurchaseStore store, 
                 session.Send(new CreditBalanceComposer(habbo.Credits));
                 session.Send(new FurniListNotificationComposer(claim.Delivery.Id, 1));
                 session.Send(new PurchaseOKComposer());
-                session.Send(new FurniListAddComposer(InventoryItemSnapshot.Capture(claim.Delivery)));
+                session.Send(new FurniListAddComposer(InventoryItemSnapshot.Capture(claim.Delivery, GuildFurnitureAppearance.Find(groups, claim.Delivery.GroupId))));
                 session.Send(new FurniListUpdateComposer());
                 outcome = MarketplacePurchaseOutcome.Bought;
             }
@@ -94,6 +94,7 @@ public sealed class MarketplacePurchaseService(IMarketplacePurchaseStore store, 
             ExtraData = FurniExtraData.Load(delivery.Definition, delivery.ExtraData, keepLegacy: true),
             UniqueNumber = delivery.LimitedNumber,
             UniqueSeries = delivery.LimitedStack,
+            GroupId = delivery.GroupId,
         };
 
         return item.ToInventoryItem() ?? throw new InvalidOperationException($"Furni {delivery.FurniId} could not be built for delivery; nothing was charged.");

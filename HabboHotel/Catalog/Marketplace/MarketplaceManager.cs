@@ -188,7 +188,8 @@ public class MarketplaceManager : IMarketplaceManager
                             Definition = delivery.Definition,
                             ExtraData = FurniExtraData.Load(delivery.Definition, delivery.ExtraData, keepLegacy: true),
                             UniqueNumber = delivery.LimitedNumber,
-                            UniqueSeries = delivery.LimitedStack
+                            UniqueSeries = delivery.LimitedStack,
+                            GroupId = delivery.GroupId
                         };
 
                         return item.ToInventoryItem() ?? throw new InvalidOperationException("Marketplace return could not be prepared.");
@@ -199,7 +200,7 @@ public class MarketplaceManager : IMarketplaceManager
                 }
 
                 inventory.Furniture.AddItem(returned);
-                habbo.Client?.Send(new FurniListAddComposer(InventoryItemSnapshot.Capture(returned)));
+                habbo.Client?.Send(new FurniListAddComposer(InventoryItemSnapshot.Capture(returned, GuildFurnitureAppearance.Find(_groups, returned.GroupId))));
                 habbo.Client?.Send(new FurniListNotificationComposer(returned.Id, returned.IsFloorItem ? 1 : 2));
                 habbo.Client?.Send(new FurniListUpdateComposer());
 

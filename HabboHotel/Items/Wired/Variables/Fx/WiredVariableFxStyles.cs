@@ -109,6 +109,8 @@ public static class WiredVariableFxStyles
         Add(levelling, ["level_with_bar_and_numerical_progress"], SToXl, 2, 1, "DYNAMIC_LEVELLING", "level_with_bar_and_numerical_progress", "medium", ("sub_renderer", "1"));
         Add(["RED"], ["boss_health_bar"], LToXxl, 4, 0, "RED", "boss_health_bar", "extra_large", ("icon", "misc_skull"), ("icon_alignment", "double"));
         Add(redToGreenTeam, ["boss_health_bar"], LToXxl, 4, 1, "RED", "boss_health_bar", "extra_large");
+        Add(["NOT_APPLICABLE"], ["boss_health_bar"], LToXxl, 4, 2, "NOT_APPLICABLE", "boss_health_bar", "extra_large", ("icon", "xmas26.snowman"),
+            ("icon_alignment", "double"), ("color", "#3C5B92"), ("metallic", "true"));
         Add(["RED", "GREEN", "BLUE", "YELLOW", "WHITE", "DYNAMIC_TEAM_COLOR"], ["number_baked_colors"], ["not_applicable"], 5, 0, "GREEN", "number_baked_colors", "not_applicable", ("design", "freeze_style"));
         Add(team, ["number_recolorable"], ["not_applicable"], 5, 1, "GREEN", "number_recolorable", "not_applicable", ("design", "shalimar"));
         Add(team, ["number_recolorable"], ["not_applicable"], 5, 2, "GREEN", "number_recolorable", "not_applicable", ("design", "blocky"));
@@ -138,6 +140,8 @@ public static class WiredVariableFxStyles
         Icon(19, "upgrading", "#6bdc34");
         Icon(20, "star_power", "#ffd900", true);
         Icon(21, "droplet", "#4aabf5");
+        Icon(22, "xmas26.tree", "#368349");
+        Icon(23, "xmas26.snowball", "#acdafa");
 
         return all;
     }

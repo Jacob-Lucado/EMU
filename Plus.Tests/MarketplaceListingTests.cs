@@ -287,6 +287,19 @@ public class MarketplaceListingTests
         Assert.Null(habbo.Inventory!.Furniture.GetItem(item.Id));
     }
 
+    [Fact]
+    public async Task AListedGroupFurniKeepsItsGroupOnTheOffer()
+    {
+        var store = new RecordingStore();
+        var (habbo, item) = Owner(ItemType.Floor);
+        item.GroupId = 5;
+        var (client, _) = HabbiconTestSupport.Client(habbo);
+
+        await Offer(store).Parse(client, Packet(100, 1, 1, (int)item.Id));
+
+        Assert.Equal(5, Assert.Single(store.Listings).GroupId);
+    }
+
     private static (Habbo Habbo, InventoryItem Item) Owner(ItemType type, bool staffTest = false)
     {
         var item = new InventoryItem

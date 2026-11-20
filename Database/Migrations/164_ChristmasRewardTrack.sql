@@ -1,4 +1,4 @@
--- A Christmas 2026 reward track made of everyday tasks. Its prizes are currencies: duckets (0), diamonds (5) and Stars (101).
+-- A Christmas 2026 reward track made of everyday tasks. Its prizes are currencies (duckets 0, diamonds 5, Stars 101) and three floor furni, given by sprite id.
 INSERT IGNORE INTO reward_tracks (id, theme, sort_order, starts_at, ends_at, has_premium, premium_task_points_boost, premium_instant_points, premium_cost_diamonds, premium_cost_credits, enabled)
 VALUES ('christmas2026', 'red', 2, '2026-12-01 00:00:00', '2027-01-07 00:00:00', 1, 1.2, 0, 75, 75, 1);
 
@@ -59,7 +59,7 @@ INSERT IGNORE INTO reward_track_prizes (track_id, id, required_points, product_i
     ('christmas2026', 'free6', 300, 8, '101', '', 40, 0, 11),
     ('christmas2026', 'premium6', 300, 8, '5', '', 4, 1, 12),
     ('christmas2026', 'free7', 350, 8, '101', '', 25, 0, 13),
-    ('christmas2026', 'premium7', 350, 8, '0', '', 50, 1, 14),
+    ('christmas2026', 'premium7', 350, 1, '2641', '', 1, 1, 14),
     ('christmas2026', 'free8', 400, 8, '0', '', 50, 0, 15),
     ('christmas2026', 'premium8', 400, 8, '0', '', 100, 1, 16),
     ('christmas2026', 'free9', 450, 8, '101', '', 25, 0, 17),
@@ -70,5 +70,5 @@ INSERT IGNORE INTO reward_track_prizes (track_id, id, required_points, product_i
     ('christmas2026', 'premium11', 550, 8, '0', '', 150, 1, 22),
     ('christmas2026', 'free12', 600, 8, '101', '', 40, 0, 23),
     ('christmas2026', 'premium12', 600, 8, '5', '', 6, 1, 24),
-    ('christmas2026', 'free13', 650, 8, '101', '', 25, 0, 25),
-    ('christmas2026', 'premium13', 650, 8, '0', '', 50, 1, 26);
+    ('christmas2026', 'free13', 650, 1, '2637', '', 1, 0, 25),
+    ('christmas2026', 'premium13', 650, 1, '2986', '', 1, 1, 26);

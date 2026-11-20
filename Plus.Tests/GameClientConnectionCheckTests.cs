@@ -1,6 +1,8 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
+using Plus.Communication.Flash;
+using Plus.Communication.Revisions;
 using Plus.Communication.Packets.Incoming.Handshake;
 using Plus.Communication.Packets.Outgoing;
 using Plus.HabboHotel.GameClients;
@@ -153,30 +155,115 @@ public sealed class GameClientConnectionCheckTests
         Assert.Equal(1, client.Pings);
     }
 
+    [Fact]
+    public void A_ping_that_fails_to_encode_does_not_count_as_unanswered()
+    {
+        var world = new World();
+        var client = world.LoggedIn(1);
+        var revision = client.Client.Revision;
+        client.Client.Revision = null;
+
+        for (var check = 0; check < 4; check++) {
+            world.Advance(TimeSpan.FromSeconds(30));
+        }
+
+        client.Client.Revision = revision;
+        world.Advance(TimeSpan.FromSeconds(30));
+        Assert.False(client.Disconnected);
+        Assert.Equal(1, client.Pings);
+    }
+
+    [Fact]
+    public void A_slow_ping_sweep_leaves_a_full_interval_to_reply()
+    {
+        var world = new World(new ConnectionCheckConfiguration { PingIntervalSeconds = 1, MaxUnansweredPings = 1 });
+        var client = world.LoggedIn(1);
+        client.Client.SendCallback = _ =>
+        {
+            world.Clock.Advance(TimeSpan.FromSeconds(2));
+
+            return false;
+        };
+
+        world.Advance(TimeSpan.FromSeconds(1));
+        world.Advance(TimeSpan.Zero);
+
+        Assert.False(client.Disconnected);
+        world.Advance(TimeSpan.FromSeconds(1));
+        Assert.True(client.Disconnected);
+    }
+
+    [Fact]
+    public void A_slow_incoming_handler_leaves_time_to_process_a_pong()
+    {
+        var world = new World(new ConnectionCheckConfiguration { PingIntervalSeconds = 1, MaxUnansweredPings = 1 });
+        var handling = new TaskCompletionSource();
+        var server = CatalogSnapshotTestSupport.Proxy<IGameServer>((method, _) => method switch
+        {
+            "PacketReceived" => handling.Task,
+            "ModifyOutgoingPacket" => true,
+            _ => throw new NotSupportedException(method)
+        });
+        var client = new FlashGameClient(server, new FlashPacketFactory(), TestLogging.GameClient)
+        {
+            Revision = new RevisionsCache().InternalRevision
+        };
+        client.SetHabbo(new Habbo { Id = 1, Username = "busy" });
+        world.Manager.RegisterClient(client, 1, "busy");
+
+        world.Advance(TimeSpan.FromSeconds(1));
+        byte[] frame = [0, 0, 0, 2, 9, 215];
+        client.OnReceived(frame, 0, frame.Length);
+
+        try {
+            world.Advance(TimeSpan.FromSeconds(1));
+            world.Advance(TimeSpan.FromSeconds(1));
+            Assert.False(client.Closed.IsCancellationRequested);
+        }
+        finally {
+            handling.SetResult();
+        }
+    }
+
+    [Fact]
+    public void A_closing_client_does_not_get_another_disconnect_request()
+    {
+        var world = new World();
+        var client = world.LoggedIn(1);
+        var requests = 0;
+        client.Client.DisconnectRequested = () => requests++;
+
+        for (var check = 0; check < 6; check++) {
+            world.Advance(TimeSpan.FromSeconds(30));
+        }
+
+        Assert.Equal(1, requests);
+    }
+
     private sealed class World
     {
-        private readonly FakeTimeProvider _clock = new(DateTimeOffset.Parse("2026-11-20T12:00:00Z"));
-        private readonly GameClientManager _manager;
+        public readonly FakeTimeProvider Clock = new(DateTimeOffset.Parse("2026-11-20T12:00:00Z"));
+        public readonly GameClientManager Manager;
 
         public World(ConnectionCheckConfiguration? configuration = null)
         {
-            _manager = new GameClientManager(null!, NullLogger<GameClientManager>.Instance, Options.Create(configuration ?? new ConnectionCheckConfiguration()), _clock);
-            _manager.OnCycle();
+            Manager = new GameClientManager(null!, NullLogger<GameClientManager>.Instance, Options.Create(configuration ?? new ConnectionCheckConfiguration()), Clock);
+            Manager.OnCycle();
         }
 
         public Probe LoggedIn(int id)
         {
             var probe = new Probe(new Habbo { Id = id, Username = $"user{id}" });
             probe.Client.Id = Guid.NewGuid();
-            _manager.RegisterClient(probe.Client, id, $"user{id}");
+            Manager.RegisterClient(probe.Client, id, $"user{id}");
 
             return probe;
         }
 
         public void Advance(TimeSpan time)
         {
-            _clock.Advance(time);
-            _manager.OnCycle();
+            Clock.Advance(time);
+            Manager.OnCycle();
         }
     }
 

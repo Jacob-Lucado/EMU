@@ -99,6 +99,32 @@ public partial class PlacedFurniRoomTests
         Assert.Equal(["1", "5", "b01010s21084", "84de00", "9844e7"], Enumerable.Range(0, 5).Select(_ => update.ReadString()));
     }
 
+    // A one-state group seat answers each use with an ObjectDataUpdate of its unchanged group data.
+    [Fact]
+    public async Task UsingAOneStateGroupSeatSendsItsUnchangedGroupData()
+    {
+        GuildLook(5);
+        AdmitOwner();
+        var item = Add(30, 1, 1, type: InteractionType.GuildItem);
+        item.Definition.Modes = 1;
+        item.GroupId = 5;
+        item.ExtraData = new LegacyDataFormat { Data = "0" };
+        var use = new UseFurnitureEvent(new FurnitureUseService(new FurnitureUseStore(_database), Proxy<IQuestManager>((_, _) => null)));
+
+        for (var click = 0; click < 2; click++) {
+            _client.Packets.Clear();
+
+            await use.Parse(_room, _client, ClientPacket(30, 0));
+
+            Assert.Equal("0", item.LegacyDataString);
+            var update = new FlashIncomingPacket { Buffer = Assert.Single(_client.Packets, packet => packet.Header == ServerPacketHeader.ObjectDataUpdateComposer).Body };
+            Assert.Equal("30", update.ReadString());
+            Assert.Equal(2, update.ReadInt());
+            Assert.Equal(5, update.ReadInt());
+            Assert.Equal(["0", "5", "b01010s21084", "84de00", "9844e7"], Enumerable.Range(0, 5).Select(_ => update.ReadString()));
+        }
+    }
+
     private void GuildLook(int groupId)
     {
         var group = new Group(groupId, "group", "", "b01010s21084", RoomId, 7, null, 0, 19, 37, 0, false, new GroupMembershipSnapshot([7], [], []));

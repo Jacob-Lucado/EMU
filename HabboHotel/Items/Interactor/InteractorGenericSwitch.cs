@@ -16,7 +16,7 @@ public class InteractorGenericSwitch(IQuestManager quests, IRewardTrackManager r
     {
         var modes = item.Definition.Modes - 1;
 
-        if (session != null && hasRights && modes <= 0 && item.Definition.InteractionType == InteractionType.Recolorable) {
+        if (session != null && hasRights && modes <= 0 && (item.Definition.InteractionType == InteractionType.Recolorable || GuildFurnitureAppearance.IsGuildFurni(item.Definition))) {
             item.GetRoom()?.SendObjectData(item, item.LegacyDataString, false);
 
             return;

@@ -12,7 +12,7 @@ public enum MarketplacePurchaseRefusal
 }
 
 // Everything the delivered furni needs, already converted to its unsigned wire types.
-public sealed record MarketplaceDelivery(uint FurniId, uint ItemId, string ExtraData, uint LimitedNumber, uint LimitedStack, ItemDefinition Definition);
+public sealed record MarketplaceDelivery(uint FurniId, uint ItemId, string ExtraData, uint LimitedNumber, uint LimitedStack, ItemDefinition Definition, int GroupId = 0);
 
 public sealed record MarketplacePurchaseRequest(int OfferId, int BuyerId, int BuyerCredits, DateTimeOffset ListedBefore,
     Func<uint, ItemDefinition?> DefinitionOf, Func<MarketplaceDelivery, InventoryItem> Prepare);
@@ -42,6 +42,7 @@ public sealed class MarketplacePurchaseStore(IDatabase database, TimeProvider? t
         public uint UserId { get; set; }
         public int LimitedNumber { get; set; }
         public int LimitedStack { get; set; }
+        public uint GroupId { get; set; }
     }
 
     public MarketplacePurchaseResult Claim(MarketplacePurchaseRequest request)
@@ -64,7 +65,7 @@ public sealed class MarketplacePurchaseStore(IDatabase database, TimeProvider? t
         try {
             MarketplaceCommit.LockUser(connection, transaction, request.BuyerId);
             var offer = connection.QuerySingleOrDefault<OfferRow>("SELECT `state` AS State, `listed_at` AS ListedAt, `total_price` AS TotalPrice, `asking_price` AS AskingPrice, `extra_data` AS ExtraData, " +
-                "`item_id` AS ItemId, `furni_id` AS FurniId, `user_id` AS UserId, `limited_number` AS LimitedNumber, `limited_stack` AS LimitedStack " +
+                "`item_id` AS ItemId, `furni_id` AS FurniId, `user_id` AS UserId, `limited_number` AS LimitedNumber, `limited_stack` AS LimitedStack, `group_id` AS GroupId " +
                 "FROM `catalog_marketplace_offers` WHERE `offer_id` = @OfferId LIMIT 1 FOR UPDATE", new { request.OfferId }, transaction);
 
             if (offer == null) {
@@ -98,7 +99,7 @@ public sealed class MarketplacePurchaseStore(IDatabase database, TimeProvider? t
 
             // Everything that can fail on the way to delivery runs before the first write: parsing the furni data, building the inventory item.
             var delivery = new MarketplaceDelivery(offer.FurniId, offer.ItemId, offer.ExtraData,
-                Convert.ToUInt32(offer.LimitedNumber), Convert.ToUInt32(offer.LimitedStack), definition);
+                Convert.ToUInt32(offer.LimitedNumber), Convert.ToUInt32(offer.LimitedStack), definition, MarketplaceCommit.LockGroup(connection, transaction, offer.GroupId));
             var prepared = request.Prepare(delivery);
 
             if (offer.TotalPrice > request.BuyerCredits) {
@@ -127,6 +128,8 @@ public sealed class MarketplacePurchaseStore(IDatabase database, TimeProvider? t
             if (delivered != 1) {
                 throw new InvalidOperationException($"Furni {offer.FurniId} was not delivered; nothing was charged.");
             }
+
+            MarketplaceCommit.LinkGroup(connection, transaction, delivery.FurniId, delivery.GroupId);
 
             var soldAt = (time ?? TimeProvider.System).GetUtcNow().UtcDateTime;
             var itemType = offer.LimitedNumber > 0 ? 3 : definition.Type == ItemType.Wall ? 2 : 1;

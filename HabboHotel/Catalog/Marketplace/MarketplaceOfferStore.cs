@@ -4,7 +4,7 @@ using Plus.Database;
 namespace Plus.HabboHotel.Catalog.Marketplace;
 
 public sealed record MarketplaceListing(uint FurniId, uint ItemId, int UserId, int AskingPrice, int TotalPrice, string PublicName, int SpriteId,
-    string ItemType, DateTimeOffset ListedAt, string ExtraData, uint LimitedNumber, uint LimitedStack);
+    string ItemType, DateTimeOffset ListedAt, string ExtraData, uint LimitedNumber, uint LimitedStack, int GroupId = 0);
 
 public sealed record MarketplaceSoldOffer(uint OfferId, int AskingPrice);
 
@@ -47,8 +47,8 @@ public sealed class MarketplaceOfferStore(IDatabase database) : IMarketplaceOffe
                     return false;
                 }
 
-                connection.Execute("INSERT INTO `catalog_marketplace_offers` (`furni_id`,`item_id`,`user_id`,`asking_price`,`total_price`,`public_name`,`sprite_id`,`item_type`,`listed_at`,`extra_data`,`limited_number`,`limited_stack`) " +
-                    "VALUES (@FurniId,@ItemId,@UserId,@AskingPrice,@TotalPrice,@PublicName,@SpriteId,@ItemType,@ListedAt,@ExtraData,@LimitedNumber,@LimitedStack)",
+                connection.Execute("INSERT INTO `catalog_marketplace_offers` (`furni_id`,`item_id`,`user_id`,`asking_price`,`total_price`,`public_name`,`sprite_id`,`item_type`,`listed_at`,`extra_data`,`limited_number`,`limited_stack`,`group_id`) " +
+                    "VALUES (@FurniId,@ItemId,@UserId,@AskingPrice,@TotalPrice,@PublicName,@SpriteId,@ItemType,@ListedAt,@ExtraData,@LimitedNumber,@LimitedStack,@GroupId)",
                     new
                     {
                         listing.FurniId,
@@ -62,7 +62,8 @@ public sealed class MarketplaceOfferStore(IDatabase database) : IMarketplaceOffe
                         ListedAt = listing.ListedAt.UtcDateTime,
                         listing.ExtraData,
                         listing.LimitedNumber,
-                        listing.LimitedStack
+                        listing.LimitedStack,
+                        GroupId = Math.Max(listing.GroupId, 0)
                     }, transaction);
                 // TODO @80O: Do not delete items from the items table when putting on marketplace. Just reference the furniture instead.
                 var removed = connection.Execute("DELETE FROM `items` WHERE `id` = @FurniId AND `user_id` = @UserId AND `room_id` = 0 AND base_item=@ItemId LIMIT 1",

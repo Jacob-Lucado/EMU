@@ -1,6 +1,7 @@
 using Dapper;
 using Plus.Communication.Packets.Outgoing.Inventory.Furni;
 using Plus.Database;
+using Plus.HabboHotel.Groups;
 using Plus.HabboHotel.Items;
 using Plus.HabboHotel.Users;
 using Plus.HabboHotel.Users.Inventory.Furniture;
@@ -15,18 +16,21 @@ public class MarketplaceManager : IMarketplaceManager
     private readonly IItemFactory _itemFactory;
     private readonly TimeProvider _time;
     private readonly IMarketplaceFeePolicy? _policy;
+    private readonly IGroupManager? _groups;
     public Dictionary<int, int> MarketAverages { get; } = new();
     public Dictionary<int, int> MarketCounts { get; } = new();
     public List<int> MarketItemKeys { get; } = new();
     public List<MarketOffer> MarketItems { get; } = new();
 
-    public MarketplaceManager(IDatabase database, IItemDataManager itemDataManager, IItemFactory itemFactory, TimeProvider time, IMarketplaceFeePolicy? policy = null)
+    public MarketplaceManager(IDatabase database, IItemDataManager itemDataManager, IItemFactory itemFactory, TimeProvider time, IMarketplaceFeePolicy? policy = null,
+        IGroupManager? groups = null)
     {
         _database = database;
         _itemDataManager = itemDataManager;
         _itemFactory = itemFactory;
         _time = time;
         _policy = policy;
+        _groups = groups;
     }
     public int AvgPriceForSprite(int spriteId)
     {
@@ -184,7 +188,8 @@ public class MarketplaceManager : IMarketplaceManager
                             Definition = delivery.Definition,
                             ExtraData = FurniExtraData.Load(delivery.Definition, delivery.ExtraData, keepLegacy: true),
                             UniqueNumber = delivery.LimitedNumber,
-                            UniqueSeries = delivery.LimitedStack
+                            UniqueSeries = delivery.LimitedStack,
+                            GroupId = delivery.GroupId
                         };
 
                         return item.ToInventoryItem() ?? throw new InvalidOperationException("Marketplace return could not be prepared.");
@@ -195,7 +200,7 @@ public class MarketplaceManager : IMarketplaceManager
                 }
 
                 inventory.Furniture.AddItem(returned);
-                habbo.Client?.Send(new FurniListAddComposer(InventoryItemSnapshot.Capture(returned)));
+                habbo.Client?.Send(new FurniListAddComposer(InventoryItemSnapshot.Capture(returned, GuildFurnitureAppearance.Find(_groups, returned.GroupId))));
                 habbo.Client?.Send(new FurniListNotificationComposer(returned.Id, returned.IsFloorItem ? 1 : 2));
                 habbo.Client?.Send(new FurniListUpdateComposer());
 

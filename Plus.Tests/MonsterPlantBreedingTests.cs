@@ -98,6 +98,30 @@ public sealed class MonsterPlantBreedingTests
     }
 
     [Fact]
+    public async Task BreedingProgressesTheBreederAchievementAndTheBreedTask()
+    {
+        var world = World();
+
+        await world.Request(0, 21, 22);
+
+        Assert.Equal([("ACH_MonsterPlantBreeder", 1), ("breed_monster_plant", 1)], world.Progress);
+        Assert.Equal(2, world.Sent.Count(p => p.Header == ServerPacketHeader.FurniListAddComposer));
+    }
+
+    [Fact]
+    public async Task AFailedBreedProgressesNothing()
+    {
+        var world = World();
+        world.Store.Fail = true;
+
+        await world.Request(0, 21, 22);
+        world.Store.Fail = false;
+        await world.Request(1, 21, 22);
+
+        Assert.Empty(world.Progress);
+    }
+
+    [Fact]
     public async Task TheCelebrationLastsOneStatusUpdate()
     {
         var world = World();
@@ -292,7 +316,13 @@ public sealed class MonsterPlantBreedingTests
         var items = CatalogSnapshotTestSupport.Proxy<IItemDataManager>((method, args) =>
             method == nameof(IItemDataManager.GetItemByName) && (string)args[0]! == "mnstr_seed" ? Seed : null);
 
-        return new(room, client, sent, own, other, store, genetics, new MonsterPlantBreedingService(store, genetics, items, new FixedClock()));
+        var progress = new List<(string Action, int SeedUpdates)>();
+        void RecordProgress(string action) => progress.Add((action, sent.Count(p => p.Header == ServerPacketHeader.FurniListAddComposer)));
+        var achievements = CatalogSnapshotTestSupport.Proxy<IAchievementManager>((_, args) => { RecordProgress((string)args[1]!); return true; });
+        var rewards = CatalogSnapshotTestSupport.Proxy<IRewardTrackManager>((_, args) => { RecordProgress((string)args[1]!); return null; });
+
+        return new(room, client, sent, own, other, store, genetics,
+            new MonsterPlantBreedingService(store, genetics, items, achievements, rewards, new FixedClock()), progress);
     }
 
     private static RoomUser Deploy(Room room, int petId, string name, int rarity, int x, int y)
@@ -315,7 +345,7 @@ public sealed class MonsterPlantBreedingTests
         .GetField(field, BindingFlags.NonPublic | BindingFlags.Instance)!.SetValue(instance, value);
 
     private sealed record Fixture(Room Room, GameClient Client, List<(uint Header, byte[] Payload)> Sent, RoomUser Own, RoomUser Other,
-        RecordingStore Store, RecordingGenetics Genetics, MonsterPlantBreedingService Service)
+        RecordingStore Store, RecordingGenetics Genetics, MonsterPlantBreedingService Service, List<(string Action, int SeedUpdates)> Progress)
     {
         public Task Request(int state, int ownPetId, int otherPetId) =>
             new BreedPetsEvent(Service).Parse(Room, Client, HabbiconTestSupport.Incoming(state, ownPetId, otherPetId));

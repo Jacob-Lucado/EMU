@@ -18,12 +18,16 @@ public static class WiredVariableFxSettings
     private const int StackOrder = 22;
 
     /// <summary>
-    /// The icons of the editor's dropdown plus the campaign "ranch." icons the editor shows behind a client flag; the renderer throws on any other asset name, so no other name is ever stored.
+    /// The icons of the editor's dropdown; the renderer throws on any other asset name, so no other name is ever stored.
     /// </summary>
     private static readonly HashSet<string> Icons = ["battery", "burning", "cash", "cooldown", "droplet", "energy", "eye", "fish", "food", "freezing", "gems",
         "gold", "health", "honor", "magic", "mana", "poison", "repairing", "reputation", "shield", "stamina", "star_power", "stealth", "timeleft",
         "upgrading", "wooden_logs", "ranch.aubergine", "ranch.carrot", "ranch.corn", "ranch.egg", "ranch.grape", "ranch.potato", "ranch.pumpkin",
-        "ranch.sapling", "ranch.tomato", "ranch.wheat"];
+        "ranch.sapling", "ranch.tomato", "ranch.wheat", "xmas26.bauble_red", "xmas26.bauble_blue", "xmas26.bauble_green", "xmas26.bauble_gold",
+        "xmas26.bell", "xmas26.candycane", "xmas26.coal", "xmas26.cookie", "xmas26.gingerbreadman", "xmas26.ice_cube", "xmas26.key", "xmas26.list",
+        "xmas26.present_green", "xmas26.present_red", "xmas26.present_blue", "xmas26.present_purple", "xmas26.present_pink", "xmas26.present_orange",
+        "xmas26.present_gold", "xmas26.santahat", "xmas26.snowball", "xmas26.stocking", "xmas26.ticket_red", "xmas26.ticket_blue",
+        "xmas26.ticket_orange", "xmas26.ticket_green", "xmas26.tree"];
 
     // The delegated colours the client's baked number renderer matches by exact RGB against its RED/GREEN/BLUE/YELLOW rows
     // (VariableFxColorType.resolve); any other value paints a baked number white.

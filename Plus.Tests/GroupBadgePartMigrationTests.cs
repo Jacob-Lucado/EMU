@@ -26,20 +26,22 @@ public sealed class GroupBadgePartMigrationTests
                     ('base', 1, 'base_basic_1.gif', ''), ('base', 22, 'base_ring.gif', ''),
                     ('symbol', 1, 'symbol_background_1.gif', ''), ('symbol', 68, 'symbol_alligator.gif', ''),
                     ('symbol', 183, 'symbol_a.gif', ''), ('symbol', 210, 'symbol_credit_part2.gif', 'symbol_credit_part1.gif'),
-                    ('symbol', 120, 'symbol_custom.gif', ''), ('symbol', 250, 'symbol_custom_2.gif', '');
+                    ('symbol', 120, 'symbol_custom.gif', ''), ('symbol', 250, 'symbol_custom_2.gif', ''),
+                    ('symbol', 100104, 'symbol_unused.gif', '');
                 INSERT INTO `groups` (id, badge) VALUES
                     (1, 'b01130s183104'), (2, 'b22030s68044s01082'), (3, 'b01010s210000'), (4, 'b01010s120001s250002'),
-                    (5, 'b01010'), (6, 'not a badge');
+                    (5, 'b01010'), (6, 'not a badge'), (7, 'b0101s6804'), (8, 'b01010t110000');
                 """);
             var migration = File.ReadAllText(HabbiconPacketTests.Repo(Migration));
 
             connection.Execute(migration);
             connection.Execute(migration);
 
-            Assert.Equal(new[] { "b01130s78104", "b22030t04044s01082", "b01010t14000", "b01010s1120001s250002", "b01010", "not a badge" },
+            Assert.Equal(new[] { "b01130s78104", "b22030t04044s01082", "b01010t14000", "b01010t59001s250002", "b01010", "not a badge", "b01010t04040", "b01010t14000" },
                 connection.Query<string>("SELECT badge FROM `groups` ORDER BY id"));
             Assert.Equal(new[] { "symbol_a.gif", "symbol_alligator.gif", "symbol_credit_part2.gif", "symbol_custom.gif", "symbol_custom_2.gif" },
-                connection.Query<string>("SELECT firstvalue FROM groups_items WHERE type = 'symbol' AND id IN (78, 104, 114, 1120, 250) ORDER BY id = 250, id"));
+                connection.Query<string>("SELECT firstvalue FROM groups_items WHERE type = 'symbol' AND id IN (78, 104, 114, 159, 250) ORDER BY id = 250, id"));
+            Assert.Equal("symbol_unused.gif", connection.QuerySingle<string>("SELECT firstvalue FROM groups_items WHERE type = 'symbol' AND id = 100104"));
             Assert.Equal("symbol_credit_part1.gif", connection.QuerySingle<string>("SELECT secondvalue FROM groups_items WHERE type = 'symbol' AND id = 114"));
             Assert.Equal("symbol_hc_part2.gif", connection.QuerySingle<string>("SELECT firstvalue FROM groups_items WHERE type = 'symbol' AND id = 158"));
         });

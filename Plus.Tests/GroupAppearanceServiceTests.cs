@@ -126,6 +126,20 @@ public sealed class GroupAppearanceServiceTests
         Assert.Equal(ServerPacketHeader.GroupInfoComposer, sent[0].Header);
     }
 
+    [Fact]
+    public async Task BadgeWritesSymbolsFromHundredWithTheTPrefix()
+    {
+        var group = Group();
+        var (owner, _) = Client(7);
+        var service = Service(group, new RecordingStore(), new RecordingGroupInfo());
+
+        await service.UpdateBadge(owner, group.Id, [new(21, 2, 0), new(104, 3, 0), new(68, 4, 1), new(141, 5, 2), new(158, 6, 3)]);
+        Assert.Equal("b21020t04030s68041t41052t58063", group.Badge);
+
+        await service.UpdateBadge(owner, group.Id, [new(1, 11, 0), new(99, 12, 4), new(100, 24, 8)]);
+        Assert.Equal("b01110s99124t00248", group.Badge);
+    }
+
     [RoomComponentDatabaseFact]
     public void StoreUpdatesExactRowAndRejectsMissingGroup()
     {

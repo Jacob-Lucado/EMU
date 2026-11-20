@@ -3,6 +3,8 @@ using Dapper;
 using Microsoft.Extensions.Logging;
 using Plus.Database;
 using Plus.HabboHotel.Catalog.Utilities;
+using Plus.HabboHotel.Items;
+using Plus.HabboHotel.Users;
 using Plus.Utilities.DependencyInjection;
 
 namespace Plus.HabboHotel.Rooms.AI.MonsterPlants;
@@ -17,9 +19,15 @@ public interface IMonsterPlantStore
     Pet? Plant(MonsterPlantSeedRequest request);
 
     void Save(MonsterPlant plant);
+
+    /// <summary>
+    /// Saves two bred plants and gives the owner the seed in one transaction. Returns null and changes nothing when either
+    /// plant has bred already.
+    /// </summary>
+    Item? Breed(MonsterPlant first, MonsterPlant second, ItemDefinition seed, Habbo owner, int rarity);
 }
 
-public sealed class MonsterPlantStore(IDatabase database, ILogger<MonsterPlantStore> logger) : IMonsterPlantStore
+public sealed class MonsterPlantStore(IDatabase database, IItemFactory items, ILogger<MonsterPlantStore> logger) : IMonsterPlantStore
 {
     public Pet? Plant(MonsterPlantSeedRequest request)
     {
@@ -62,6 +70,31 @@ public sealed class MonsterPlantStore(IDatabase database, ILogger<MonsterPlantSt
 
         if (updated != 1) {
             throw new InvalidOperationException("The monster plant was not saved.");
+        }
+    }
+
+    public Item? Breed(MonsterPlant first, MonsterPlant second, ItemDefinition seed, Habbo owner, int rarity)
+    {
+        try {
+            using var connection = database.Connection();
+            connection.Open();
+            using var transaction = connection.BeginTransaction();
+            var bred = connection.Execute("UPDATE bots_monsterplants SET can_breed = 0 WHERE pet_id IN @ids AND can_breed = 1",
+                new { ids = new[] { first.PetId, second.PetId } }, transaction);
+
+            if (bred != 2) {
+                return null;
+            }
+
+            var item = items.CreateSingleItemNullable(connection, transaction, seed, owner, MonsterPlantSeedRarity.Data(rarity));
+            transaction.Commit();
+
+            return item;
+        }
+        catch (Exception exception) {
+            logger.LogError(exception, "Could not breed plants {First} and {Second} for user {OwnerId}", first.PetId, second.PetId, owner.Id);
+
+            return null;
         }
     }
 

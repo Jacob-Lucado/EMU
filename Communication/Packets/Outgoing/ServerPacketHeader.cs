@@ -315,6 +315,7 @@ public static class ServerPacketHeader
     public const uint PetLevelNotificationComposer = 1774;
     public const uint PetStatusUpdateComposer = 1835;
     public const uint PetLevelUpdateComposer = 415;
+    public const uint PetBreedingResultComposer = 2194;
     public const uint FlatAccessDeniedComposer = 1964;
     public const uint LatencyPingResponseComposer = 3231;
     public const uint HabboUserBadgesComposer = 3377;

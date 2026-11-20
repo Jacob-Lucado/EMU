@@ -1,4 +1,5 @@
 using Plus.Communication.Packets.Outgoing.Rooms.AI.Pets;
+using Plus.Communication.Packets.Outgoing.Rooms.Engine;
 using Plus.HabboHotel.GameClients;
 
 namespace Plus.HabboHotel.Rooms.AI.MonsterPlants;
@@ -19,6 +20,20 @@ public sealed class MonsterPlantBot(TimeProvider clock) : BotAi
     public override void OnUserSay(RoomUser user, string message) { }
     public override void OnUserShout(RoomUser user, string message) { }
     public override void OnTimerTick() => Refresh(true);
+
+    /// <summary>Tells the room at once when the plant's level or breeding or revival state changed.</summary>
+    public void Announce() => Refresh(true);
+
+    /// <summary>A plant's gesture lasts one status update.</summary>
+    public void Gesture(string gesture)
+    {
+        if (GetRoomUser() is not { } user || GetRoom() is not { } room) {
+            return;
+        }
+
+        room.SendPacket(new UserUpdateComposer([RoomUserStatusSnapshot.Capture(user, gesture)]));
+        user.UpdateNeeded = true;
+    }
 
     private void Refresh(bool announce)
     {

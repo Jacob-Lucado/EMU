@@ -40,6 +40,8 @@ public sealed class MonsterPlantGenetics(Func<int, int> roll) : IMonsterPlantGen
             shape.Rarity + color.Rarity);
     }
 
+    public int BreedRarity(int first, int second) => Math.Min(first, second) + roll(Math.Abs(first - second) + 1);
+
     private (PlantColor Color, PlantShape Shape) LookOfRarity(int rarity)
     {
         var looks = Looks.Where(look => look.Color.Rarity + look.Shape.Rarity == rarity).ToList();

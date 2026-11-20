@@ -18,6 +18,9 @@ public interface IMonsterPlantGenetics
 {
     /// <summary>Rolls a look. A seed with a rarity grows into a plant of exactly that rarity.</summary>
     MonsterPlantSeedling Roll(ItemDefinition seed, int? rarity);
+
+    /// <summary>The rarity of the seed two plants breed.</summary>
+    int BreedRarity(int first, int second);
 }
 
 [Singleton]

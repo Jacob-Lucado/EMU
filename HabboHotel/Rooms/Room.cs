@@ -61,6 +61,8 @@ public class Room
     // RoomCycle's task slot: 0 idle, else the kind of pass holding it.
     internal int CycleSlot;
     private object? _navigationSync;
+    private object? _monsterPlantSync;
+    internal object MonsterPlantSync => LazyInitializer.EnsureInitialized(ref _monsterPlantSync);
     internal object NavigationSync => LazyInitializer.EnsureInitialized(ref _navigationSync);
     // Only the entrant count and the idle close are decided under this lock, so a room tick may take it while it holds NavigationSync.
     private object? _entrySync;

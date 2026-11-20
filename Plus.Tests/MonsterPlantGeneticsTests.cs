@@ -17,7 +17,7 @@ public sealed class MonsterPlantGeneticsTests
             basePalette
         ]);
 
-        var seedling = new MonsterPlantGenetics(_ => picks.Dequeue()).Roll(new ItemDefinition { ItemName = "mnstr_seed" });
+        var seedling = new MonsterPlantGenetics(_ => picks.Dequeue()).Roll(new ItemDefinition { ItemName = "mnstr_seed" }, null);
 
         Assert.Equal((name, 0, "ffffff", parts, rarity), (seedling.Name, seedling.Look.Race, seedling.Look.Color, seedling.Look.Parts, seedling.Rarity));
     }

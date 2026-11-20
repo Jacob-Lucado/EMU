@@ -24,7 +24,7 @@ public sealed class MonsterPlantGenetics(Func<int, int> roll) : IMonsterPlantGen
 
     public MonsterPlantGenetics() : this(Random.Shared.Next) { }
 
-    public MonsterPlantSeedling Roll(ItemDefinition seed)
+    public MonsterPlantSeedling Roll(ItemDefinition seed, int? rarity)
     {
         var color = Colors[roll(Colors.Count)];
         var shape = Shapes[roll(Shapes.Count)];

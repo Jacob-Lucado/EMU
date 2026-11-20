@@ -334,7 +334,7 @@ public sealed class MonsterPlantSeedServiceTests
 
     private sealed class FixedGenetics : IMonsterPlantGenetics
     {
-        public MonsterPlantSeedling Roll(ItemDefinition seed) => new("Sunspike", new(0, "FFFFFF", "1 0 -1 0"), 3);
+        public MonsterPlantSeedling Roll(ItemDefinition seed, int? rarity) => new("Sunspike", new(0, "FFFFFF", "1 0 -1 0"), 3);
     }
 
     private sealed class RecordingStore : IMonsterPlantStore

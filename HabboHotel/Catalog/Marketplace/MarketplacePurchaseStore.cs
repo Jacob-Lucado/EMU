@@ -12,7 +12,7 @@ public enum MarketplacePurchaseRefusal
 }
 
 // Everything the delivered furni needs, already converted to its unsigned wire types.
-public sealed record MarketplaceDelivery(uint FurniId, uint ItemId, string ExtraData, uint LimitedNumber, uint LimitedStack, ItemDefinition Definition);
+public sealed record MarketplaceDelivery(uint FurniId, uint ItemId, string ExtraData, uint LimitedNumber, uint LimitedStack, ItemDefinition Definition, int GroupId = 0);
 
 public sealed record MarketplacePurchaseRequest(int OfferId, int BuyerId, int BuyerCredits, DateTimeOffset ListedBefore,
     Func<uint, ItemDefinition?> DefinitionOf, Func<MarketplaceDelivery, InventoryItem> Prepare);

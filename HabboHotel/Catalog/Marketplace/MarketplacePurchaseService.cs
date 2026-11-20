@@ -4,6 +4,7 @@ using Plus.Communication.Packets.Outgoing.Inventory.Furni;
 using Plus.Communication.Packets.Outgoing.Inventory.Purse;
 using Plus.Communication.Packets.Outgoing.Marketplace;
 using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Groups;
 using Plus.HabboHotel.Items;
 using Plus.HabboHotel.Users;
 using Plus.HabboHotel.Users.Inventory.Furniture;
@@ -21,7 +22,7 @@ public interface IMarketplacePurchaseService
 }
 
 public sealed class MarketplacePurchaseService(IMarketplacePurchaseStore store, IItemDataManager items, IMarketplaceManager marketplace,
-    TimeProvider time, IMarketplaceFeePolicy? policy = null) : IMarketplacePurchaseService
+    TimeProvider time, IMarketplaceFeePolicy? policy = null, IGroupManager? groups = null) : IMarketplacePurchaseService
 {
 
     public MarketplacePurchaseOutcome Buy(GameClient session, int offerId)

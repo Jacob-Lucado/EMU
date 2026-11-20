@@ -4,7 +4,7 @@ using Plus.Database;
 namespace Plus.HabboHotel.Catalog.Marketplace;
 
 public sealed record MarketplaceListing(uint FurniId, uint ItemId, int UserId, int AskingPrice, int TotalPrice, string PublicName, int SpriteId,
-    string ItemType, DateTimeOffset ListedAt, string ExtraData, uint LimitedNumber, uint LimitedStack);
+    string ItemType, DateTimeOffset ListedAt, string ExtraData, uint LimitedNumber, uint LimitedStack, int GroupId = 0);
 
 public sealed record MarketplaceSoldOffer(uint OfferId, int AskingPrice);
 

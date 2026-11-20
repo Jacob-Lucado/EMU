@@ -1,6 +1,7 @@
 using Dapper;
 using Plus.Communication.Packets.Outgoing.Inventory.Furni;
 using Plus.Database;
+using Plus.HabboHotel.Groups;
 using Plus.HabboHotel.Items;
 using Plus.HabboHotel.Users;
 using Plus.HabboHotel.Users.Inventory.Furniture;
@@ -15,18 +16,21 @@ public class MarketplaceManager : IMarketplaceManager
     private readonly IItemFactory _itemFactory;
     private readonly TimeProvider _time;
     private readonly IMarketplaceFeePolicy? _policy;
+    private readonly IGroupManager? _groups;
     public Dictionary<int, int> MarketAverages { get; } = new();
     public Dictionary<int, int> MarketCounts { get; } = new();
     public List<int> MarketItemKeys { get; } = new();
     public List<MarketOffer> MarketItems { get; } = new();
 
-    public MarketplaceManager(IDatabase database, IItemDataManager itemDataManager, IItemFactory itemFactory, TimeProvider time, IMarketplaceFeePolicy? policy = null)
+    public MarketplaceManager(IDatabase database, IItemDataManager itemDataManager, IItemFactory itemFactory, TimeProvider time, IMarketplaceFeePolicy? policy = null,
+        IGroupManager? groups = null)
     {
         _database = database;
         _itemDataManager = itemDataManager;
         _itemFactory = itemFactory;
         _time = time;
         _policy = policy;
+        _groups = groups;
     }
     public int AvgPriceForSprite(int spriteId)
     {

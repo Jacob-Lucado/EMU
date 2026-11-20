@@ -33,7 +33,7 @@ public sealed class GroupBadgePartIds
 
     public int GetEditorId(bool isBase, int codeId) => codeId == 0
         ? 0
-        : (isBase ? _baseEditorIds : _symbolEditorIds).GetValueOrDefault(codeId, codeId + GroupBadgeParts.CustomEditorIdOffset);
+        : (isBase ? _baseEditorIds : _symbolEditorIds).GetValueOrDefault(codeId);
 
     public ImmutableArray<GroupBadgePiece> ToEditorIds(ImmutableArray<GroupBadgePiece> pieces) =>
         [.. pieces.Select((piece, index) => piece with { Symbol = GetEditorId(index == 0, piece.Symbol) })];

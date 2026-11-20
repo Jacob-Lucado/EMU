@@ -25,6 +25,7 @@ public sealed record InventoryItemSnapshot(uint Id, string Type, int SpriteId, F
             InteractionType.HorseHairstyle => FurniCategory.PetCustomPart,
             InteractionType.HorseHairDye => FurniCategory.PetCustomPartShampoo,
             InteractionType.HorseSaddle1 or InteractionType.HorseSaddle2 => FurniCategory.PetSaddle,
+            _ when definition.SpecialType == (int)FurniCategory.MonsterplantSeed => FurniCategory.MonsterplantSeed,
             _ when isGuildFurni => FurniCategory.GuildFurni,
             _ => RecyclerBox.IsDefinition(definition)
                 ? FurniCategory.EcotronBox
@@ -36,10 +37,12 @@ public sealed record InventoryItemSnapshot(uint Id, string Type, int SpriteId, F
             : isGuildFurni ? (guild ?? new GuildFurnitureAppearance(item.GroupId, "", "", "")).Data(GuildState(item.ExtraData))
             : FurnitureDataSnapshot.Capture(item.ExtraData);
 
+        var isSeed = category == FurniCategory.MonsterplantSeed;
+
         return new(item.Id, definition.Type.ToCharCode(), definition.SpriteId, category,
             data, item.UniqueNumber, item.UniqueSeries,
-            definition.AllowEcotronRecycle, definition.AllowTrade, item.ShouldStackInInventory(),
-            item.UniqueNumber == 0 && definition.AllowInventoryStack, definition.AllowMarketplaceSell, item.IsWallItem);
+            !isSeed && definition.AllowEcotronRecycle, definition.AllowTrade, !isSeed && item.ShouldStackInInventory(),
+            !isSeed && item.UniqueNumber == 0 && definition.AllowInventoryStack, definition.AllowMarketplaceSell, item.IsWallItem);
     }
 
     // The inventory stores most states as empty data; a group furni then shows state 0.

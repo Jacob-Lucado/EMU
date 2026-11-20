@@ -30,10 +30,21 @@ public sealed class MonsterPlantBreedingService(IMonsterPlantStore store, IMonst
 
     public void Breed(Room room, GameClient session, int state, int ownPetId, int otherPetId)
     {
+        if (state != RequestState || ownPetId == otherPetId) {
+            return;
+        }
+
+        lock (room.MonsterPlantSync) {
+            BreedOwnedPair(room, session, ownPetId, otherPetId);
+        }
+    }
+
+    private void BreedOwnedPair(Room room, GameClient session, int ownPetId, int otherPetId)
+    {
         var habbo = session.GetHabbo();
         var users = room.GetRoomUserManager();
 
-        if (state != RequestState || ownPetId == otherPetId || habbo == null || !ReferenceEquals(habbo.CurrentRoom, room)
+        if (habbo == null || !ReferenceEquals(habbo.CurrentRoom, room)
             || !users.TryGetPet(ownPetId, out var own) || !users.TryGetPet(otherPetId, out var other)
             || own.PetData is not { Plant: { } ownPlant } ownPet || other.PetData is not { Plant: { } otherPlant } otherPet
             || ownPet.OwnerId != habbo.Id || otherPet.OwnerId != habbo.Id) {
@@ -57,9 +68,12 @@ public sealed class MonsterPlantBreedingService(IMonsterPlantStore store, IMonst
         otherPet.Plant = otherBred;
         var inventorySeed = seed.ToInventoryItem();
 
+        FurniListAddComposer? seedUpdate = null;
+
         if (habbo.Inventory?.Furniture.AddItem(inventorySeed) == true) {
+            seedUpdate = new FurniListAddComposer(InventoryItemSnapshot.Capture(inventorySeed));
             session.Send(new FurniListNotificationComposer(seed.Id, 1));
-            session.Send(new FurniListAddComposer(InventoryItemSnapshot.Capture(inventorySeed)));
+            session.Send(seedUpdate);
         }
 
         (own.BotAi as MonsterPlantBot)?.Announce();
@@ -74,5 +88,9 @@ public sealed class MonsterPlantBreedingService(IMonsterPlantStore store, IMonst
 
         achievements.ProgressAchievement(session, "ACH_MonsterPlantBreeder", 1);
         rewards.Progress(session, RewardTrackActions.BreedMonsterPlant);
+
+        if (seedUpdate != null) {
+            session.Send(seedUpdate);
+        }
     }
 }

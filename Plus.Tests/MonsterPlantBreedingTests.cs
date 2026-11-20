@@ -59,11 +59,13 @@ public sealed class MonsterPlantBreedingTests
         await world.Request(0, 21, 22);
 
         uint[] watched = [ServerPacketHeader.FurniListNotificationComposer, ServerPacketHeader.FurniListAddComposer,
-            ServerPacketHeader.PetStatusUpdateComposer, ServerPacketHeader.PetBreedingResultComposer, ServerPacketHeader.ChatComposer];
+            ServerPacketHeader.PetStatusUpdateComposer, ServerPacketHeader.PetBreedingResultComposer, ServerPacketHeader.UserUpdateComposer, ServerPacketHeader.ChatComposer];
         Assert.Equal([ServerPacketHeader.FurniListNotificationComposer, ServerPacketHeader.FurniListAddComposer,
                 ServerPacketHeader.PetStatusUpdateComposer, ServerPacketHeader.PetStatusUpdateComposer,
-                ServerPacketHeader.PetBreedingResultComposer, ServerPacketHeader.ChatComposer],
+                ServerPacketHeader.PetBreedingResultComposer, ServerPacketHeader.UserUpdateComposer, ServerPacketHeader.ChatComposer, ServerPacketHeader.FurniListAddComposer],
             world.Sent.Select(p => p.Header).Where(watched.Contains));
+        var seedUpdates = world.Sent.Where(p => p.Header == ServerPacketHeader.FurniListAddComposer).ToList();
+        Assert.Equal(seedUpdates[0].Payload, seedUpdates[1].Payload);
         var statuses = world.Sent.Where(p => p.Header == ServerPacketHeader.PetStatusUpdateComposer).Select(p => p.Payload).ToList();
         Assert.Equal([(world.Own.VirtualId, 21), (world.Other.VirtualId, 22)], statuses.Select(p => (Int(p, 0), Int(p, 4))));
         Assert.All(statuses, p => Assert.Equal(new byte[] { 0, 0, 0, 0 }, p[8..12]));
@@ -88,8 +90,7 @@ public sealed class MonsterPlantBreedingTests
 
         await world.Request(0, 21, 22);
 
-        Assert.Equal("rev", world.Own.Statusses["gst"]);
-        Assert.True(world.Own.UpdateNeeded);
+        Assert.Contains("gst rev", Encoding.UTF8.GetString(world.Sent.Single(p => p.Header == ServerPacketHeader.UserUpdateComposer).Payload));
         Assert.False(world.Other.Statusses.ContainsKey("gst"));
         var chat = world.Sent.Single(p => p.Header == ServerPacketHeader.ChatComposer).Payload;
         Assert.Equal(world.Own.VirtualId, Int(chat, 0));
@@ -126,14 +127,15 @@ public sealed class MonsterPlantBreedingTests
         var world = World();
         await world.Request(0, 21, 22);
 
-        world.Own.BotAi.OnTimerTick();
-        Assert.Equal("rev", world.Own.Statusses["gst"]);
+        world.Room.GetRoomUserManager().SerializeStatusUpdates();
 
-        world.Own.UpdateNeeded = false;
-        world.Own.BotAi.OnTimerTick();
-
-        Assert.False(world.Own.Statusses.ContainsKey("gst"));
-        Assert.True(world.Own.UpdateNeeded);
+        var updates = world.Sent.Where(p => p.Header == ServerPacketHeader.UserUpdateComposer)
+            .Select(p => Encoding.UTF8.GetString(p.Payload)).ToList();
+        Assert.Collection(updates, gesture => Assert.Contains("gst rev", gesture), posture =>
+        {
+            Assert.Contains("std", posture);
+            Assert.DoesNotContain("gst", posture);
+        });
     }
 
     [Fact]
@@ -219,6 +221,43 @@ public sealed class MonsterPlantBreedingTests
         Assert.True(world.Other.PetData!.Plant!.CanBreed);
         Assert.Empty(world.Client.GetHabbo().Inventory.Furniture.GetItems);
         Assert.Empty(world.Sent);
+    }
+
+    [Fact]
+    public async Task TreatingDuringBreedingKeepsTheNewWellbeingAndBreedingState()
+    {
+        var world = World();
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var release = new ManualResetEventSlim();
+        world.Store.BeforeBreed = () =>
+        {
+            started.SetResult();
+            Assert.True(release.Wait(TimeSpan.FromSeconds(10)));
+        };
+        var breed = Task.Run(() => world.Request(0, 21, 22));
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        var treating = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var treat = Task.Run(() =>
+        {
+            var achievements = CatalogSnapshotTestSupport.Proxy<IAchievementManager>((_, _) => true);
+            var rewards = CatalogSnapshotTestSupport.Proxy<IRewardTrackManager>((_, _) => null);
+            var service = new PetRespectService(achievements, null!, rewards, world.Store, new FixedClock());
+            treating.SetResult();
+            service.Respect(world.Room, world.Client, 21);
+        });
+
+        try {
+            await treating.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            await Task.WhenAny(treat, Task.Delay(250));
+        }
+        finally {
+            release.Set();
+        }
+
+        await Task.WhenAll(breed, treat);
+        Assert.Equal(Now + MonsterPlant.GrownMaxWellbeing, world.Own.PetData!.Plant!.WellbeingUntil);
+        Assert.False(world.Own.PetData.Plant.CanBreed);
+        Assert.False(Assert.Single(world.Store.Treated).CanBreed);
     }
 
     [Fact]
@@ -330,13 +369,16 @@ public sealed class MonsterPlantBreedingTests
     {
         public List<(MonsterPlant First, MonsterPlant Second, ItemDefinition Seed, Habbo Owner, int Rarity)> Bred { get; } = [];
         public bool Fail;
+        public Action? BeforeBreed;
+        public List<MonsterPlant> Treated { get; } = [];
 
         public Pet? Plant(MonsterPlantSeedRequest request) => throw new InvalidOperationException("Breeding plants nothing.");
 
-        public void Save(MonsterPlant plant) => throw new InvalidOperationException("Breeding saves both plants together.");
+        public void Save(MonsterPlant plant) => Treated.Add(plant);
 
         public Item? Breed(MonsterPlant first, MonsterPlant second, ItemDefinition seed, Habbo owner, int rarity)
         {
+            BeforeBreed?.Invoke();
             Bred.Add((first, second, seed, owner, rarity));
 
             return Fail

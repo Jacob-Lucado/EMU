@@ -1,4 +1,5 @@
 using Plus.Communication.Packets.Outgoing.Rooms.AI.Pets;
+using Plus.Communication.Packets.Outgoing.Rooms.Engine;
 using Plus.HabboHotel.GameClients;
 
 namespace Plus.HabboHotel.Rooms.AI.MonsterPlants;
@@ -26,11 +27,11 @@ public sealed class MonsterPlantBot(TimeProvider clock) : BotAi
     /// <summary>A plant's gesture lasts one status update.</summary>
     public void Gesture(string gesture)
     {
-        if (GetRoomUser() is not { } user) {
+        if (GetRoomUser() is not { } user || GetRoom() is not { } room) {
             return;
         }
 
-        user.Statusses["gst"] = gesture;
+        room.SendPacket(new UserUpdateComposer([RoomUserStatusSnapshot.Capture(user, gesture)]));
         user.UpdateNeeded = true;
     }
 
@@ -46,10 +47,6 @@ public sealed class MonsterPlantBot(TimeProvider clock) : BotAi
         if (!user.Statusses.ContainsKey(posture)) {
             user.Statusses.Clear();
             user.Statusses[posture] = "";
-            user.UpdateNeeded = true;
-        }
-
-        if (!user.UpdateNeeded && user.Statusses.Remove("gst")) {
             user.UpdateNeeded = true;
         }
 

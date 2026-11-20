@@ -13,6 +13,10 @@ public sealed class MonsterPlantSeedRarityTests
     {
         Id = 4582,
         Type = ItemType.Floor,
+        AllowEcotronRecycle = true,
+        AllowTrade = true,
+        AllowInventoryStack = true,
+        AllowMarketplaceSell = true,
         ItemName = "mnstr_seed",
         SpecialType = (int)FurniCategory.MonsterplantSeed
     };
@@ -36,7 +40,7 @@ public sealed class MonsterPlantSeedRarityTests
 
         new FurniListAddComposer(InventoryItemSnapshot.Capture(item)).Compose(packet);
 
-        Assert.True(ContainsRun(packet.Writes, [1, 1, "rarity", "2"]), string.Join(",", packet.Writes));
+        Assert.True(ContainsRun(packet.Writes, [19, 1, 1, "rarity", "2", false, true, false, true]), string.Join(",", packet.Writes));
     }
 
     [Fact]

@@ -156,6 +156,11 @@ public sealed class CatalogGiftPurchaseService : ICatalogGiftPurchaseService
 
         var definition = item.Definition!;
 
+        // Group furni stay giftable in the catalogue, but the purchase is always refused.
+        if (GuildFurnitureAppearance.IsGuildFurni(definition)) {
+            return Reject(session, "group furni offer {OfferId} cannot be gifted", itemId);
+        }
+
         if (!_itemManager.Gifts.TryGetValue(spriteId, out var presentId) || !_itemManager.Items.TryGetValue(presentId, out var presentData) || presentData.InteractionType != InteractionType.Gift) {
             return Reject(session, "gift wrapper sprite {SpriteId} is not a configured gift box", spriteId);
         }

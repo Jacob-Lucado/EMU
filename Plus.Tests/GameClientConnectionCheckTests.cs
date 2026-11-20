@@ -109,6 +109,26 @@ public sealed class GameClientConnectionCheckTests
     }
 
     [Fact]
+    public void Settings_below_one_fall_back_to_the_defaults()
+    {
+        var world = new World(new ConnectionCheckConfiguration { PingIntervalSeconds = 0, MaxUnansweredPings = 0 });
+        var client = world.LoggedIn(1);
+
+        world.Advance(TimeSpan.FromSeconds(29));
+        Assert.Equal(0, client.Pings);
+
+        for (var check = 0; check < 3; check++) {
+            world.Advance(TimeSpan.FromSeconds(30));
+        }
+
+        Assert.Equal(3, client.Pings);
+        Assert.False(client.Disconnected);
+
+        world.Advance(TimeSpan.FromSeconds(30));
+        Assert.True(client.Disconnected);
+    }
+
+    [Fact]
     public void A_connection_that_has_not_logged_in_is_not_pinged_or_disconnected()
     {
         var world = new World();

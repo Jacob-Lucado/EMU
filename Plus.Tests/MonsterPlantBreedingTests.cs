@@ -97,6 +97,29 @@ public sealed class MonsterPlantBreedingTests
     }
 
     [Fact]
+    public async Task BreedingProgressesTheBreederAchievementAndTheBreedTask()
+    {
+        var world = World();
+
+        await world.Request(0, 21, 22);
+
+        Assert.Equal(["ACH_MonsterPlantBreeder", "breed_monster_plant"], world.Progress);
+    }
+
+    [Fact]
+    public async Task AFailedBreedProgressesNothing()
+    {
+        var world = World();
+        world.Store.Fail = true;
+
+        await world.Request(0, 21, 22);
+        world.Store.Fail = false;
+        await world.Request(1, 21, 22);
+
+        Assert.Empty(world.Progress);
+    }
+
+    [Fact]
     public async Task TheCelebrationLastsOneStatusUpdate()
     {
         var world = World();

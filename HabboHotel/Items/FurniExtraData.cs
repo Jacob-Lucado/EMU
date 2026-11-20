@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using Plus.HabboHotel.Items.DataFormat;
+using Plus.HabboHotel.Rooms.AI.MonsterPlants;
 using Plus.HabboHotel.Users.Inventory.Furniture;
 
 namespace Plus.HabboHotel.Items;
@@ -180,6 +181,10 @@ internal static class FurniExtraData
             }
 
             return board;
+        }
+
+        if (definition.SpecialType == (int)FurniCategory.MonsterplantSeed && MonsterPlantSeedRarity.Load(stored) is { } seed) {
+            return seed;
         }
 
         // Every firing flips a box's legacy state between "1" and "0", and a box that never fired rests at "0". A box keeps legacy data in the

@@ -41,6 +41,27 @@ public sealed class MonsterPlantSeedServiceTests
     }
 
     [Fact]
+    public void ASeedGrowsIntoAPlantOfItsRarity()
+    {
+        var world = World();
+        world.Item.ExtraData = FurniExtraData.Load(world.Item.Definition, "rarity\t2", keepLegacy: true);
+
+        world.Service.TryPlant(world.Room, world.Client, 7);
+
+        Assert.Equal([2], world.Genetics.Rarities);
+    }
+
+    [Fact]
+    public void ASeedWithoutARarityRollsAnyLook()
+    {
+        var world = World();
+
+        world.Service.TryPlant(world.Room, world.Client, 7);
+
+        Assert.Equal([null], world.Genetics.Rarities);
+    }
+
+    [Fact]
     public void PlantingASeedProgressesThePlantMonsterPlantTask()
     {
         var world = World();
@@ -322,19 +343,27 @@ public sealed class MonsterPlantSeedServiceTests
         var clock = new FixedClock();
 
         var rewards = new List<string>();
+        var genetics = new FixedGenetics();
 
-        return new(room, item, client, sent, store, clock, new(store, new FixedGenetics(), clock,
-            CatalogSnapshotTestSupport.Proxy<IRewardTrackManager>((_, args) => { rewards.Add((string)args[1]!); return null; })), rewards);
+        return new(room, item, client, sent, store, clock, new(store, genetics, clock,
+            CatalogSnapshotTestSupport.Proxy<IRewardTrackManager>((_, args) => { rewards.Add((string)args[1]!); return null; })), rewards, genetics);
     }
 
     private static void Set(object instance, string field, object value) => instance.GetType()
         .GetField(field, BindingFlags.NonPublic | BindingFlags.Instance)!.SetValue(instance, value);
 
-    private sealed record Fixture(Room Room, Item Item, GameClient Client, List<(uint Header, byte[] Payload)> Sent, RecordingStore Store, FixedClock Clock, MonsterPlantSeedService Service, List<string> Rewards);
+    private sealed record Fixture(Room Room, Item Item, GameClient Client, List<(uint Header, byte[] Payload)> Sent, RecordingStore Store, FixedClock Clock, MonsterPlantSeedService Service, List<string> Rewards, FixedGenetics Genetics);
 
     private sealed class FixedGenetics : IMonsterPlantGenetics
     {
-        public MonsterPlantSeedling Roll(ItemDefinition seed) => new("Sunspike", new(0, "FFFFFF", "1 0 -1 0"), 3);
+        public List<int?> Rarities { get; } = [];
+
+        public MonsterPlantSeedling Roll(ItemDefinition seed, int? rarity)
+        {
+            Rarities.Add(rarity);
+
+            return new("Sunspike", new(0, "FFFFFF", "1 0 -1 0"), 3);
+        }
     }
 
     private sealed class RecordingStore : IMonsterPlantStore

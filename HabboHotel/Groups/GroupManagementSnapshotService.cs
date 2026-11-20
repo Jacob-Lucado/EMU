@@ -39,7 +39,7 @@ public sealed class GroupManagementSnapshotService(IGroupManager groups, IRoomDa
         var snapshot = new GroupManagementSnapshot(
             group.RoomId != 0, group.RoomId, roomName, group.Id, group.Name, group.Description,
             group.Colour1, group.Colour2, group.Type switch { GroupType.Open => 0, GroupType.Locked => 1, _ => 2 },
-            group.AdminOnlyDeco, pieces, group.Badge, group.MemberCount, group.ForumEnabled);
+            group.AdminOnlyDeco, groups.BadgePartIds.ToEditorIds(pieces), group.Badge, group.MemberCount, group.ForumEnabled);
         session.Send(new ManageGroupComposer(snapshot));
     }
 

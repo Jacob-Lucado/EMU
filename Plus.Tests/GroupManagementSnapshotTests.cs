@@ -82,6 +82,20 @@ public sealed class GroupManagementSnapshotTests
         Assert.Empty(deniedSent);
     }
 
+    [Fact]
+    public void ManagedBadgePartsAreSentWithEditorIds()
+    {
+        var group = GroupFixture(creatorId: 1);
+        group.Badge = "b21020t04030s68041";
+        var service = new GroupManagementSnapshotService(GroupManager(group), new MissingRoomLoader());
+        var (creator, sent) = HabbiconTestSupport.Client(new Habbo { Id = 1 });
+
+        service.Send(creator, group.Id);
+
+        var parts = HabbiconTestSupport.Incoming(5, 65, 2, 0, 122, 3, 0, 173, 4, 1, 0, 0, 0, 0, 0, 0, "b21020t04030s68041").Buffer.ToArray();
+        Assert.Contains(Convert.ToHexString(parts), Convert.ToHexString(Assert.Single(sent).Payload));
+    }
+
     private static Group GroupFixture(int creatorId)
     {
         var group = (Group)RuntimeHelpers.GetUninitializedObject(typeof(Group));
@@ -115,6 +129,10 @@ public sealed class GroupManagementSnapshotTests
         public Group Group { get; set; } = null!;
         protected override object? Invoke(MethodInfo? method, object?[]? args)
         {
+            if (method?.Name == "get_BadgePartIds") {
+                return GroupBadgeTestIds.Habbo;
+            }
+
             if (method?.Name != nameof(IGroupManager.TryGetGroup)) {
                 throw new NotSupportedException(method?.Name);
             }

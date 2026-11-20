@@ -116,7 +116,7 @@ public sealed class GroupAppearanceServiceTests
         var (owner, sent) = Client(7);
         var service = Service(group, store, snapshots);
 
-        await service.UpdateBadge(owner, group.Id, [new(1, 1, 4), new(2, 2, 4)]);
+        await service.UpdateBadge(owner, group.Id, [new(1, 1, 4), new(22, 2, 4)]);
         await service.UpdateBadge(owner, group.Id, ImmutableArray<GroupBadgePartRequest>.Empty);
 
         Assert.Equal("b01014s02024", group.Badge);
@@ -127,17 +127,34 @@ public sealed class GroupAppearanceServiceTests
     }
 
     [Fact]
-    public async Task BadgeWritesSymbolsFromHundredWithTheTPrefix()
+    public async Task BadgeEditorIdsAreWrittenAsBadgeCodeIdsWithTheTPrefixFromHundred()
     {
         var group = Group();
         var (owner, _) = Client(7);
         var service = Service(group, new RecordingStore(), new RecordingGroupInfo());
 
-        await service.UpdateBadge(owner, group.Id, [new(21, 2, 0), new(104, 3, 0), new(68, 4, 1), new(141, 5, 2), new(158, 6, 3)]);
+        await service.UpdateBadge(owner, group.Id, [new(65, 2, 0), new(122, 3, 0), new(173, 4, 1), new(209, 5, 2), new(211, 6, 3)]);
         Assert.Equal("b21020t04030s68041t41052t58063", group.Badge);
 
-        await service.UpdateBadge(owner, group.Id, [new(1, 11, 0), new(99, 12, 4), new(100, 24, 8)]);
+        await service.UpdateBadge(owner, group.Id, [new(1, 11, 0), new(203, 12, 4), new(204, 24, 8), new(0, 0, 0)]);
         Assert.Equal("b01110s99124t00248", group.Badge);
+    }
+
+    [Theory]
+    [InlineData(21, 22)]
+    [InlineData(1, 2)]
+    [InlineData(1, 65)]
+    public async Task UnknownEditorIdsLeaveTheBadgeUnchanged(int baseId, int symbolId)
+    {
+        var group = Group();
+        var store = new RecordingStore();
+        var (owner, sent) = Client(7);
+
+        await Service(group, store).UpdateBadge(owner, group.Id, [new(baseId, 1, 4), new(symbolId, 2, 4)]);
+
+        Assert.Equal("b05114s06114", group.Badge);
+        Assert.Equal(0, store.Writes);
+        Assert.Empty(sent);
     }
 
     [RoomComponentDatabaseFact]
@@ -173,7 +190,16 @@ public sealed class GroupAppearanceServiceTests
     }
 
     private static GroupAppearanceService Service(Group group, RecordingStore store, RecordingGroupInfo? info = null) => new(
-        Proxy<IGroupManager>((method, args) => { args[1] = group; return true; }),
+        Proxy<IGroupManager>((method, args) =>
+        {
+            if (method == "get_BadgePartIds") {
+                return GroupBadgeTestIds.Habbo;
+            }
+
+            args[1] = group;
+
+            return true;
+        }),
         new RecordingFilter(value => value),
         info ?? new RecordingGroupInfo(),
         store);

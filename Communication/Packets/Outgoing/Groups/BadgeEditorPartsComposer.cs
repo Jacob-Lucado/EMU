@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Groups;
 
@@ -12,7 +13,7 @@ public class BadgeEditorPartsComposer(BadgeEditorPresentation presentation) : IS
         packet.WriteInteger(presentation.Bases.Length);
 
         foreach (var part in presentation.Bases) {
-            packet.WriteInteger(part.Id);
+            packet.WriteInteger(part.EditorId);
             packet.WriteString(part.AssetOne);
             packet.WriteString(part.AssetTwo);
         }
@@ -20,7 +21,7 @@ public class BadgeEditorPartsComposer(BadgeEditorPresentation presentation) : IS
         packet.WriteInteger(presentation.Symbols.Length);
 
         foreach (var part in presentation.Symbols) {
-            packet.WriteInteger(part.Id);
+            packet.WriteInteger(part.EditorId);
             packet.WriteString(part.AssetOne);
             packet.WriteString(part.AssetTwo);
         }
@@ -44,6 +45,19 @@ public class BadgeEditorPartsComposer(BadgeEditorPresentation presentation) : IS
         foreach (var color in presentation.BackgroundColours) {
             packet.WriteInteger(color.Id);
             packet.WriteString(color.Colour);
+        }
+
+        // Badge code ids follow the fields the official client reads, so clients that draw badge codes themselves can map each part.
+        WriteCodeIds(packet, presentation.Bases);
+        WriteCodeIds(packet, presentation.Symbols);
+    }
+
+    private static void WriteCodeIds(IOutgoingPacket packet, ImmutableArray<BadgePartPresentation> parts)
+    {
+        packet.WriteInteger(parts.Length);
+
+        foreach (var part in parts) {
+            packet.WriteInteger(part.CodeId);
         }
     }
 }

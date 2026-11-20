@@ -30,6 +30,7 @@ internal sealed class TestGroupManager(Func<int, Group?>? lookup = null, Func<in
     public static TestGroupManager Empty { get; } = new();
     public ICollection<GroupBadgeParts> BadgeBases => throw Unused();
     public ICollection<GroupBadgeParts> BadgeSymbols => throw Unused();
+    public GroupBadgePartIds BadgePartIds => throw Unused();
     public ICollection<GroupColours> BadgeBaseColours => throw Unused();
     public ICollection<GroupColours> BadgeSymbolColours => throw Unused();
     public ICollection<GroupColours> BadgeBackColours => throw Unused();

@@ -23,7 +23,8 @@ public sealed record GroupInfoSnapshot(
     bool ViewerHasRequest,
     int PendingRequests,
     bool AdminOnlyDecoOpen,
-    bool ForumEnabled);
+    bool ForumEnabled,
+    bool ViewerFavourite = false);
 
 public interface IGroupInfoSnapshotService
 {
@@ -56,7 +57,8 @@ public sealed class GroupInfoSnapshotService(IGameClientManager clientManager, I
             group.HasRequest(viewerId),
             viewerIsCreator || viewerIsAdmin ? group.RequestCount : 0,
             group.AdminOnlyDeco == 0,
-            group.ForumEnabled);
+            group.ForumEnabled,
+            clientManager.GetClientByUserId(viewerId)?.GetHabbo()?.HabboStats?.FavouriteGroupId == group.Id);
     }
 
     private string ResolveUsername(int userId)

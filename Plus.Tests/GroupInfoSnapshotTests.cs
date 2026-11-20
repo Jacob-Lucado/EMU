@@ -137,14 +137,14 @@ public class GroupInfoSnapshotTests : IDisposable
     }
 
     [Fact]
-    public void CreationDatePreservesWireFormatAndUnknownPolicy()
+    public void CreationDateHasTwoDigitDayAndMonthAndUnknownPolicy()
     {
         var group = NewGroup(type: 0, forum: false, adminOnly: 0);
         group.CreatedAt = null;
-        Assert.Equal("1-1-1970", Service(_clients, _ => null).Capture(group, 9).CreatedOn);
+        Assert.Equal("01-01-1970", Service(_clients, _ => null).Capture(group, 9).CreatedOn);
 
         group.CreatedAt = new DateTimeOffset(2040, 1, 2, 3, 4, 5, TimeSpan.Zero).AddTicks(1_234_560);
-        Assert.Equal("2-1-2040", Service(_clients, _ => null).Capture(group, 9).CreatedOn);
+        Assert.Equal("02-01-2040", Service(_clients, _ => null).Capture(group, 9).CreatedOn);
     }
 
     private static IRoomManager UnloadedRooms() => Proxy<IRoomManager>((method, args) =>

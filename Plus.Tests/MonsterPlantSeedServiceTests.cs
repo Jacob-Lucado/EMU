@@ -364,6 +364,8 @@ public sealed class MonsterPlantSeedServiceTests
 
             return new("Sunspike", new(0, "FFFFFF", "1 0 -1 0"), 3);
         }
+
+        public int BreedRarity(int first, int second) => 0;
     }
 
     private sealed class RecordingStore : IMonsterPlantStore
@@ -385,12 +387,14 @@ public sealed class MonsterPlantSeedServiceTests
         }
 
         public void Save(MonsterPlant plant) { }
+        public Item? Breed(MonsterPlant first, MonsterPlant second, ItemDefinition seed, Habbo owner, int rarity) => null;
     }
 
     private sealed class SavingStore(List<MonsterPlant> saved) : IMonsterPlantStore
     {
         public Pet? Plant(MonsterPlantSeedRequest request) => null;
         public void Save(MonsterPlant plant) => saved.Add(plant);
+        public Item? Breed(MonsterPlant first, MonsterPlant second, ItemDefinition seed, Habbo owner, int rarity) => null;
     }
 
     private sealed class RecordingFurniture : IFurnitureUseService

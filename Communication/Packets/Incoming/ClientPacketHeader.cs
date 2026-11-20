@@ -164,6 +164,7 @@ public static class ClientPacketHeader
     public const uint GetPromoArticlesEvent = 314;
     public const uint ModifyWhoCanRideHorseEvent = 879;
     public const uint TogglePetBreedingPermissionEvent = 3224;
+    public const uint BreedPetsEvent = 322;
     public const uint RemoveFriendEvent = 3675;
     public const uint RefreshCampaignEvent = 2617;
     public const uint AcceptFriendEvent = 1558;

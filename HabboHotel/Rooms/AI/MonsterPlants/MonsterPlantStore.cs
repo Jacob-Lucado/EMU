@@ -3,6 +3,8 @@ using Dapper;
 using Microsoft.Extensions.Logging;
 using Plus.Database;
 using Plus.HabboHotel.Catalog.Utilities;
+using Plus.HabboHotel.Items;
+using Plus.HabboHotel.Users;
 using Plus.Utilities.DependencyInjection;
 
 namespace Plus.HabboHotel.Rooms.AI.MonsterPlants;
@@ -17,9 +19,15 @@ public interface IMonsterPlantStore
     Pet? Plant(MonsterPlantSeedRequest request);
 
     void Save(MonsterPlant plant);
+
+    /// <summary>
+    /// Saves two bred plants and gives the owner the seed in one transaction. Returns null and changes nothing when either
+    /// plant has bred already.
+    /// </summary>
+    Item? Breed(MonsterPlant first, MonsterPlant second, ItemDefinition seed, Habbo owner, int rarity);
 }
 
-public sealed class MonsterPlantStore(IDatabase database, ILogger<MonsterPlantStore> logger) : IMonsterPlantStore
+public sealed class MonsterPlantStore(IDatabase database, IItemFactory items, ILogger<MonsterPlantStore> logger) : IMonsterPlantStore
 {
     public Pet? Plant(MonsterPlantSeedRequest request)
     {
@@ -64,6 +72,8 @@ public sealed class MonsterPlantStore(IDatabase database, ILogger<MonsterPlantSt
             throw new InvalidOperationException("The monster plant was not saved.");
         }
     }
+
+    public Item? Breed(MonsterPlant first, MonsterPlant second, ItemDefinition seed, Habbo owner, int rarity) => throw new NotImplementedException();
 
     internal static void Insert(IDbConnection connection, IDbTransaction? transaction, MonsterPlant plant) => connection.Execute("""
         INSERT INTO bots_monsterplants (pet_id, rarity, growth_started_at, wellbeing_until, can_breed, breeding_permission)

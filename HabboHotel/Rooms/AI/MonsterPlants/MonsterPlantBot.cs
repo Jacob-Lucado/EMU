@@ -20,6 +20,9 @@ public sealed class MonsterPlantBot(TimeProvider clock) : BotAi
     public override void OnUserShout(RoomUser user, string message) { }
     public override void OnTimerTick() => Refresh(true);
 
+    /// <summary>Tells the room at once when the plant's level or breeding or revival state changed.</summary>
+    public void Announce() { }
+
     private void Refresh(bool announce)
     {
         if (GetRoomUser() is not { PetData: { Plant: { } plant } pet } user) {

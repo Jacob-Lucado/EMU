@@ -3,6 +3,7 @@ using Dapper;
 using Microsoft.Extensions.Logging.Abstractions;
 using MySqlConnector;
 using Plus.Database;
+using Plus.HabboHotel.Items;
 using Plus.HabboHotel.Rooms.AI;
 using Plus.HabboHotel.Rooms.AI.MonsterPlants;
 using Xunit;
@@ -134,7 +135,7 @@ public sealed class MonsterPlantStoreDatabaseTests
                 """);
             connection.Execute(MigrationSql());
 
-            return new(root, schema, connection, new MonsterPlantStore(new ProbeDatabase(cs), NullLogger<MonsterPlantStore>.Instance));
+            return new(root, schema, connection, new MonsterPlantStore(new ProbeDatabase(cs), new ItemFactory(new ProbeDatabase(cs)), NullLogger<MonsterPlantStore>.Instance));
         }
 
         private static string MigrationSql()

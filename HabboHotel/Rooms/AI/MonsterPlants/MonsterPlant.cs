@@ -71,6 +71,9 @@ public sealed class MonsterPlant(int petId, int rarity, DateTimeOffset growthSta
         return level < AdultLevel ? $"grw{level}" : "std";
     }
 
+    /// <summary>A plant breeds once. It stays alive and keeps everything else.</summary>
+    public MonsterPlant? AfterBreeding(DateTimeOffset now) => throw new NotImplementedException();
+
     /// <summary>Treating a living plant fills its wellbeing. A dead plant needs a revival potion instead.</summary>
     public MonsterPlant? AfterTreat(DateTimeOffset now)
     {

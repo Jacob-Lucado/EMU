@@ -4,8 +4,10 @@ using System.Text;
 using Plus.Communication.Packets.Incoming.Rooms.AI.Pets;
 using Plus.Communication.Packets.Outgoing;
 using Plus.Communication.Packets.Outgoing.Pets;
+using Plus.HabboHotel.Achievements;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Items;
+using Plus.HabboHotel.Quests;
 using Plus.HabboHotel.Rooms;
 using Plus.HabboHotel.Rooms.AI;
 using Plus.HabboHotel.Rooms.AI.MonsterPlants;
@@ -251,7 +253,12 @@ public sealed class MonsterPlantBreedingTests
         var items = CatalogSnapshotTestSupport.Proxy<IItemDataManager>((method, args) =>
             method == nameof(IItemDataManager.GetItemByName) && (string)args[0]! == "mnstr_seed" ? Seed : null);
 
-        return new(room, client, sent, own, other, store, genetics, new MonsterPlantBreedingService(store, genetics, items, new FixedClock()));
+        var progress = new List<string>();
+        var achievements = CatalogSnapshotTestSupport.Proxy<IAchievementManager>((_, args) => { progress.Add((string)args[1]!); return true; });
+        var rewards = CatalogSnapshotTestSupport.Proxy<IRewardTrackManager>((_, args) => { progress.Add((string)args[1]!); return null; });
+
+        return new(room, client, sent, own, other, store, genetics,
+            new MonsterPlantBreedingService(store, genetics, items, achievements, rewards, new FixedClock()), progress);
     }
 
     private static RoomUser Deploy(Room room, int petId, string name, int rarity, int x, int y)
@@ -274,7 +281,7 @@ public sealed class MonsterPlantBreedingTests
         .GetField(field, BindingFlags.NonPublic | BindingFlags.Instance)!.SetValue(instance, value);
 
     private sealed record Fixture(Room Room, GameClient Client, List<(uint Header, byte[] Payload)> Sent, RoomUser Own, RoomUser Other,
-        RecordingStore Store, RecordingGenetics Genetics, MonsterPlantBreedingService Service)
+        RecordingStore Store, RecordingGenetics Genetics, MonsterPlantBreedingService Service, List<string> Progress)
     {
         public Task Request(int state, int ownPetId, int otherPetId) =>
             new BreedPetsEvent(Service).Parse(Room, Client, HabbiconTestSupport.Incoming(state, ownPetId, otherPetId));

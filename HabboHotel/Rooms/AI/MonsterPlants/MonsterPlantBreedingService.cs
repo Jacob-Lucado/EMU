@@ -1,8 +1,10 @@
 using Plus.Communication.Packets.Outgoing.Inventory.Furni;
 using Plus.Communication.Packets.Outgoing.Pets;
 using Plus.Communication.Packets.Outgoing.Rooms.Chat;
+using Plus.HabboHotel.Achievements;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Items;
+using Plus.HabboHotel.Quests;
 using Plus.HabboHotel.Users.Inventory.Furniture;
 using Plus.Utilities.DependencyInjection;
 
@@ -20,7 +22,7 @@ public interface IMonsterPlantBreedingService
 /// again. Breeding with another owner's plant is not supported.
 /// </summary>
 public sealed class MonsterPlantBreedingService(IMonsterPlantStore store, IMonsterPlantGenetics genetics, IItemDataManager items,
-    TimeProvider clock) : IMonsterPlantBreedingService
+    IAchievementManager achievements, IRewardTrackManager rewards, TimeProvider clock) : IMonsterPlantBreedingService
 {
     private const int RequestState = 0;
     private const string SeedItemName = "mnstr_seed";

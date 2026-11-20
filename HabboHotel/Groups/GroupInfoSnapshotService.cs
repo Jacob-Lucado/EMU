@@ -1,3 +1,4 @@
+using System.Globalization;
 using Dapper;
 using Plus.Database;
 using Plus.HabboHotel.Cache;
@@ -48,7 +49,7 @@ public sealed class GroupInfoSnapshotService(IGameClientManager clientManager, I
             group.RoomId,
             room != null ? room.Name : "No room found..",
             group.MemberCount,
-            $"{origin.Day}-{origin.Month}-{origin.Year}",
+            origin.ToString("dd-MM-yyyy", CultureInfo.InvariantCulture),
             ResolveUsername(group.CreatorId),
             viewerIsCreator,
             viewerIsAdmin,

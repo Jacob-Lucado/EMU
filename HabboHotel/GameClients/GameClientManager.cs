@@ -6,6 +6,7 @@ using System.Diagnostics;
 using System.Text;
 using Dapper;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Plus.Communication.Packets;
 using Plus.Core;
 using Plus.Communication.Packets.Outgoing.Handshake;
@@ -29,7 +30,8 @@ public class GameClientManager : IGameClientManager
     private readonly ConcurrentDictionary<string, GameClient> _usernameRegister;
     private readonly object _usernameSync = new();
 
-    public GameClientManager(IDatabase database, ILogger<GameClientManager> logger)
+    public GameClientManager(IDatabase database, ILogger<GameClientManager> logger, IOptions<ConnectionCheckConfiguration>? connectionCheck = null,
+        TimeProvider? clock = null)
     {
         _database = database;
         _logger = logger;

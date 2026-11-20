@@ -179,18 +179,30 @@ CREATE TEMPORARY TABLE migration_166_ids (
 ) ENGINE=InnoDB;
 
 INSERT INTO migration_166_ids (old_id, new_id)
-SELECT MIN(i.id), s.id
+SELECT COALESCE(MIN(IF(i.id = s.id, i.id, NULL)), MIN(i.id)), s.id
 FROM groups_items i
 JOIN migration_166_symbols s ON s.firstvalue = i.firstvalue
 WHERE i.type = 'symbol'
 GROUP BY s.id;
 
 INSERT INTO migration_166_ids (old_id, new_id)
-SELECT i.id, i.id + 1000
-FROM groups_items i
-WHERE i.type = 'symbol'
-  AND i.id NOT IN (SELECT old_id FROM migration_166_ids)
-  AND i.id IN (SELECT id FROM migration_166_symbols);
+WITH RECURSIVE candidates AS (
+    SELECT 159 AS id
+    UNION ALL
+    SELECT id + 1 FROM candidates WHERE id < 999
+),
+free_ids AS (
+    SELECT c.id, ROW_NUMBER() OVER (ORDER BY c.id) AS n
+    FROM candidates c
+    WHERE NOT EXISTS (SELECT 1 FROM groups_items i WHERE i.type = 'symbol' AND i.id = c.id)
+),
+displaced AS (
+    SELECT i.id, ROW_NUMBER() OVER (ORDER BY i.id) AS n
+    FROM groups_items i
+    JOIN migration_166_symbols s ON s.id = i.id
+    WHERE i.type = 'symbol' AND i.id NOT IN (SELECT old_id FROM migration_166_ids)
+)
+SELECT d.id, f.id FROM displaced d LEFT JOIN free_ids f ON f.n = d.n;
 
 DELETE FROM migration_166_ids WHERE old_id = new_id;
 
@@ -208,7 +220,7 @@ WITH RECURSIVE layers AS (
            CAST(REGEXP_SUBSTR(badge, '^[bst][0-9]+') AS CHAR(50)) AS part,
            CAST(SUBSTRING(badge, CHAR_LENGTH(REGEXP_SUBSTR(badge, '^[bst][0-9]+')) + 1) AS CHAR(50)) AS rest
     FROM `groups`
-    WHERE badge REGEXP '^([bst][0-9]{5,6})+$'
+    WHERE badge REGEXP '^([bst][0-9]{4,6})+$'
     UNION ALL
     SELECT group_id, n + 1,
            CAST(REGEXP_SUBSTR(rest, '^[bst][0-9]+') AS CHAR(50)),
@@ -218,18 +230,19 @@ WITH RECURSIVE layers AS (
 ),
 symbols AS (
     SELECT group_id, n, part,
-           IF(LEFT(part, 1) = 't', 100 + CAST(SUBSTRING(part, 2, 2) AS UNSIGNED),
-              CAST(SUBSTRING(part, 2, CHAR_LENGTH(part) - 4) AS UNSIGNED)) AS old_id
+           CAST(SUBSTRING(part, 2, IF(CHAR_LENGTH(part) = 7, 3, 2)) AS UNSIGNED)
+               + IF(LEFT(part, 1) = 't', 100, 0) AS old_id,
+           IF(CHAR_LENGTH(part) = 5, CONCAT(RIGHT(part, 2), '0'), RIGHT(part, 3)) AS colour_position
     FROM layers
 ),
 parts AS (
     SELECT s.group_id, s.n,
-           IF(LEFT(s.part, 1) = 'b', s.part,
+           IF(LEFT(s.part, 1) = 'b', IF(CHAR_LENGTH(s.part) = 5, CONCAT(s.part, '0'), s.part),
               CONCAT(CASE
                          WHEN COALESCE(m.new_id, s.old_id) < 100 THEN CONCAT('s', LPAD(COALESCE(m.new_id, s.old_id), 2, '0'))
                          WHEN COALESCE(m.new_id, s.old_id) < 200 THEN CONCAT('t', LPAD(COALESCE(m.new_id, s.old_id) - 100, 2, '0'))
                          ELSE CONCAT('s', COALESCE(m.new_id, s.old_id))
-                     END, RIGHT(s.part, 3))) AS part
+                     END, s.colour_position)) AS part
     FROM symbols s
     LEFT JOIN migration_166_ids m ON m.old_id = s.old_id AND LEFT(s.part, 1) <> 'b'
 )
@@ -247,12 +260,13 @@ WHERE g.badge <> b.badge;
 
 UPDATE groups_items i
 JOIN migration_166_ids m ON m.old_id = i.id
-SET i.id = m.new_id + 100000
+SET i.id = -m.new_id
 WHERE i.type = 'symbol';
 
-UPDATE groups_items
-SET id = id - 100000
-WHERE type = 'symbol' AND id > 100000;
+UPDATE groups_items i
+JOIN migration_166_ids m ON i.id = -m.new_id
+SET i.id = m.new_id
+WHERE i.type = 'symbol';
 
 COMMIT;
 

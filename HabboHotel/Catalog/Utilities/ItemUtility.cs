@@ -6,14 +6,14 @@ namespace Plus.HabboHotel.Catalog.Utilities;
 
 public static class ItemUtility
 {
-    // Only one piece of furniture, without badges, can be wrapped as a gift.
+    // Only one piece of furniture, without badges, can be wrapped as a gift. An offer that costs points must also cost credits, and the points must be diamonds.
     public static bool CanGiftItem(CatalogOffer offer)
     {
         if (offer.Products is not [{ Type: CatalogProductType.Furni, Definition: { } definition } product]) {
             return false;
         }
 
-        return definition.AllowGift && !offer.IsLimited && product.Amount <= 1 && (offer.CostPoints == 0 || offer.PointsType == ActivityPointType.Duckets) && !definition.IsRare &&
+        return definition.AllowGift && !offer.IsLimited && product.Amount <= 1 && (offer.CostPoints == 0 || offer is { PointsType: ActivityPointType.Diamonds, CostCredits: > 0 }) && !definition.IsRare &&
             definition.InteractionType is not (InteractionType.Exchange or InteractionType.Badge or InteractionType.Teleport or InteractionType.WiredRoomLinker or InteractionType.Deal or InteractionType.Pet);
     }
 

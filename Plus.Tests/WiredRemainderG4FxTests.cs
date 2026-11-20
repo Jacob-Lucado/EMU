@@ -224,6 +224,77 @@ public sealed class WiredRemainderG4FxTests
     }
 
     [Theory]
+    [InlineData("xmas26.bauble_red")]
+    [InlineData("xmas26.bauble_blue")]
+    [InlineData("xmas26.bauble_green")]
+    [InlineData("xmas26.bauble_gold")]
+    [InlineData("xmas26.bell")]
+    [InlineData("xmas26.candycane")]
+    [InlineData("xmas26.coal")]
+    [InlineData("xmas26.cookie")]
+    [InlineData("xmas26.gingerbreadman")]
+    [InlineData("xmas26.ice_cube")]
+    [InlineData("xmas26.key")]
+    [InlineData("xmas26.list")]
+    [InlineData("xmas26.present_green")]
+    [InlineData("xmas26.present_red")]
+    [InlineData("xmas26.present_blue")]
+    [InlineData("xmas26.present_purple")]
+    [InlineData("xmas26.present_pink")]
+    [InlineData("xmas26.present_orange")]
+    [InlineData("xmas26.present_gold")]
+    [InlineData("xmas26.santahat")]
+    [InlineData("xmas26.snowball")]
+    [InlineData("xmas26.stocking")]
+    [InlineData("xmas26.ticket_red")]
+    [InlineData("xmas26.ticket_blue")]
+    [InlineData("xmas26.ticket_orange")]
+    [InlineData("xmas26.ticket_green")]
+    [InlineData("xmas26.tree")]
+    public void ANumberDisplayCarriesEveryChristmasIcon(string icon)
+    {
+        Assert.Equal(icon, WiredVariableFxSettings.FitText("wf_xtra_var_fx_number", icon));
+        Assert.Equal(icon, Bind("wf_xtra_var_fx_number", text: icon)!.Config.Extra["icon"]);
+    }
+
+    [Fact]
+    public void TheSnowmanIsABossBarIconAndNotANumberIcon()
+    {
+        Assert.Equal("", WiredVariableFxSettings.FitText("wf_xtra_var_fx_number", "xmas26.snowman"));
+        Assert.Null(Bind("wf_xtra_var_fx_number", text: "xmas26.snowman"));
+    }
+
+    [Fact]
+    public void TheSnowmanBossBarStoresItsOwnDefaultsAndDrawsTheSnowman()
+    {
+        var stored = Compile("wf_xtra_var_fx_boss", ints => { ints[6] = 2; ints[7] = ints[8] = ints[9] = -1; return ints; }, save: true)!;
+        var binding = Bind("wf_xtra_var_fx_boss", ints => { ints[6] = 2; ints[7] = 5; ints[8] = 100; return ints; })!;
+
+        Assert.Equal([2, -1, 4, 100], stored.IntParams.Skip(6).Take(4));
+        Assert.Equal((2, -1, 100, 100), (binding.Config.StyleId, binding.Config.ColorId, binding.Config.WidthId, binding.Config.RendererId));
+        Assert.Equal(new Dictionary<string, string>
+        {
+            ["color"] = "#3C5B92",
+            ["icon"] = "xmas26.snowman",
+            ["icon_alignment"] = "double",
+            ["metallic"] = "true"
+        }, binding.Config.Extra);
+    }
+
+    [Theory]
+    [InlineData(22, "xmas26.tree", "#368349")]
+    [InlineData(23, "xmas26.snowball", "#acdafa")]
+    public void TheChristmasStatusBarsDrawTheirIconInTheirColour(int style, string icon, string color)
+    {
+        var stored = Compile("wf_xtra_var_fx_status", ints => { ints[6] = style; ints[7] = ints[8] = ints[9] = -1; return ints; }, save: true)!;
+        var binding = Bind("wf_xtra_var_fx_status", ints => { ints[6] = style; ints[7] = -1; ints[8] = 0; ints[9] = 4; return ints; })!;
+
+        Assert.Equal([style, -1, 2, 2], stored.IntParams.Skip(6).Take(4));
+        Assert.Equal((style, 0, 4), (binding.Config.StyleId, binding.Config.WidthId, binding.Config.RendererId));
+        Assert.Equal(new Dictionary<string, string> { ["color"] = color, ["icon"] = icon, ["metallic"] = "false" }, binding.Config.Extra);
+    }
+
+    [Theory]
     [InlineData(0, "left")]
     [InlineData(1, "right")]
     [InlineData(2, "double")]
@@ -662,7 +733,7 @@ public sealed class WiredRemainderG4FxTests
         Assert.Equal(1000, Bind("wf_xtra_var_fx_health", ints => { ints[7] = 5; return ints; })!.Config.ColorId);
         Assert.Equal(5, Bind("wf_xtra_var_fx_boss", ints => { ints[7] = 1; return ints; })!.Config.ColorId);
         Assert.Equal(1, Bind("wf_xtra_var_fx_boss", ints => { ints[6] = 1; ints[7] = 1; return ints; })!.Config.ColorId);
-        Assert.Null(Bind("wf_xtra_var_fx_status", ints => { ints[6] = 22; return ints; }));
+        Assert.Null(Bind("wf_xtra_var_fx_status", ints => { ints[6] = 24; return ints; }));
         Assert.NotNull(Bind("wf_xtra_var_fx_status", ints => { ints[6] = 21; ints[7] = -1; return ints; }));
         // The battery runs red to green instead of a baked colour.
         Assert.Equal("battery", Bind("wf_xtra_var_fx_status", ints => { ints[6] = 16; ints[7] = 1000; return ints; })!.Config.Extra["icon"]);

@@ -14,6 +14,7 @@ public sealed class GroupManagementSnapshotTests
 {
     [Theory]
     [InlineData("b0101s02023", 1, 1, 0, 2, 2, 3)]
+    [InlineData("b01010t04044", 1, 1, 0, 104, 4, 4)]
     [InlineData("b123451", 123, 45, 1, 0, 0, 0)]
     public void BadgeParserProducesFiveBoundedTriplets(string badge, int symbol1, int colour1, int position1, int symbol2, int colour2, int position2)
     {

@@ -6,6 +6,7 @@ using Plus.Database;
 using Plus.HabboHotel.Items;
 using Plus.HabboHotel.Rooms.AI;
 using Plus.HabboHotel.Rooms.AI.MonsterPlants;
+using Plus.HabboHotel.Users.Inventory.Furniture;
 using Xunit;
 
 namespace Plus.Tests;
@@ -86,6 +87,62 @@ public sealed class MonsterPlantStoreDatabaseTests
 
         Assert.Equal(first.Rarity, Assert.Single(plants).Value.Rarity);
         Assert.True(plants.ContainsKey(first.PetId));
+    }
+
+    [PetPlacementDatabaseFact]
+    public void BreedingSavesBothPlantsAndGivesTheOwnerTheSeedTogether()
+    {
+        using var scratch = Scratch.Create();
+        var (first, second) = BreedablePair(scratch);
+        var grown = PlantedAt.AddDays(3);
+
+        var seed = Assert.IsType<Item>(scratch.Store.Breed(first.AfterBreeding(grown)!, second.AfterBreeding(grown)!, SeedDefinition, Owner, 2));
+
+        Assert.Equal((1, 4582u, "rarity\t2"), scratch.Connection.QuerySingle<(int, uint, string)>(
+            "SELECT user_id, base_item, extra_data FROM items WHERE id = @Id", new { seed.Id }));
+        Assert.Equal(2, MonsterPlantSeedRarity.Of(seed.ExtraData));
+        Assert.Equal([false, false], scratch.Connection.Query<bool>("SELECT can_breed FROM bots_monsterplants ORDER BY pet_id"));
+    }
+
+    [PetPlacementDatabaseFact]
+    public void APlantThatBredAlreadyBreedsNothing()
+    {
+        using var scratch = Scratch.Create();
+        var (first, second) = BreedablePair(scratch);
+        var grown = PlantedAt.AddDays(3);
+        scratch.Connection.Execute("UPDATE bots_monsterplants SET can_breed = 0 WHERE pet_id = @PetId", new { second.PetId });
+        var items = scratch.Connection.ExecuteScalar<int>("SELECT COUNT(*) FROM items");
+
+        Assert.Null(scratch.Store.Breed(first.AfterBreeding(grown)!, second.AfterBreeding(grown)!, SeedDefinition, Owner, 2));
+
+        Assert.Equal(items, scratch.Connection.ExecuteScalar<int>("SELECT COUNT(*) FROM items"));
+        Assert.Equal([true, false], scratch.Connection.Query<bool>("SELECT can_breed FROM bots_monsterplants ORDER BY pet_id"));
+    }
+
+    private static readonly ItemDefinition SeedDefinition = new()
+    {
+        Id = 4582,
+        SpriteId = 4582,
+        Type = ItemType.Floor,
+        ItemName = "mnstr_seed",
+        SpecialType = (int)FurniCategory.MonsterplantSeed
+    };
+
+    private static readonly Plus.HabboHotel.Users.Habbo Owner = new() { Id = 1, Username = "owner" };
+
+    private static (MonsterPlant First, MonsterPlant Second) BreedablePair(Scratch scratch)
+    {
+        scratch.Connection.Execute("""
+            ALTER TABLE items MODIFY id INT UNSIGNED NOT NULL AUTO_INCREMENT, ADD x INT NOT NULL DEFAULT 0, ADD y INT NOT NULL DEFAULT 0,
+                ADD z DOUBLE NOT NULL DEFAULT 0, ADD wall_pos VARCHAR(100) NOT NULL DEFAULT '', ADD rot INT NOT NULL DEFAULT 0,
+                ADD extra_data TEXT NOT NULL, ADD limited_number INT NOT NULL DEFAULT 0, ADD limited_stack INT NOT NULL DEFAULT 0
+            """);
+        var first = new MonsterPlant(16, 0, PlantedAt, PlantedAt.AddDays(5), true, false);
+        var second = new MonsterPlant(17, 2, PlantedAt, PlantedAt.AddDays(5), true, false);
+        MonsterPlantStore.Insert(scratch.Connection, null, first);
+        MonsterPlantStore.Insert(scratch.Connection, null, second);
+
+        return (first, second);
     }
 
     private static MonsterPlantSeedRequest Request() => new(7, 100, 1, "owner", 42, 3, 1, 0.5, "Sunspike",

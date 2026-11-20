@@ -28,7 +28,7 @@ public class GroupInfoComposer : IServerPacket
         packet.WriteString(_info.RoomName);
         packet.WriteInteger(_info.ViewerIsCreator ? 3 : _info.ViewerHasRequest ? 2 : _info.ViewerIsMember ? 1 : 0);
         packet.WriteInteger(_info.MemberCount); // Members
-        packet.WriteBoolean(false); // Whether this is the viewer's favorite group.
+        packet.WriteBoolean(_info.ViewerFavourite);
         packet.WriteString(_info.CreatedOn);
         packet.WriteBoolean(_info.ViewerIsCreator);
         packet.WriteBoolean(_info.ViewerIsAdmin); // admin

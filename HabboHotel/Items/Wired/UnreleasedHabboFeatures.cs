@@ -40,6 +40,11 @@ public static class UnreleasedHabboFeatures
     public const int ContextMenuButtonIdLength = 32;
     public const int ContextMenuButtonTextLength = 64;
     public const int ContextMenuConditions = 3;
+    public const int Everyone = 0;
+    public const int EveryoneExceptViewer = 1;
+    public const int OnlyViewer = 2;
+    public const int AllPets = 0;
+    public const int ViewerPets = 1;
     public const int ContextMenuExists = 6;
     public const int ContextMenuNotExists = 7;
     public const string ContextMenuVariableError = "Pick a user variable of this room.";

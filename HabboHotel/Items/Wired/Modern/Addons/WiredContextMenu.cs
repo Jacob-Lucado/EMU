@@ -47,7 +47,7 @@ public sealed record WiredContextMenuRule(string ButtonId, string Text, Immutabl
         }
 
         if (unit.IsPet) {
-            return Ints[3] == 1 && (Ints[4] == 0 || unit.PetData?.OwnerId == viewer.HabboId);
+            return Ints[3] == 1 && (Ints[4] == UnreleasedHabboFeatures.AllPets || unit.PetData?.OwnerId == viewer.HabboId);
         }
 
         if (unit.IsBot) {
@@ -56,7 +56,8 @@ public sealed record WiredContextMenuRule(string ButtonId, string Text, Immutabl
 
         var self = ReferenceEquals(unit, viewer);
 
-        return Ints[1] == 1 && Ints[2] switch { 0 => true, 1 => !self, 2 => self, _ => false };
+        return Ints[1] == 1 && Ints[2] switch { UnreleasedHabboFeatures.Everyone => true,
+            UnreleasedHabboFeatures.EveryoneExceptViewer => !self, UnreleasedHabboFeatures.OnlyViewer => self, _ => false };
     }
 
     /// <summary>Habbo's comparisons 0 &lt;, 1 =, 2 &gt;, 3 &lt;=, 4 !=, 5 &gt;=, then 6 exists and 7 does not exist.</summary>

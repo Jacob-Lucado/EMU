@@ -13,6 +13,7 @@ namespace Plus.HabboHotel.Groups;
 public interface IGroupParticipationService
 {
     Task Join(GameClient session, int groupId);
+    Task AcceptInvitation(GameClient session, int groupId);
     Task SetFavourite(GameClient session, int groupId);
     Task RemoveFavourite(GameClient session);
 }
@@ -20,7 +21,7 @@ public interface IGroupParticipationService
 // Lock order is account gate, then group lock, then the database rows. Each operation holds the gate until its packets are sent,
 // so two requests from one account publish in the same order their writes commit.
 public sealed class GroupParticipationService(IGroupManager groups, IGroupInfoSnapshotService groupInfo, IGameClientManager clients,
-    IGroupParticipationStore store, IAccountSessionGate accounts) : IGroupParticipationService
+    IGroupParticipationStore store, IAccountSessionGate accounts, IGroupInvitationStore? invitations = null) : IGroupParticipationService
 {
     private const int MaxGroupsPerUser = 1500;
     private const string LimitMessage = "Oops, it appears that you've hit the group membership limit! You can only join upto 1,500 groups.";
@@ -77,6 +78,8 @@ public sealed class GroupParticipationService(IGroupManager groups, IGroupInfoSn
 
         return Task.CompletedTask;
     }
+
+    public Task AcceptInvitation(GameClient session, int groupId) => throw new NotImplementedException();
 
     public Task SetFavourite(GameClient session, int groupId)
     {

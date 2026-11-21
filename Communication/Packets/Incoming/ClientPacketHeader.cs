@@ -1,3 +1,5 @@
+using Plus.HabboHotel.Items.Wired;
+
 namespace Plus.Communication.Packets.Incoming;
 
 public static class ClientPacketHeader
@@ -142,6 +144,7 @@ public static class ClientPacketHeader
     public const uint UpdateGroupColoursEvent = 3450;
     public const uint SetGroupFavouriteEvent = 3283;
     public const uint GetGroupMembersEvent = 3410;
+    public const uint GroupInvitationReplyEvent = UnreleasedHabboFeatures.GroupInvitationReplyEvent;
 
     // Group Forums
     public const uint PostGroupContentEvent = 937;

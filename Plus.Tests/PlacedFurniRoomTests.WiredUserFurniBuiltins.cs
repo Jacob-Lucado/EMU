@@ -270,6 +270,9 @@ public partial class PlacedFurniRoomTests
         var source = Furni(202, InteractionType.None, WiredBoxType.None);
         Assert.True(_room.GetRoomItemHandler().SetFloorItem(null, source, 1, 1, 0, true, false, false));
         source.Definition.InteractionType = InteractionType.Teleport;
+        var partner = Furni(400, InteractionType.None, WiredBoxType.None);
+        Assert.True(_room.GetRoomItemHandler().SetFloorItem(null, partner, 3, 1, 0, true, false, false));
+        partner.Definition.InteractionType = InteractionType.Teleport;
         var target = 300u;
         var writes = 0;
         var travel = Proxy<IItemTravelStore>((method, args) =>
@@ -302,6 +305,68 @@ public partial class PlacedFurniRoomTests
         source.Definition.InteractionType = InteractionType.None;
         Assert.Null(module.Read(reference, holder, frame));
         Assert.Equal(1, writes);
+    }
+
+    [Fact]
+    public void TeleportTargetWriteAcceptsOnlyTheSameKindOfItemInTheSameRoom()
+    {
+        Item Place(uint id, InteractionType interaction, int x, int y)
+        {
+            var item = Furni(id, InteractionType.None, WiredBoxType.None);
+            Assert.True(_room.GetRoomItemHandler().SetFloorItem(null, item, x, y, 0, true, false, false));
+            item.Definition.InteractionType = interaction;
+
+            return item;
+        }
+
+        var teleporter = Place(210, InteractionType.Teleport, 1, 1);
+        var partner = Place(211, InteractionType.Teleport, 3, 1);
+        var linker = Place(212, InteractionType.WiredRoomLinker, 1, 3);
+        var otherLinker = Place(213, InteractionType.WiredRoomLinker, 3, 3);
+        var plain = Place(214, InteractionType.None, 2, 2);
+        var links = new Dictionary<uint, uint> { [teleporter.Id] = partner.Id, [linker.Id] = otherLinker.Id };
+        var travel = Proxy<IItemTravelStore>((method, args) =>
+        {
+            var id = (uint)args[0]!;
+
+            if (method == "FindLinkedTeleporter") {
+                return links.GetValueOrDefault(id);
+            }
+
+            Assert.Equal("SetLinkedTeleporter", method);
+            links[id] = (uint)args[2]!;
+
+            return true;
+        });
+        var builtin = new RoomWiredBuiltinVariables(_room, travelStore: travel);
+
+        bool Write(Item source, uint value)
+        {
+            var holder = WiredVariableRuntimeFrames.FurniHolder(source);
+            var module = new WiredVariableModule(RoomId, new BuiltinDefinitionDirectory(), new MemoryWiredVariableStore(), _interactionClock, builtin);
+
+            return module.Mutate(new(holder.Target, "internal:~teleport.target_id"), holder, WiredVariableMutation.Set, (int)value,
+                new WiredVariableFrame(RoomId, [holder]));
+        }
+
+        Assert.False(Write(teleporter, plain.Id));
+        Assert.False(Write(teleporter, linker.Id));
+        Assert.False(Write(teleporter, 999));
+        Assert.Equal(partner.Id, links[teleporter.Id]);
+        Assert.True(Write(teleporter, teleporter.Id));
+        Assert.Equal(teleporter.Id, links[teleporter.Id]);
+        Assert.True(Write(teleporter, partner.Id));
+        Assert.Equal(partner.Id, links[teleporter.Id]);
+
+        Assert.False(Write(linker, teleporter.Id));
+        Assert.Equal(otherLinker.Id, links[linker.Id]);
+        Assert.True(Write(linker, linker.Id));
+        Assert.True(Write(linker, otherLinker.Id));
+        Assert.Equal(otherLinker.Id, links[linker.Id]);
+
+        Assert.True(_room.GetRoomItemHandler().RemoveFurniture(null!, partner));
+        Assert.False(Write(teleporter, partner.Id));
+        Assert.Equal(partner.Id, links[teleporter.Id]);
     }
 
     [Fact]

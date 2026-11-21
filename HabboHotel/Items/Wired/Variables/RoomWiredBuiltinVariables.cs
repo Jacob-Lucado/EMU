@@ -271,7 +271,10 @@ public sealed class RoomWiredBuiltinVariables(Room room,
         if (holder.Target == WiredVariableTarget.Furni && key == "~teleport.target_id") {
             var item = FindItem(holder, frame);
 
+            // The target must be an item of the same kind in this room, so a write can never link into another room.
             return value > 0 && item is { IsTemporary: false } && InteractionTypes.IsLinkedPair(item.Definition.InteractionType)
+                && room.GetRoomItemHandler().GetItem((uint)value) is { } target
+                && target.Definition.InteractionType == item.Definition.InteractionType
                 && travelStore?.SetLinkedTeleporter(item.Id, room.Id, (uint)value) == true;
         }
 

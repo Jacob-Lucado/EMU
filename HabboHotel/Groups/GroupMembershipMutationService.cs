@@ -77,6 +77,7 @@ public sealed class GroupMembershipMutationService(
             group.HandleRequest(userId, true);
             PublishController(group, userId);
             SendMemberUpdate(session, group, userId, 2, identity);
+            membership?.Changed(group.Id, userId, true);
 
             return Task.CompletedTask;
         }

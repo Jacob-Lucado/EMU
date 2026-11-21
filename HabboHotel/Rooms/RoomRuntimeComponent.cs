@@ -21,12 +21,15 @@ public sealed class RoomRuntimeComponent(IRoomItemStore itemStore, Plus.HabboHot
     AI.IBotManagementStore botStore, ISettingsManager settings, IGroupManager groups, IGameClientManager clients,
     IRewardTrackManager rewards, Plus.HabboHotel.Items.IItemDataManager definitions, ILanguageManager language,
     IChatEmotionsManager chatEmotions, ICommandManager commands, IAccessControl access, AI.IBotAiFactory botAiFactory, IItemInteractorFactory interactors, Plus.HabboHotel.Items.IItemTravelStore travelStore,
-    IQuestManager quests) : IRoomComponent
+    IQuestManager quests, IWiredGroupMembership groupWired) : IRoomComponent
 {
     public int Order => 0;
     public void Initiate(Room room) => room.SetRuntime(
         new(room, room.Data.Model, room.NavigationLogger, settings, groups, database, rewards), new(room, itemStore, metadata, clients, language, interactors, travelStore, rewards), new(room, userStore, clock, rewards, chatEmotions, botAiFactory, clients, travelStore, settings),
-        new(room, room.WiredLogger, clock, settings, wiredSettings, wiredConfigurations, database, wiredRewards, botStore, clients, groups, definitions, commands, access, travelStore, quests),
+        new(room, room.WiredLogger, clock, settings, wiredSettings, wiredConfigurations, database, wiredRewards, botStore, clients, groups, definitions, commands, access, travelStore, quests)
+        {
+            GroupMembership = groupWired
+        },
         userSnapshots, clock);
     public void Initiated() { }
 }

@@ -160,6 +160,7 @@ public sealed class GroupRemovalService(
 
                 if (group.IsMember(userId)) {
                     group.DeleteMember(userId);
+                    _membership?.Changed(group.Id, userId, false);
                 }
 
                 if (_roomManager.TryGetRoom(group.RoomId, out var homeRoom)) {
@@ -209,6 +210,7 @@ public sealed class GroupRemovalService(
 
                 if (group.IsMember(userId)) {
                     group.DeleteMember(userId);
+                    _membership?.Changed(group.Id, userId, false);
                 }
 
                 if (_roomManager.TryGetRoom(group.RoomId, out var room)) {

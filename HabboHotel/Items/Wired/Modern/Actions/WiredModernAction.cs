@@ -41,7 +41,7 @@ public sealed class WiredModernAction : WiredModernBox, IWiredContextualAction
         "wf_act_join_team", "wf_act_leave_team", "wf_act_give_score", "wf_act_give_score_tm", "wf_act_kick_user", "wf_act_mute_triggerer", "wf_act_teleport_to_room", "wf_act_give_reward"
     };
     public static bool Supports(string name) => WiredTemporaryFurnitureActions.Supports(name) || WiredMovementActions.Names.Contains(name) || OtherNames.Contains(name) || WiredBotActions.Names.Contains(name)
-        || WiredOctoberActions.Names.Contains(name);
+        || WiredOctoberActions.Names.Contains(name) || WiredGroupActions.Names.Contains(name);
     public bool IsNegative => Descriptor.CanonicalName is "wf_act_neg_call_stacks" or "wf_act_neg_send_signal" or "wf_act_neg_log";
 
     public WiredModernAction(Room room, Item item, WiredBoxDescriptor descriptor, WiredCounterController clocks,
@@ -396,6 +396,12 @@ public sealed class WiredModernAction : WiredModernBox, IWiredContextualAction
             var native = config;
 
             return WiredOctoberActions.Execute(name, this, context, config, slot => Furni(context, native, slot), slot => Users(context, native, slot));
+        }
+
+        if (WiredGroupActions.Names.Contains(name)) {
+            var native = config;
+
+            return WiredGroupActions.Execute(name, context, config, Users(context, native, "users"));
         }
 
         if (WiredTemporaryFurnitureActions.Supports(name)) {

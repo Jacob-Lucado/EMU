@@ -12,5 +12,13 @@ public interface IGroupMembershipEvents
 
 public sealed class GroupMembershipEvents(IGameClientManager clients) : IGroupMembershipEvents
 {
-    public void Changed(int groupId, int userId, bool joined) => throw new NotImplementedException();
+    public void Changed(int groupId, int userId, bool joined)
+    {
+        if (clients.GetClientByUserId(userId)?.GetHabbo() is not { CurrentRoom: { } room }
+            || room.GetRoomUserManager()?.GetRoomUserByHabbo(userId) is not { } user) {
+            return;
+        }
+
+        room.GetWired()?.GroupMembershipChanged(user, groupId, joined);
+    }
 }

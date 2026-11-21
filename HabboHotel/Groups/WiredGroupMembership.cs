@@ -1,3 +1,4 @@
+using Plus.HabboHotel.Items.Wired;
 using Plus.HabboHotel.Rooms;
 using Plus.Utilities.DependencyInjection;
 
@@ -17,9 +18,38 @@ public interface IWiredGroupMembership
 
 public sealed class WiredGroupMembership(IGroupManager groups, IGroupInvitationService invitations, IGroupRemovalService removal) : IWiredGroupMembership
 {
-    public string? SaveRefusal(int editorId, int groupId, bool mustOwn) => throw new NotImplementedException();
+    public string? SaveRefusal(int editorId, int groupId, bool mustOwn)
+    {
+        if (groupId == 0) {
+            return null;
+        }
 
-    public bool Invite(int groupId, RoomUser target, uint roomId) => throw new NotImplementedException();
+        if (!groups.TryGetGroup(groupId, out var group)) {
+            return UnreleasedHabboFeatures.GroupNotFoundError;
+        }
 
-    public bool Remove(int groupId, RoomUser target, bool cancelInvitation) => throw new NotImplementedException();
+        return mustOwn && group.CreatorId != editorId ? UnreleasedHabboFeatures.GroupNotOwnedError : null;
+    }
+
+    // The invitation comes from the group's owner, who is the only one that can save the box.
+    public bool Invite(int groupId, RoomUser target, uint roomId) =>
+        groups.TryGetGroup(groupId, out var group) && invitations.Invite(group, target.HabboId, group.CreatorId, roomId);
+
+    // The member leaves as with the leave button, so the client gets the packets of a normal leave.
+    public bool Remove(int groupId, RoomUser target, bool cancelInvitation)
+    {
+        if (!groups.TryGetGroup(groupId, out var group)) {
+            return false;
+        }
+
+        var cancelled = cancelInvitation && invitations.Cancel(groupId, target.HabboId);
+
+        if (target.HabboId == group.CreatorId || !group.IsMember(target.HabboId) || target.GetClient() is not { } client) {
+            return cancelled;
+        }
+
+        removal.Remove(client, groupId, target.HabboId).GetAwaiter().GetResult();
+
+        return !group.IsMember(target.HabboId) || cancelled;
+    }
 }

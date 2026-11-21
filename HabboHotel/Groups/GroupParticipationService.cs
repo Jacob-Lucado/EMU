@@ -73,6 +73,7 @@ public sealed class GroupParticipationService(IGroupManager groups, IGroupInfoSn
             }
             else {
                 PublishMembership(session, group, habbo);
+                membership?.Changed(group.Id, habbo.Id, true);
             }
         }
 
@@ -114,6 +115,7 @@ public sealed class GroupParticipationService(IGroupManager groups, IGroupInfoSn
 
             found.HandleRequest(habbo.Id, true);
             PublishMembership(session, found, habbo);
+            membership?.Changed(found.Id, habbo.Id, true);
         }
 
         return Task.CompletedTask;

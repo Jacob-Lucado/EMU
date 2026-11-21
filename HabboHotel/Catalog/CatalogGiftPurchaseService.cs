@@ -14,6 +14,7 @@ using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Items;
 using Plus.HabboHotel.Items.DataFormat;
 using Plus.HabboHotel.Quests;
+using Plus.HabboHotel.Rooms.Music;
 using Plus.HabboHotel.Subscriptions;
 using Plus.HabboHotel.Users.Inventory.Furniture;
 using Plus.Utilities;
@@ -50,6 +51,7 @@ public sealed class CatalogGiftPurchaseService : ICatalogGiftPurchaseService
     private readonly IClubMembershipService _clubMemberships;
     private readonly IClubRewards _clubRewards;
     private readonly ICatalogGiftStore _giftStore;
+    private readonly IRoomMusicStore? _songs;
     private readonly TimeProvider _clock;
     private readonly ILogger<CatalogGiftPurchaseService> _logger;
 
@@ -64,8 +66,10 @@ public sealed class CatalogGiftPurchaseService : ICatalogGiftPurchaseService
         ICatalogGiftStore giftStore,
         TimeProvider clock,
         ILogger<CatalogGiftPurchaseService> logger,
-        IPlannedShutdown? plannedShutdown = null)
+        IPlannedShutdown? plannedShutdown = null,
+        IRoomMusicStore? songs = null)
     {
+        _songs = songs;
         _plannedShutdown = plannedShutdown;
         _catalogManager = catalogManager;
         _settingsManager = settingsManager;
@@ -249,6 +253,15 @@ public sealed class CatalogGiftPurchaseService : ICatalogGiftPurchaseService
                     break; // maintain extra data // todo: validate
                 case InteractionType.Postit:
                     itemExtraData = "FFFF33";
+                    break;
+                case InteractionType.MusicDisc:
+                    var songId = _songs?.OfficialSong(item.Product.ExtraParam) ?? -1;
+
+                    if (songId <= 0) {
+                        return Reject(session, "no song for disc offer {OfferId}", itemId);
+                    }
+
+                    itemExtraData = songId.ToString(CultureInfo.InvariantCulture);
                     break;
                 case InteractionType.Moodlight:
                     itemExtraData = "1,1,1,#000000,255";

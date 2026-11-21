@@ -22,6 +22,7 @@ using Plus.HabboHotel.Groups;
 using Plus.HabboHotel.Groups.Forums;
 using Plus.HabboHotel.Items;
 using Plus.HabboHotel.Items.DataFormat;
+using Plus.HabboHotel.Rooms.Music;
 using Plus.HabboHotel.Quests;
 using Plus.HabboHotel.Users.Effects;
 using Plus.HabboHotel.Habbicons;
@@ -61,6 +62,7 @@ public sealed class CatalogPurchaseService : ICatalogPurchaseService
     private readonly TimeProvider _clock;
     private readonly ILogger<CatalogPurchaseService> _logger;
     private readonly IBuildersClubService? _buildersClub;
+    private readonly IRoomMusicStore? _songs;
     // Window id the client's club purchase page requests offers for.
     private const int ClubWindow = 1;
 
@@ -75,8 +77,9 @@ public sealed class CatalogPurchaseService : ICatalogPurchaseService
         IClubMembershipService clubMemberships, IClubRewards clubRewards, IRewardTrackManager rewardTracks, IAvatarEffectStore avatarEffects,
         IGroupManager groups, IGroupForumStore forums,
         TimeProvider clock, ILogger<CatalogPurchaseService> logger, IBuildersClubService? buildersClub = null,
-        IPlannedShutdown? plannedShutdown = null, IHabbiconAchievementService? habbiconAchievements = null)
+        IPlannedShutdown? plannedShutdown = null, IHabbiconAchievementService? habbiconAchievements = null, IRoomMusicStore? songs = null)
     {
+        _songs = songs;
         _plannedShutdown = plannedShutdown;
         _buildersClub = buildersClub;
         _catalogManager = catalogManager;
@@ -458,6 +461,9 @@ public sealed class CatalogPurchaseService : ICatalogPurchaseService
                     RecolorableDataFormat.TryParseCatalogueColor(extraData, out var chosen) ? chosen : null));
             case InteractionType.Postit:
                 return "FFFF33";
+            case InteractionType.MusicDisc:
+                // A disc offer names its song by code. The disc keeps the song's id, so it plays that song.
+                return _songs?.OfficialSong(product.ExtraParam) is > 0 and var songId ? songId.ToString(CultureInfo.InvariantCulture) : null;
             case InteractionType.Moodlight:
                 return "1,1,1,#000000,255";
             case InteractionType.Trophy:

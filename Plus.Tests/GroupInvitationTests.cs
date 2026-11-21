@@ -55,6 +55,18 @@ public class GroupInvitationTests
     }
 
     [Fact]
+    public void RepeatedInviteToTheSameClientSendsOnlyOnePrompt()
+    {
+        var hotel = new Hotel(GroupType.Private);
+        var (_, sent) = hotel.Online(8);
+
+        Assert.True(hotel.Invitations.Invite(hotel.Group, 8, 7, 42));
+        Assert.False(hotel.Invitations.Invite(hotel.Group, 8, 7, 42));
+        Assert.Single(sent);
+        Assert.Single(hotel.Store.Rows);
+    }
+
+    [Fact]
     public void InviteRefreshesAPendingInvitationAndSkipsMembers()
     {
         var hotel = new Hotel(GroupType.Open);

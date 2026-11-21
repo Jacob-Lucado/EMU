@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Plus.Communication.Packets.Outgoing.Groups;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Items.Wired;
@@ -20,14 +21,42 @@ public interface IGroupInvitationService
 public sealed class GroupInvitationService(IGroupInvitationStore store, IGroupParticipationService participation, IGameClientManager clients,
     TimeProvider time) : IGroupInvitationService
 {
+    private readonly ConditionalWeakTable<GameClient, Queue<(int GroupId, DateTimeOffset SentAt)>> _recent = new();
+
+    private bool AllowPrompt(GameClient client, int groupId, DateTimeOffset now)
+    {
+        var prompts = _recent.GetOrCreateValue(client);
+
+        lock (prompts) {
+            while (prompts.TryPeek(out var oldest) && oldest.SentAt <= now.AddSeconds(-30)) {
+                prompts.Dequeue();
+            }
+
+            if (prompts.Count >= 5 || prompts.Any(prompt => prompt.GroupId == groupId)) {
+                return false;
+            }
+
+            prompts.Enqueue((groupId, now));
+
+            return true;
+        }
+    }
+
     public bool Invite(Group group, int userId, int inviterId, uint roomId)
     {
         if (group.IsMember(userId)) {
             return false;
         }
 
-        store.Save(new GroupInvitation(group.Id, userId, inviterId, roomId, time.GetUtcNow()));
-        clients.GetClientByUserId(userId)?.Send(new GroupInvitationComposer(group.Id, group.Name, group.Badge, roomId));
+        var client = clients.GetClientByUserId(userId);
+        var now = time.GetUtcNow();
+
+        if (client != null && !AllowPrompt(client, group.Id, now)) {
+            return false;
+        }
+
+        store.Save(new GroupInvitation(group.Id, userId, inviterId, roomId, now));
+        client?.Send(new GroupInvitationComposer(group.Id, group.Name, group.Badge, roomId));
 
         return true;
     }

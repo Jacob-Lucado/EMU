@@ -94,6 +94,7 @@ public sealed class GroupParticipationStore(IDatabase database) : IGroupParticip
         }
 
         connection.Execute("INSERT INTO group_memberships (user_id, group_id) VALUES (@userId, @groupId)", new { userId, groupId }, transaction);
+        connection.Execute("DELETE FROM group_invitations WHERE user_id = @userId AND group_id = @groupId", new { userId, groupId }, transaction);
 
         return GroupJoinOutcome.Inserted;
     }

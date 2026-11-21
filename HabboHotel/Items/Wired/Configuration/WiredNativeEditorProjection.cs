@@ -48,7 +48,8 @@ public static class WiredNativeEditorProjection
         "wf_xtra_var_fx_boss", "wf_xtra_var_fx_health", "wf_xtra_var_fx_level", "wf_xtra_var_fx_number", "wf_xtra_var_fx_progress",
         "wf_xtra_var_fx_status", "wf_xtra_var_leaderboard", "wf_xtra_var_web_api", "wf_xtra_text_output_username", "wf_var_dailytask",
         "wf_var_echo", "wf_var_pointer", "wf_var_quest", "wf_var_quest_chain", "wf_var_reference",
-        UnreleasedHabboFeatures.InviteToGroupAction, UnreleasedHabboFeatures.RemoveFromGroupAction, UnreleasedHabboFeatures.GroupMembershipTrigger
+        UnreleasedHabboFeatures.InviteToGroupAction, UnreleasedHabboFeatures.RemoveFromGroupAction, UnreleasedHabboFeatures.GroupMembershipTrigger,
+        UnreleasedHabboFeatures.ContextMenuItemAddon, UnreleasedHabboFeatures.ClickContextMenuTrigger
     };
 
     public static WiredNativeEditorMetadata Metadata(string name)
@@ -102,8 +103,11 @@ public static class WiredNativeEditorProjection
     {
         var names = stackBoxNames.ToHashSet(StringComparer.Ordinal);
 
-        return [.. new[] { (Name: "wf_trg_bot_reached_avtr", Source: WiredSources.ReachedUser), (Name: "wf_trg_click_user", Source: WiredSources.ClickedUser) }
-            .Where(entry => names.Contains(entry.Name)).Select(entry => entry.Source)];
+        return [.. new[]
+            {
+                (Name: "wf_trg_bot_reached_avtr", Source: WiredSources.ReachedUser), (Name: "wf_trg_click_user", Source: WiredSources.ClickedUser),
+                (Name: UnreleasedHabboFeatures.ClickContextMenuTrigger, Source: WiredSources.ClickedUser)
+            }.Where(entry => names.Contains(entry.Name)).Select(entry => entry.Source).Distinct()];
     }
 
     public static WiredNativeEditorMetadata WithTriggerContext(WiredNativeEditorMetadata metadata, ImmutableArray<int> contextSources) =>

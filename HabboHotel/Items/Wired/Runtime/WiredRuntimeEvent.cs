@@ -9,7 +9,8 @@ public enum WiredEventKind
     Score, AvatarAction, Leave, ClickFurni, ClickTile, ClickUser, BotReachedFurni,
     BotReachedUser, Counter, Signal, Variable, Periodic, Elapsed, TransactionComplete, TransactionFail, Inspection,
     RoomInitialized, LinkMessage, LinkDataframe,
-    GroupMembership
+    GroupMembership,
+    ContextMenu
 }
 
 public sealed record WiredRuntimeEvent(WiredEventKind Kind)

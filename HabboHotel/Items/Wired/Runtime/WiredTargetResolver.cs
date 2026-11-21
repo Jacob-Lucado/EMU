@@ -57,7 +57,7 @@ public sealed class WiredTargetResolver(Func<IEnumerable<Item>> furni, Func<IEnu
         IEnumerable<int> ids = source switch
         {
             WiredSources.Trigger => context.Triggering.UserIds,
-            WiredSources.ClickedUser when context.Event.Kind == WiredEventKind.ClickUser =>
+            WiredSources.ClickedUser when context.Event.Kind is WiredEventKind.ClickUser or WiredEventKind.ContextMenu =>
                 context.Event.TargetUser is { } clicked ? [clicked.VirtualId] : [],
             WiredSources.ClickedUser => [],
             WiredSources.ReachedUser => context.Event.TargetUser is { } target ? [target.VirtualId] : [],

@@ -7,5 +7,16 @@ public class WiredContextMenuComposer(int targetType, int targetId, IReadOnlyLis
 {
     public uint MessageId => ServerPacketHeader.WiredContextMenuComposer;
 
-    public void Compose(IOutgoingPacket packet) => throw new NotImplementedException();
+    public void Compose(IOutgoingPacket packet)
+    {
+        packet.WriteInteger(targetType);
+        packet.WriteInteger(targetId);
+        packet.WriteInteger(items.Count);
+
+        foreach (var item in items) {
+            packet.WriteString(item.ButtonId);
+            packet.WriteString(item.Text);
+            packet.WriteBoolean(item.Enabled);
+        }
+    }
 }

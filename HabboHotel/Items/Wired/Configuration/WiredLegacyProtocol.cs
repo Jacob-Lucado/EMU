@@ -157,7 +157,7 @@ public static class WiredLegacyProtocol
         IReadOnlyList<Plus.HabboHotel.Items.Wired.Variables.WiredNativeSharedVariable>? sharedVariables = null,
         Plus.HabboHotel.Items.Wired.Runtime.WiredTextPlaceholders? textPlaceholders = null,
         Plus.HabboHotel.Items.Wired.Leaderboard.WiredLeaderboardContext? leaderboard = null, ImmutableArray<int> contextSources = default,
-        Plus.HabboHotel.Items.Wired.Variables.WiredVariableBoxContext? variableBox = null)
+        Plus.HabboHotel.Items.Wired.Variables.WiredVariableBoxContext? variableBox = null, IReadOnlyList<string>? contextMenuButtons = null)
     {
         editor ??= configuration.Origin?.Native;
 
@@ -215,7 +215,7 @@ public static class WiredLegacyProtocol
         // One context entry (type 0, the room's variable catalog) carries its hash; the client synchronizes the catalog by it.
         // Zero is the "unknown, request it" hint and is also what a failed capture sends. Cards without pickers carry no context.
         packet.WriteInteger((catalogHash is null ? 0 : 1) + (sharedVariables is null ? 0 : 1) + (textPlaceholders is null ? 0 : 1)
-            + (leaderboard is null ? 0 : 1) + (variableBox is null ? 0 : 1));
+            + (leaderboard is null ? 0 : 1) + (variableBox is null ? 0 : 1) + (contextMenuButtons is null ? 0 : 1));
 
         if (catalogHash is { } hash) {
             packet.WriteInteger(0);
@@ -284,6 +284,16 @@ public static class WiredLegacyProtocol
                 packet.WriteBoolean(choice.Persistent);
                 packet.WriteBoolean(choice.Description.HasValue);
                 packet.WriteInteger(choice.LevelSystem is null ? 0 : 1);
+            }
+        }
+
+        // Context 900 (User Clicks Context Menu): the button ids of the room's Context Menu Items.
+        if (contextMenuButtons is not null) {
+            packet.WriteInteger(UnreleasedHabboFeatures.ContextMenuEditorContext);
+            packet.WriteInteger(contextMenuButtons.Count);
+
+            foreach (var button in contextMenuButtons) {
+                packet.WriteString(button);
             }
         }
 

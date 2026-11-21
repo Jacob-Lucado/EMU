@@ -24,6 +24,9 @@ public sealed record WiredEditorSnapshot(
     /// <summary>The variable context entry of a user, furni or room variable box; null for every other form.</summary>
     public Plus.HabboHotel.Items.Wired.Variables.WiredVariableBoxContext? VariableBox { get; init; }
 
+    /// <summary>Editor context 900 of User Clicks Context Menu: the room's button ids; null for every other form.</summary>
+    public ImmutableArray<string>? ContextMenuButtons { get; init; }
+
     /// <summary>The user sources the stack's trigger adds to every user slot (10 under Bot Reaches User, 11 under Click User).</summary>
     public ImmutableArray<int> TriggerContextSources { get; init; } = [];
 
@@ -56,7 +59,9 @@ public sealed record WiredEditorSnapshot(
                 ? Plus.HabboHotel.Items.Wired.Runtime.WiredTextPlaceholders.Capture(box) : null,
             Leaderboard = box.Descriptor.CanonicalName == "wf_xtra_var_leaderboard" ? box.Instance.GetWired().LeaderboardContext(box) : null,
             VariableBox = box.Instance.GetWired().VariableBoxContext(box),
-            TriggerContextSources = TriggerContext(box)
+            TriggerContextSources = TriggerContext(box),
+            ContextMenuButtons = box.Descriptor.CanonicalName == UnreleasedHabboFeatures.ClickContextMenuTrigger
+                ? box.Instance.GetWired().ContextMenuButtonIds() : null
         };
     }
 

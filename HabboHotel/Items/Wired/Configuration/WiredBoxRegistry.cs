@@ -47,6 +47,8 @@ public static class WiredBoxRegistry
         new(UnreleasedHabboFeatures.InviteToGroupAction, WiredBoxCategory.Action, UnreleasedHabboFeatures.InviteToGroupCode, nameof(UnreleasedHabboFeatures)),
         new(UnreleasedHabboFeatures.RemoveFromGroupAction, WiredBoxCategory.Action, UnreleasedHabboFeatures.RemoveFromGroupCode, nameof(UnreleasedHabboFeatures)),
         new(UnreleasedHabboFeatures.GroupMembershipTrigger, WiredBoxCategory.Trigger, UnreleasedHabboFeatures.GroupMembershipTriggerCode, nameof(UnreleasedHabboFeatures)),
+        new(UnreleasedHabboFeatures.ContextMenuItemAddon, WiredBoxCategory.Addon, UnreleasedHabboFeatures.ContextMenuItemCode, nameof(UnreleasedHabboFeatures)),
+        new(UnreleasedHabboFeatures.ClickContextMenuTrigger, WiredBoxCategory.Trigger, UnreleasedHabboFeatures.ClickContextMenuCode, nameof(UnreleasedHabboFeatures)),
         new("wf_act_adjust_clock", WiredBoxCategory.Action, 38, "habbohotel/items/interactions/wired/effects/WiredEffectAdjustClock.java"),
         new("wf_act_bot_clothes", WiredBoxCategory.Action, 26, "habbohotel/items/interactions/wired/effects/WiredEffectBotClothes.java"),
         new("wf_act_bot_follow_avatar", WiredBoxCategory.Action, 25, "habbohotel/items/interactions/wired/effects/WiredEffectBotFollowHabbo.java"),

@@ -456,6 +456,7 @@ public static class ServerPacketHeader
     public const uint OfficialSongIdComposer = 1156;
     public const uint SoundMachinePlaylistComposer = 747;
     public const uint SongDisksInventoryComposer = 948;
+    public const uint RoomStreamComposer = 9650;
     public const uint QuizDataComposer = 3235;
     public const uint QuizResultsComposer = 1126;
     public const uint CampaignCalendarDataComposer = 846;

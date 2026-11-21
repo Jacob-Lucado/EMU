@@ -60,6 +60,11 @@ public sealed class RoomEntryService(IQuestManager quests, TimeProvider clock, I
         }
 
         session.Send(new Plus.Communication.Packets.Outgoing.Rooms.Session.RaidProtectionCapabilityComposer(room.RoomId, room.OwnerId == habbo.Id));
+
+        if (room.Stream is { } stream) {
+            session.Send(new Plus.Communication.Packets.Outgoing.Rooms.Session.RoomStreamComposer(stream));
+        }
+
         var now = clock.GetUtcNow();
 
         if (habbo.FloodUntil is { } floodUntil && now < floodUntil) {

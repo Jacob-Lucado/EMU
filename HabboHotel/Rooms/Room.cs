@@ -53,6 +53,8 @@ public class Room
     private DateTimeOffset? _timerRestartAt;
     public bool MDisposed;
     public MoodlightData MoodlightData;
+    // The web audio the room plays. It lasts until the room unloads.
+    public Plus.HabboHotel.Rooms.Music.RoomStream? Stream { get; set; }
 
     public Dictionary<int, DateTimeOffset> MutedUsers;
 

@@ -70,6 +70,7 @@ public static class PermissionKeys
     public const string CommandMimic = "command.mimic";
     public const string CommandMip = "command.mip";
     public const string CommandMoonwalk = "command.moonwalk";
+    public const string CommandMusic = "command.music";
     public const string CommandMute = "command.mute";
     public const string CommandMutebots = "command.mutebots";
     public const string CommandMutepets = "command.mutepets";

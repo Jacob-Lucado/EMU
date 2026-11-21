@@ -40,7 +40,7 @@ public static class WiredGroupActions
     /// <summary>[group mode (0 the room's group, 1 the picked group), group id, change (0 joins, 1 leaves)].</summary>
     public static bool MatchesMembership(WiredRuntimeContext context, WiredConfiguration config)
     {
-        var groupId = P(config, 0) == 0 ? context.Room.Group?.Id ?? 0 : P(config, 1);
+        var groupId = P(config, 0) == UnreleasedHabboFeatures.RoomGroup ? context.Room.Group?.Id ?? 0 : P(config, 1);
 
         return groupId > 0 && context.Event.Code == groupId && context.Event.Action == P(config, 2);
     }

@@ -250,7 +250,7 @@ public sealed class WiredConfigurationService(
         var (groupId, mustOwn) = name switch
         {
             UnreleasedHabboFeatures.InviteToGroupAction or UnreleasedHabboFeatures.RemoveFromGroupAction => (native.OwnedIntParams.FirstOrDefault(), true),
-            UnreleasedHabboFeatures.GroupMembershipTrigger when native.OwnedIntParams is [1, var picked, ..] => (picked, false),
+            UnreleasedHabboFeatures.GroupMembershipTrigger when native.OwnedIntParams is [UnreleasedHabboFeatures.PickedGroup, var picked, ..] => (picked, false),
             _ => (0, false)
         };
 

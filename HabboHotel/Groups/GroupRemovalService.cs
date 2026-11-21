@@ -24,7 +24,8 @@ public sealed class GroupRemovalService(
     IGameClientManager _clients,
     IGroupInfoSnapshotService _groupInfo,
     IGroupRemovalStore _store,
-    IAccountSessionGate _sessions) : IGroupRemovalService
+    IAccountSessionGate _sessions,
+    IGroupMembershipEvents? _membership = null) : IGroupRemovalService
 {
     public Task Delete(GameClient session, int groupId)
     {

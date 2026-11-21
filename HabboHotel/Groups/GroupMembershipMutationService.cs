@@ -47,7 +47,8 @@ public sealed class GroupMembershipMutationService(
     IGroupManager groups,
     IRoomManager rooms,
     IGroupMemberIdentityLookup identities,
-    IGroupMembershipMutationStore store) : IGroupMembershipMutationService
+    IGroupMembershipMutationStore store,
+    IGroupMembershipEvents? membership = null) : IGroupMembershipMutationService
 {
     public Task Accept(GameClient session, int groupId, int userId)
     {

@@ -6,5 +6,11 @@ public class GroupInvitationComposer(int groupId, string groupName, string badge
 {
     public uint MessageId => ServerPacketHeader.GroupInvitationComposer;
 
-    public void Compose(IOutgoingPacket packet) => throw new NotImplementedException();
+    public void Compose(IOutgoingPacket packet)
+    {
+        packet.WriteInteger(groupId);
+        packet.WriteString(groupName);
+        packet.WriteString(badgeCode);
+        packet.WriteInteger((int)roomId);
+    }
 }

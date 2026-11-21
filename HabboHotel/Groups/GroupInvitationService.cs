@@ -1,4 +1,6 @@
+using Plus.Communication.Packets.Outgoing.Groups;
 using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Items.Wired;
 using Plus.Utilities.DependencyInjection;
 
 namespace Plus.HabboHotel.Groups;
@@ -18,9 +20,32 @@ public interface IGroupInvitationService
 public sealed class GroupInvitationService(IGroupInvitationStore store, IGroupParticipationService participation, IGameClientManager clients,
     TimeProvider time) : IGroupInvitationService
 {
-    public bool Invite(Group group, int userId, int inviterId, uint roomId) => throw new NotImplementedException();
+    public bool Invite(Group group, int userId, int inviterId, uint roomId)
+    {
+        if (group.IsMember(userId)) {
+            return false;
+        }
 
-    public bool Cancel(int groupId, int userId) => throw new NotImplementedException();
+        store.Save(new GroupInvitation(group.Id, userId, inviterId, roomId, time.GetUtcNow()));
+        clients.GetClientByUserId(userId)?.Send(new GroupInvitationComposer(group.Id, group.Name, group.Badge, roomId));
 
-    public Task Reply(GameClient session, int groupId, int answer) => throw new NotImplementedException();
+        return true;
+    }
+
+    public bool Cancel(int groupId, int userId) => store.Delete(groupId, userId);
+
+    public Task Reply(GameClient session, int groupId, int answer)
+    {
+        var habbo = session.GetHabbo();
+
+        switch ((GroupInvitationAnswer)answer) {
+            case GroupInvitationAnswer.Accept:
+                return participation.AcceptInvitation(session, groupId);
+            case GroupInvitationAnswer.Reject:
+                store.Delete(groupId, habbo.Id);
+                break;
+        }
+
+        return Task.CompletedTask;
+    }
 }

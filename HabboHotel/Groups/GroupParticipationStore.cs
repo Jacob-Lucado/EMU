@@ -70,10 +70,10 @@ public sealed class GroupParticipationStore(IDatabase database) : IGroupParticip
     }
 
     // Deletion locks the same groups row, so a deleted group cannot gain a membership, request or favourite afterwards.
-    private static bool LockGroup(System.Data.IDbConnection connection, System.Data.IDbTransaction transaction, int groupId) =>
+    internal static bool LockGroup(System.Data.IDbConnection connection, System.Data.IDbTransaction transaction, int groupId) =>
         connection.Query<int>("SELECT id FROM `groups` WHERE id = @groupId FOR UPDATE", new { groupId }, transaction).Count() == 1;
 
-    private static bool LockAccount(System.Data.IDbConnection connection, System.Data.IDbTransaction transaction, int userId) =>
+    internal static bool LockAccount(System.Data.IDbConnection connection, System.Data.IDbTransaction transaction, int userId) =>
         connection.Query<int>("SELECT id FROM users WHERE id = @userId FOR UPDATE", new { userId }, transaction).Count() == 1;
 
     private static GroupJoinOutcome InsertRequest(System.Data.IDbConnection connection, System.Data.IDbTransaction transaction, int userId, int groupId)

@@ -79,7 +79,45 @@ public sealed class GroupParticipationService(IGroupManager groups, IGroupInfoSn
         return Task.CompletedTask;
     }
 
-    public Task AcceptInvitation(GameClient session, int groupId) => throw new NotImplementedException();
+    // The same publication as an open join; the stored invitation replaces the type and request checks.
+    public Task AcceptInvitation(GameClient session, int groupId)
+    {
+        var habbo = session.GetHabbo();
+        using var account = accounts.Enter(habbo.Id);
+
+        if (invitations == null || !groups.TryGetGroup(groupId, out var found)) {
+            return Task.CompletedTask;
+        }
+
+        lock (found) {
+            if (!IsCurrent(found)) {
+                return Task.CompletedTask;
+            }
+
+            if (!found.IsMember(habbo.Id) && groups.GetGroupsForUser(habbo.Id).Count >= MaxGroupsPerUser) {
+                session.Send(new BroadcastMessageAlertComposer(LimitMessage));
+
+                return Task.CompletedTask;
+            }
+
+            var outcome = invitations.Accept(habbo.Id, found.Id, MaxGroupsPerUser);
+
+            if (outcome == GroupJoinOutcome.LimitReached) {
+                session.Send(new BroadcastMessageAlertComposer(LimitMessage));
+
+                return Task.CompletedTask;
+            }
+
+            if (outcome != GroupJoinOutcome.Inserted) {
+                return Task.CompletedTask;
+            }
+
+            found.HandleRequest(habbo.Id, true);
+            PublishMembership(session, found, habbo);
+        }
+
+        return Task.CompletedTask;
+    }
 
     public Task SetFavourite(GameClient session, int groupId)
     {

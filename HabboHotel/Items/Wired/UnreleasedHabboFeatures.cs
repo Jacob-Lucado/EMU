@@ -21,6 +21,10 @@ public static class UnreleasedHabboFeatures
     public const int RemoveFromGroupCode = 9001;
     public const string GroupMembershipTrigger = "wf_trg_group_membership";
     public const int GroupMembershipTriggerCode = 9000;
+    public const int RoomGroup = 0;
+    public const int PickedGroup = 1;
+    public const int JoinedGroup = 0;
+    public const int LeftGroup = 1;
     public const string GroupNotFoundError = "This group does not exist.";
     public const string GroupNotOwnedError = "You can only pick a group you own.";
 

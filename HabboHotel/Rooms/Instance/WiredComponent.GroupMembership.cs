@@ -1,4 +1,5 @@
 using Plus.HabboHotel.Groups;
+using Plus.HabboHotel.Items.Wired;
 using Plus.HabboHotel.Items.Wired.Runtime;
 
 namespace Plus.HabboHotel.Rooms.Instance;
@@ -13,5 +14,5 @@ public partial class WiredComponent
     /// so the stacks run on the next Wired pass instead of now.
     /// </summary>
     public void GroupMembershipChanged(RoomUser user, int groupId, bool joined) =>
-        _linkArrivals.Enqueue(new(WiredEventKind.GroupMembership) { Actor = user, Code = groupId, Action = joined ? 0 : 1 });
+        _linkArrivals.Enqueue(new(WiredEventKind.GroupMembership) { Actor = user, Code = groupId, Action = joined ? UnreleasedHabboFeatures.JoinedGroup : UnreleasedHabboFeatures.LeftGroup });
 }

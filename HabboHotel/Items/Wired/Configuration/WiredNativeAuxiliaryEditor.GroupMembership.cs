@@ -14,11 +14,12 @@ internal static partial class WiredNativeAuxiliaryEditor
             Shape(n, 2, 0, 1, 0) && n.Text.Length == 0 && n.OwnedIntParams[0] >= 0 && n.OwnedIntParams[1] is 0 or 1
                 ? Roles(Draft(n, n.OwnedIntParams), [], [("users", n.UserSourceTypes[0])]) : null));
         // [group mode (0 the room's group, 1 a picked group), group id, change (0 joins, 1 leaves)].
-        yield return new(UnreleasedHabboFeatures.GroupMembershipTrigger, new(Meta(0, 0, [0, 0, 0]), n =>
+        yield return new(UnreleasedHabboFeatures.GroupMembershipTrigger, new(Meta(0, 0, [UnreleasedHabboFeatures.RoomGroup, 0, UnreleasedHabboFeatures.JoinedGroup]), n =>
         {
             var p = n.OwnedIntParams;
 
-            return Shape(n, 3, 0, 0, 0) && n.Text.Length == 0 && p[0] is 0 or 1 && p[1] >= 0 && p[2] is 0 or 1 ? Draft(n, p) : null;
+            return Shape(n, 3, 0, 0, 0) && n.Text.Length == 0 && p[0] is UnreleasedHabboFeatures.RoomGroup or UnreleasedHabboFeatures.PickedGroup
+                && p[1] >= 0 && p[2] is UnreleasedHabboFeatures.JoinedGroup or UnreleasedHabboFeatures.LeftGroup ? Draft(n, p) : null;
         }));
     }
 }

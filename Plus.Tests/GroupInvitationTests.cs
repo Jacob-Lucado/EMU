@@ -119,6 +119,18 @@ public class GroupInvitationTests
     }
 
     [Fact]
+    public async Task NormalJoinCannotAdmitAUserToAPrivateGroup()
+    {
+        var hotel = new Hotel(GroupType.Private);
+        var (client, sent) = hotel.Online(8);
+
+        await hotel.Participation.Join(client, GroupId);
+
+        Assert.False(hotel.Group.IsMember(8));
+        Assert.Empty(sent);
+    }
+
+    [Fact]
     public async Task AcceptWithoutAPendingInvitationChangesNothing()
     {
         var hotel = new Hotel(GroupType.Private);

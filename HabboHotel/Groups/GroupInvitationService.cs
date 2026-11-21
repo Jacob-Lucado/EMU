@@ -44,18 +44,17 @@ public sealed class GroupInvitationService(IGroupInvitationStore store, IGroupPa
 
     public bool Invite(Group group, int userId, int inviterId, uint roomId)
     {
-        if (group.IsMember(userId)) {
-            return false;
-        }
-
         var client = clients.GetClientByUserId(userId);
         var now = time.GetUtcNow();
 
-        if (client != null && !AllowPrompt(client, group.Id, now)) {
-            return false;
+        lock (group) {
+            if (group.CreatorId == userId || group.IsMember(userId) || client != null && !AllowPrompt(client, group.Id, now)) {
+                return false;
+            }
+
+            store.Save(new GroupInvitation(group.Id, userId, inviterId, roomId, now));
         }
 
-        store.Save(new GroupInvitation(group.Id, userId, inviterId, roomId, now));
         client?.Send(new GroupInvitationComposer(group.Id, group.Name, group.Badge, roomId));
 
         return true;

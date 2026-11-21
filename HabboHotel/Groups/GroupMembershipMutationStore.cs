@@ -30,6 +30,7 @@ public sealed class GroupMembershipMutationStore(IDatabase database) : IGroupMem
             return false;
         }
 
+        connection.Execute("DELETE FROM group_invitations WHERE user_id = @userId AND group_id = @groupId", new { userId, groupId }, transaction);
         transaction.Commit();
 
         return true;

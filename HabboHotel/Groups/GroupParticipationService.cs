@@ -43,7 +43,7 @@ public sealed class GroupParticipationService(IGroupManager groups, IGroupInfoSn
 
             var group = found;
 
-            if (group.IsMember(habbo.Id) || group.IsAdmin(habbo.Id) || group.HasRequest(habbo.Id) && group.Type == GroupType.Private) {
+            if (group.IsMember(habbo.Id) || group.IsAdmin(habbo.Id) || group.Type == GroupType.Private) {
                 return Task.CompletedTask;
             }
 

@@ -56,11 +56,14 @@ public partial class WiredComponent
     }
 
     // The text output add-ons stacked with the item fill their placeholders for the viewer, then the room's global placeholders.
-    private string MenuText(WiredRuntimeContext context, IWiredConfiguredItem box, string text)
+    private string MenuText(WiredRuntimeContext viewer, IWiredConfiguredItem box, string text)
     {
         if (!text.Contains("$(", StringComparison.Ordinal)) {
             return text;
         }
+
+        var context = viewer.Fork(viewer.Event, viewer.Depth);
+        context.Triggering = viewer.Triggering;
 
         try {
             foreach (var output in (_room.GetGameMap()?.GetCoordinatedItems(new(box.Item.GetX, box.Item.GetY)) ?? [])

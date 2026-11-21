@@ -9,7 +9,7 @@ internal static partial class WiredNativeAuxiliaryEditor
     {
         // See WiredContextMenuRule for the 20 ints, the six variables and the text. An empty button id is the inactive item.
         yield return new(UnreleasedHabboFeatures.ContextMenuItemAddon, new(Meta(0, 0,
-            [0, 1, 1, 0, 0, 0, 0, 0, .. Enumerable.Repeat(new[] { 6, 0 }, 2 * UnreleasedHabboFeatures.ContextMenuConditions).SelectMany(pair => pair)],
+            [0, 1, 1, 0, 0, 0, 0, 0, .. Enumerable.Repeat(new[] { UnreleasedHabboFeatures.ContextMenuExists, 0 }, 2 * UnreleasedHabboFeatures.ContextMenuConditions).SelectMany(pair => pair)],
             WiredContextMenuRule.VariableCount), n =>
         {
             var p = n.OwnedIntParams;

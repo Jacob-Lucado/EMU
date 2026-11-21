@@ -127,6 +127,21 @@ public partial class PlacedFurniRoomTests
         Assert.Equal(new[] { ("first", "Hello friend", true), ("second", "Second", true) }, menu.Items);
     }
 
+    [Fact]
+    public async Task TextOutputOnlyFillsButtonsOnItsOwnTile()
+    {
+        var (_, viewer, visitor, _, _) = PrepareTwoUsers();
+        PlaceSavedBox(MenuItemB, "wf_xtra_context_menu_item", 2, 2, 2);
+        Assert.Equal("saved", await SaveMenuItem(MenuItemA, 1, "first\tHello $(who)", MenuInts()));
+        Assert.Equal("saved", await SaveMenuItem(MenuItemB, 2, "second\tHello $(who)", MenuInts()));
+        PlaceSavedBox(UsernameBox, UsernameOutput, 3, 3, 0);
+        Assert.Equal("saved", SaveUsernameOutput(MenuSaveService(), [0], "who", []));
+
+        var menu = await OpenMenu(_client, 0, visitor.VirtualId);
+
+        Assert.Equal(new[] { ("first", "Hello " + viewer.GetUsername(), true), ("second", "Hello $(who)", true) }, menu.Items);
+    }
+
     [Theory]
     [InlineData(1, 0, true, true)]
     [InlineData(1, 1, true, false)]
@@ -186,27 +201,20 @@ public partial class PlacedFurniRoomTests
     public async Task VisibilityAndEnableConditionsReadTheViewersUserVariables()
     {
         var actor = EditedVariableRoom();
-        var wireB = BuildersClubItemIds.Assign(HeldFurniB);
+        GiveEditedVariables(actor, HeldFurniB);
+        var user = $"user:{EditedUser}";
+        var noValue = $"user:{EditedNoValue}";
+        // Shown when the viewer's variable is 7; enabled while the viewer holds the second variable, disabled while it must not.
+        Assert.Equal("saved", await SaveMenuItem(MenuItemA, 1, "equal\tEqual", MenuInts(userScope: 0, visibility: 1, enable: 1, conditions: [1, 7, 6, 0, 6, 0, 6, 0]),
+            [user, "0", "0", noValue, "0", "0"]));
+        Assert.Equal("saved", await SaveMenuItem(MenuItemB, 2, "other\tOther", MenuInts(userScope: 0, visibility: 1, enable: 1, conditions: [1, 8, 6, 0, 6, 0, 7, 0]),
+            [user, "0", "0", noValue, "0", "0"]));
+        Assert.Equal("saved", await SaveMenuItem(MenuItemC, 3, "gone\tGone", MenuInts(userScope: 0, visibility: 2, enable: 1, conditions: [5, 7, 2, 6, 6, 0, 7, 0]),
+            [user, user, "0", noValue, "0", "0"]));
 
-        try {
-            GiveEditedVariables(actor, wireB);
-            var user = $"user:{EditedUser}";
-            var noValue = $"user:{EditedNoValue}";
-            // Shown when the viewer's variable is 7; enabled while the viewer holds the second variable, disabled while it must not.
-            Assert.Equal("saved", await SaveMenuItem(MenuItemA, 1, "equal\tEqual", MenuInts(userScope: 0, visibility: 1, enable: 1, conditions: [1, 7, 6, 0, 6, 0, 6, 0]),
-                [user, "0", "0", noValue, "0", "0"]));
-            Assert.Equal("saved", await SaveMenuItem(MenuItemB, 2, "other\tOther", MenuInts(userScope: 0, visibility: 1, enable: 1, conditions: [1, 8, 6, 0, 6, 0, 7, 0]),
-                [user, "0", "0", noValue, "0", "0"]));
-            Assert.Equal("saved", await SaveMenuItem(MenuItemC, 3, "gone\tGone", MenuInts(userScope: 0, visibility: 2, enable: 1, conditions: [5, 7, 2, 6, 6, 0, 7, 0]),
-                [user, user, "0", noValue, "0", "0"]));
+        var menu = await OpenMenu(_client, 0, actor.VirtualId);
 
-            var menu = await OpenMenu(_client, 0, actor.VirtualId);
-
-            Assert.Equal(new[] { ("equal", "Equal", true), ("gone", "Gone", false) }, menu.Items);
-        }
-        finally {
-            BuildersClubItemIds.Release(HeldFurniB);
-        }
+        Assert.Equal(new[] { ("equal", "Equal", true), ("gone", "Gone", false) }, menu.Items);
     }
 
     [Fact]
@@ -255,21 +263,14 @@ public partial class PlacedFurniRoomTests
     public async Task ADisabledItemIgnoresAClick()
     {
         var actor = EditedVariableRoom();
-        var wireB = BuildersClubItemIds.Assign(HeldFurniB);
+        GiveEditedVariables(actor, HeldFurniB);
+        Assert.Equal("saved", await SaveMenuItem(MenuItemA, 1, "wave\tWave", MenuInts(userScope: 0, enable: 1, conditions: [6, 0, 6, 0, 6, 0, 7, 0]),
+            ["0", "0", "0", $"user:{EditedNoValue}", "0", "0"]));
+        Assert.Equal("saved", await SaveMenuTrigger("wave"));
 
-        try {
-            GiveEditedVariables(actor, wireB);
-            Assert.Equal("saved", await SaveMenuItem(MenuItemA, 1, "wave\tWave", MenuInts(userScope: 0, enable: 1, conditions: [6, 0, 6, 0, 6, 0, 7, 0]),
-                ["0", "0", "0", $"user:{EditedNoValue}", "0", "0"]));
-            Assert.Equal("saved", await SaveMenuTrigger("wave"));
+        await Click(_client, 0, actor.VirtualId, "wave");
 
-            await Click(_client, 0, actor.VirtualId, "wave");
-
-            Assert.DoesNotContain("clicked", MenuMessages(_client));
-        }
-        finally {
-            BuildersClubItemIds.Release(HeldFurniB);
-        }
+        Assert.DoesNotContain("clicked", MenuMessages(_client));
     }
 
     [Fact]

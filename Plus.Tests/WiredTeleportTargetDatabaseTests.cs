@@ -47,12 +47,27 @@ public sealed class WiredTeleportTargetDatabaseTests
             Assert.False(store.SetLinkedTeleporter(10, 2, 20));
             Assert.False(store.SetLinkedTeleporter(10, 1, 0));
             Assert.False(store.SetLinkedTeleporter(999, 1, 20));
+
             foreach (var invalid in new uint[] { 40, 50, 60, 999 }) {
                 Assert.False(store.SetLinkedTeleporter(10, 1, invalid));
                 Assert.Equal(30u, reloaded.FindLinkedTeleporter(10));
             }
 
+            Assert.False(store.SetLinkedTeleporter(60, 1, 60));
             Assert.True(store.SetLinkedTeleporter(50, 1, 50));
+            Assert.Equal((50u, 1u), store.FindTravelDestination(50, 1));
+            Assert.Equal((30u, 1u), store.FindTravelDestination(10, 1));
+            connection.Execute("UPDATE items SET room_id=2 WHERE id=30");
+            Assert.Equal(default, store.FindTravelDestination(10, 1));
+            connection.Execute("INSERT INTO room_items_tele_links (tele_one_id,tele_two_id) VALUES (30,10)");
+            Assert.Equal((30u, 2u), store.FindTravelDestination(10, 1));
+            Assert.Equal(default, store.FindTravelDestination(10, 2));
+            connection.Execute("UPDATE items SET room_id=0 WHERE id=30");
+            Assert.Equal(default, store.FindTravelDestination(10, 1));
+            connection.Execute("UPDATE items SET room_id=2, base_item=4 WHERE id=30");
+            Assert.Equal(default, store.FindTravelDestination(10, 1));
+            connection.Execute("DELETE FROM items WHERE id=30");
+            Assert.Equal(default, store.FindTravelDestination(10, 1));
             connection.Execute("""
                 CREATE TRIGGER reject_link_update BEFORE UPDATE ON room_items_tele_links FOR EACH ROW
                     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='isolated link update failure';

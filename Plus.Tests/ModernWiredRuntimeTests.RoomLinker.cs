@@ -39,9 +39,9 @@ public partial class ModernWiredRuntimeTests
         linker.Definition.InteractionType = InteractionType.WiredRoomLinker;
         linker.ExtraData = new LegacyDataFormat();
         Assert.Equal(new WiredRoomForwarding.Destination(42, 6),
-            WiredRoomForwarding.Resolve([linker], "", id => id == 6 ? 42u : 0, id => id == 5 ? 6u : 0, TestLogging.Logger));
-        Assert.Null(WiredRoomForwarding.Resolve([linker], "", _ => 0, id => id == 5 ? 6u : 0, TestLogging.Logger));
-        Assert.Null(WiredRoomForwarding.Resolve([linker], "", _ => throw new Exception(), _ => 0, TestLogging.Logger));
+            WiredRoomForwarding.Resolve(1, [linker], "", _ => throw new Exception(), id => id == 5 ? (6u, 42u) : default, TestLogging.Logger));
+        Assert.Null(WiredRoomForwarding.Resolve(1, [linker], "", _ => 0, _ => (6u, 0u), TestLogging.Logger));
+        Assert.Null(WiredRoomForwarding.Resolve(1, [linker], "", _ => throw new Exception(), _ => default, TestLogging.Logger));
     }
 
     [Fact]

@@ -69,6 +69,8 @@ public sealed partial class WiredGlideConveyorTests
         public uint FindOtherHopperRoom(uint roomId) => 0;
         public uint FindHopper(uint roomId) => 0;
         public uint FindLinkedTeleporter(uint itemId) => Partners.GetValueOrDefault(itemId);
+        public (uint ItemId, uint RoomId) FindTravelDestination(uint itemId, uint roomId) =>
+            (Partners.GetValueOrDefault(itemId), partnerRoom == 0 ? roomId : partnerRoom);
         public uint FindItemRoom(uint itemId) => partnerRoom;
         public void RegisterHopper(uint itemId, uint roomId) { }
         public void RemoveHopper(uint itemId, uint roomId) { }

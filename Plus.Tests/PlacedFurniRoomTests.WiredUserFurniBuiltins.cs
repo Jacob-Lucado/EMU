@@ -265,7 +265,7 @@ public partial class PlacedFurniRoomTests
     }
 
     [Fact]
-    public void TeleportTargetWritesOnlyTheValidatedSourceHalfAndPreserveSourcePermittedDanglingTargets()
+    public void TeleportTargetReadsTheStoredIdAndWritesOnlyPlacedPartners()
     {
         var source = Furni(202, InteractionType.None, WiredBoxType.None);
         Assert.True(_room.GetRoomItemHandler().SetFloorItem(null, source, 1, 1, 0, true, false, false));

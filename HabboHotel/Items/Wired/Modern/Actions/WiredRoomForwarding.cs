@@ -34,7 +34,7 @@ public static class WiredRoomForwarding
         return true;
     }
 
-    public static Destination? Resolve(IEnumerable<Item> items, string roomText, Func<uint, uint> roomOfItem, Func<uint, uint> pairedItem, ILogger logger)
+    public static Destination? Resolve(uint sourceRoomId, IEnumerable<Item> items, string roomText, Func<uint, uint> roomOfItem, Func<uint, (uint ItemId, uint RoomId)> pairedItem, ILogger logger)
     {
         Destination? resolved = null;
 
@@ -62,7 +62,7 @@ public static class WiredRoomForwarding
                             var destination = roomOfItem((uint)pairId);
 
                             if (destination is > 0 and <= int.MaxValue) {
-                                resolved = new(destination, (uint)pairId);
+                                resolved = new(destination, destination == sourceRoomId ? (uint)pairId : 0);
 
                                 continue;
                             }
@@ -79,15 +79,9 @@ public static class WiredRoomForwarding
                 continue;
             }
 
-            var paired = pairedItem(item.Id);
+            var (paired, destinationRoom) = pairedItem(item.Id);
 
-            if (paired == 0 || paired > int.MaxValue) {
-                continue;
-            }
-
-            var destinationRoom = roomOfItem(paired);
-
-            if (destinationRoom is > 0 and <= int.MaxValue) {
+            if (paired is > 0 and <= int.MaxValue && destinationRoom is > 0 and <= int.MaxValue) {
                 resolved = new(destinationRoom, paired);
             }
         }
@@ -148,7 +142,9 @@ public static class WiredRoomForwarding
         var items = context.Targets.ResolveFurni(context, config.SelectedItems, config.FurniSources["links"]);
         var stored = WiredLegacyProtocol.JavaHashSetOrder(config.SelectedItems.Where(id => id <= int.MaxValue).Select(id => (int)id), 0).ToList();
         items = [.. items.OrderBy(item => stored.IndexOf((int)item.Id) is var index and >= 0 ? index : stored.Count)];
-        var target = Resolve(items, config.Text, id => ItemTeleporterFinder.GetTeleRoomId(id, context.Room, travelStore), travelStore.FindLinkedTeleporter, logger);
+        Destination? ResolveTarget() => Resolve(context.Room.RoomId, items, config.Text, id => ItemTeleporterFinder.GetTeleRoomId(id, context.Room, travelStore),
+            id => travelStore.FindTravelDestination(id, context.Room.RoomId), logger);
+        var target = ResolveTarget();
 
         var sameRoom = target?.RoomId == context.Room.RoomId;
 
@@ -175,6 +171,10 @@ public static class WiredRoomForwarding
             void Forward()
             {
                 if (!user.IsAttachedTo(room) || !ReferenceEquals(habbo.CurrentRoom, room)) {
+                    return;
+                }
+
+                if (target.TeleporterId != 0 && ResolveTarget() != target) {
                     return;
                 }
 

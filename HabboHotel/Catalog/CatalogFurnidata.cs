@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Plus.Database;
 using Plus.HabboHotel.Items;
+using Plus.HabboHotel.Items.Wired;
 
 namespace Plus.HabboHotel.Catalog;
 
@@ -64,6 +65,7 @@ public sealed class CatalogFurnidata(IDatabase database, ICatalogManager catalog
             [FurnidataEntry.WallSection] = new JsonObject { ["furnitype"] = wall }
         };
         Overlay(root, pages);
+        BorrowLooks(floor);
         var content = JsonSerializer.SerializeToUtf8Bytes(root, Compact);
 
         return new(content, $"\"{Convert.ToHexStringLower(SHA1.HashData(content))}\"");
@@ -93,6 +95,17 @@ public sealed class CatalogFurnidata(IDatabase database, ICatalogManager catalog
                 var buildersClubOffer = buildersClubOffers.GetValueOrDefault((classname, isWall));
                 entry["bc"] = buildersClubOffer != null;
                 entry["bcofferid"] = buildersClubOffer?.Id ?? -1;
+            }
+        }
+    }
+
+    // A box Habbo has not shipped keeps its own id, name and offer, but names the placeholder furni whose look it borrows.
+    private static void BorrowLooks(JsonArray floor)
+    {
+        foreach (var entry in floor.OfType<JsonObject>()) {
+            if (entry["classname"] is JsonValue value && value.TryGetValue<string>(out var classname)
+                && UnreleasedHabboFeatures.BorrowedLooks.TryGetValue(classname, out var look)) {
+                entry["classname"] = look;
             }
         }
     }

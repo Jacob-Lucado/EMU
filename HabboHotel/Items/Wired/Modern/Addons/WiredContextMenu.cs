@@ -56,8 +56,13 @@ public sealed record WiredContextMenuRule(string ButtonId, string Text, Immutabl
 
         var self = ReferenceEquals(unit, viewer);
 
-        return Ints[1] == 1 && Ints[2] switch { UnreleasedHabboFeatures.Everyone => true,
-            UnreleasedHabboFeatures.EveryoneExceptViewer => !self, UnreleasedHabboFeatures.OnlyViewer => self, _ => false };
+        return Ints[1] == 1 && Ints[2] switch
+        {
+            UnreleasedHabboFeatures.Everyone => true,
+            UnreleasedHabboFeatures.EveryoneExceptViewer => !self,
+            UnreleasedHabboFeatures.OnlyViewer => self,
+            _ => false
+        };
     }
 
     /// <summary>Habbo's comparisons 0 &lt;, 1 =, 2 &gt;, 3 &lt;=, 4 !=, 5 &gt;=, then 6 exists and 7 does not exist.</summary>

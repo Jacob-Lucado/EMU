@@ -8,7 +8,8 @@ public enum WiredEventKind
     Enter, Speech, WalkOn, WalkOff, Use, StateChanged, GameStart, GameEnd, Collision,
     Score, AvatarAction, Leave, ClickFurni, ClickTile, ClickUser, BotReachedFurni,
     BotReachedUser, Counter, Signal, Variable, Periodic, Elapsed, TransactionComplete, TransactionFail, Inspection,
-    RoomInitialized, LinkMessage, LinkDataframe
+    RoomInitialized, LinkMessage, LinkDataframe,
+    GroupMembership
 }
 
 public sealed record WiredRuntimeEvent(WiredEventKind Kind)

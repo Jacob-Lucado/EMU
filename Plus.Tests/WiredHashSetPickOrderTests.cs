@@ -89,7 +89,10 @@ public class WiredHashSetPickOrderTests
         "wf_xtra_text_output_furni_name", "wf_xtra_text_output_username", "wf_xtra_text_output_variable",
         "wf_xtra_var_fx_boss", "wf_xtra_var_fx_health", "wf_xtra_var_fx_level",
         "wf_xtra_var_fx_number", "wf_xtra_var_fx_progress", "wf_xtra_var_fx_status",
-        "wf_xtra_var_leaderboard", "wf_xtra_var_web_api"
+        "wf_xtra_var_leaderboard", "wf_xtra_var_web_api",
+        // Habbo has not shipped the boxes Plus added for its unreleased features, so their order is not known either.
+        .. WiredBoxRegistry.All.Where(box => box.ConfigurationReference == nameof(Plus.HabboHotel.Items.Wired.UnreleasedHabboFeatures))
+            .Select(box => box.CanonicalName).Order(StringComparer.Ordinal)
     ];
 
     public static TheoryData<string> ProvenCardNames => new(ProvenCards);

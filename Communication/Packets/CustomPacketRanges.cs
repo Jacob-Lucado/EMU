@@ -1,3 +1,5 @@
+using Plus.HabboHotel.Items.Wired;
+
 namespace Plus.Communication.Packets;
 
 public enum PacketRangeDirection
@@ -36,6 +38,8 @@ public static class CustomPacketRanges
         new("custom_features_high_client", PacketRangeDirection.ClientToServer, 9400, 9499, "custom_features"),
         new("catalog_tools_client", PacketRangeDirection.ClientToServer, 10000, 10099, "catalog_tools"),
         new("reward_track_tools_client", PacketRangeDirection.ClientToServer, 10100, 10199, "reward_track_tools"),
+        new("unreleased_habbo_client", PacketRangeDirection.ClientToServer, UnreleasedHabboFeatures.PacketRangeStart, UnreleasedHabboFeatures.PacketRangeEnd,
+            UnreleasedHabboFeatures.PacketRangeFeature),
         new("client_extensions_server", PacketRangeDirection.ServerToClient, 4050, 4099, "client_extensions"),
         new("messenger_server", PacketRangeDirection.ServerToClient, 4900, 4999, "messenger"),
         new("room_tools_server", PacketRangeDirection.ServerToClient, 5100, 5199, "room_tools"),
@@ -46,7 +50,9 @@ public static class CustomPacketRanges
         new("custom_features_server", PacketRangeDirection.ServerToClient, 9300, 9399, "custom_features"),
         new("custom_features_high_server", PacketRangeDirection.ServerToClient, 9400, 9499, "custom_features"),
         new("catalog_tools_server", PacketRangeDirection.ServerToClient, 10000, 10099, "catalog_tools"),
-        new("reward_track_tools_server", PacketRangeDirection.ServerToClient, 10100, 10199, "reward_track_tools")
+        new("reward_track_tools_server", PacketRangeDirection.ServerToClient, 10100, 10199, "reward_track_tools"),
+        new("unreleased_habbo_server", PacketRangeDirection.ServerToClient, UnreleasedHabboFeatures.PacketRangeStart, UnreleasedHabboFeatures.PacketRangeEnd,
+            UnreleasedHabboFeatures.PacketRangeFeature)
     ];
 
     /// <summary>

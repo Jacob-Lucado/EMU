@@ -16,12 +16,13 @@ public static class FurniDelivery
             case InteractionType.GuildGate:
             case InteractionType.GuildItem:
             case InteractionType.GuildForum:
+                // The extra data names the group; the furni itself starts in state 0.
                 var groupId = int.TryParse(extraData, NumberStyles.Integer, CultureInfo.InvariantCulture, out var group) ? group : 0;
 
                 if (amount > 1) {
-                    items.AddRange(factory.CreateMultipleItems(connection, transaction, definition, owner.Id, extraData, amount, groupId));
+                    items.AddRange(factory.CreateMultipleItems(connection, transaction, definition, owner.Id, "0", amount, groupId));
                 }
-                else if (factory.CreateSingleItemNullable(connection, transaction, definition, owner, extraData, groupId) is { } guildItem) {
+                else if (factory.CreateSingleItemNullable(connection, transaction, definition, owner, "0", groupId) is { } guildItem) {
                     items.Add(guildItem);
                 }
 

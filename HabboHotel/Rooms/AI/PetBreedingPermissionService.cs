@@ -39,17 +39,20 @@ public sealed class PetBreedingPermissionService(IPetBreedingPermissionStore sto
             return;
         }
 
-        if (data.Plant is { } plant) {
-            var now = (clock ?? TimeProvider.System).GetUtcNow();
+        if (data.Plant != null) {
+            lock (room.MonsterPlantSync) {
+                var plant = data.Plant;
+                var now = (clock ?? TimeProvider.System).GetUtcNow();
 
-            if (!plant.CanBreedNow(now)) {
-                return;
+                if (!plant.CanBreedNow(now)) {
+                    return;
+                }
+
+                var permission = !plant.BreedingPermission;
+                store.Save(data, permission);
+                plant.BreedingPermission = permission;
+                room.SendPacket(new PetStatusUpdateComposer(pet.VirtualId, data.PetId, true, false, false, permission));
             }
-
-            var permission = !plant.BreedingPermission;
-            store.Save(data, permission);
-            plant.BreedingPermission = permission;
-            room.SendPacket(new PetStatusUpdateComposer(pet.VirtualId, data.PetId, true, false, false, permission));
 
             return;
         }

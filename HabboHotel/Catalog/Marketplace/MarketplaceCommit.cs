@@ -33,6 +33,17 @@ internal static class MarketplaceCommit
         }
     }
 
+    // A returned or bought group furni goes back to its group. A group deleted while the furni was listed leaves a plain furni.
+    public static int LockGroup(IDbConnection connection, IDbTransaction transaction, uint groupId) =>
+        groupId == 0 ? 0 : connection.QuerySingleOrDefault<int?>("SELECT id FROM `groups` WHERE id=@groupId LOCK IN SHARE MODE", new { groupId }, transaction) ?? 0;
+
+    public static void LinkGroup(IDbConnection connection, IDbTransaction transaction, uint furniId, int groupId)
+    {
+        if (groupId > 0) {
+            connection.Execute("INSERT INTO items_groups(id,group_id) VALUES(@furniId,@groupId)", new { furniId, groupId }, transaction);
+        }
+    }
+
     public static void LockUser(IDbConnection connection, IDbTransaction transaction, int userId)
     {
         if (connection.QuerySingleOrDefault<int?>("SELECT id FROM users WHERE id=@userId FOR UPDATE", new { userId }, transaction) == null) {

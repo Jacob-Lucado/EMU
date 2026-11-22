@@ -24,21 +24,12 @@ public class GroupCreationWindowComposer : IServerPacket
             packet.WriteBoolean(false); // Whether the room has controllers.
         }
 
-        packet.WriteInteger(5);
-        packet.WriteInteger(5);
-        packet.WriteInteger(11);
-        packet.WriteInteger(4);
-        packet.WriteInteger(6);
-        packet.WriteInteger(11);
-        packet.WriteInteger(4);
-        packet.WriteInteger(0);
-        packet.WriteInteger(0);
-        packet.WriteInteger(0);
-        packet.WriteInteger(0);
-        packet.WriteInteger(0);
-        packet.WriteInteger(0);
-        packet.WriteInteger(0);
-        packet.WriteInteger(0);
-        packet.WriteInteger(0);
+        packet.WriteInteger(_presentation.BadgePieces.Length);
+
+        foreach (var piece in _presentation.BadgePieces) {
+            packet.WriteInteger(piece.Symbol);
+            packet.WriteInteger(piece.Colour);
+            packet.WriteInteger(piece.Position);
+        }
     }
 }

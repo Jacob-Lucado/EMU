@@ -87,6 +87,18 @@ public sealed class WiredConfigurationService(
                 return;
             }
 
+            if (GroupRefusal(room, habbo.Id, descriptor.CanonicalName, requested) is { } groupRefusal) {
+                session.Send(new WiredValidationErrorComposer(groupRefusal));
+
+                return;
+            }
+
+            if (descriptor.CanonicalName == UnreleasedHabboFeatures.ContextMenuItemAddon && !ContextMenuVariablesExist(room, requested)) {
+                session.Send(new WiredValidationErrorComposer(UnreleasedHabboFeatures.ContextMenuVariableError));
+
+                return;
+            }
+
             bool CanModify() => habbo.CurrentRoom == room && room.GetWired().Settings.CanModify(session);
             var native = requested with { NativeCode = descriptor.EditorCode };
 
@@ -236,6 +248,38 @@ public sealed class WiredConfigurationService(
             logger.LogWarning(error, "Failed to save Wired settings in room {RoomId}", room.Id);
             session.Send(new WiredValidationErrorComposer("Unable to save these Wired settings."));
         }
+    }
+
+    // The group effects take a group the editor owns; the membership trigger takes any group that exists. Group 0 is the inactive box.
+    private static string? GroupRefusal(Rooms.Room room, int editorId, string name, WiredNativeEditorConfiguration native)
+    {
+        var (groupId, mustOwn) = name switch
+        {
+            UnreleasedHabboFeatures.InviteToGroupAction or UnreleasedHabboFeatures.RemoveFromGroupAction => (native.OwnedIntParams.FirstOrDefault(), true),
+            UnreleasedHabboFeatures.GroupMembershipTrigger when native.OwnedIntParams is [UnreleasedHabboFeatures.PickedGroup, var picked, ..] => (picked, false),
+            _ => (0, false)
+        };
+
+        if (groupId == 0) {
+            return null;
+        }
+
+        return room.GetWired().GroupMembership is { } groups ? groups.SaveRefusal(editorId, groupId, mustOwn) : UnreleasedHabboFeatures.GroupNotFoundError;
+    }
+
+    // Each condition in use reads a user variable of this room.
+    private static bool ContextMenuVariablesExist(Rooms.Room room, WiredNativeEditorConfiguration native)
+    {
+        var p = native.OwnedIntParams;
+
+        if (p.Length != Modern.Addons.WiredContextMenuRule.IntCount || native.VariableIds.Length != Modern.Addons.WiredContextMenuRule.VariableCount) {
+            return true;
+        }
+
+        var used = Enumerable.Range(0, Math.Clamp(p[6], 0, UnreleasedHabboFeatures.ContextMenuConditions))
+            .Concat(Enumerable.Range(UnreleasedHabboFeatures.ContextMenuConditions, Math.Clamp(p[7], 0, UnreleasedHabboFeatures.ContextMenuConditions)));
+
+        return used.All(index => room.GetWired().Variables.Module.TryResolveCatalogId(native.VariableIds[index], Variables.WiredVariableTarget.User, out _));
     }
 
     // The filtered Show Message text is what is stored and returned on reopen, and the save still succeeds.

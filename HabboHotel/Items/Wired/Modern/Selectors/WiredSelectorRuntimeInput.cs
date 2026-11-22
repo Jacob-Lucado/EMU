@@ -39,7 +39,7 @@ public sealed record WiredSelectorRuntimeInput(WiredSelectorWorld World, WiredSe
             return result;
         }
         var input = new WiredSelectorInputs(Selection(RuntimeSources.Trigger), Selection(RuntimeSources.Selector),
-            Selection(RuntimeSources.Signal), context.Event.Kind == WiredEventKind.ClickUser ? context.Event.TargetUser?.VirtualId : null,
+            Selection(RuntimeSources.Signal), context.Event.Kind is WiredEventKind.ClickUser or WiredEventKind.ContextMenu ? context.Event.TargetUser?.VirtualId : null,
             context.NowMilliseconds, context.Event.Kind == WiredEventKind.AvatarAction ? context.Event.Actor?.VirtualId : null,
             context.Event.Kind == WiredEventKind.AvatarAction ? context.Event.Action : null, context.Event.Code,
             variables?.FurniPredicate, variables?.UserPredicate,

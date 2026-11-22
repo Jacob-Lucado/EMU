@@ -274,6 +274,98 @@ public sealed class MarketplaceCancellationDatabaseTests
         Assert.Equal(1, fixture.Connection.ExecuteScalar<int>("SELECT COUNT(*) FROM catalog_marketplace_offers"));
     }
 
+    [RecyclerDatabaseFact]
+    public void ListingAGroupFurniKeepsItsGroupOnTheOffer()
+    {
+        using var fixture = new Fixture();
+        fixture.Connection.Execute("CREATE TABLE room_music_playlist(player_id INT,disc_id INT); INSERT INTO items(id,base_item,user_id,room_id,extra_data) VALUES(88,10,7,0,'0'); INSERT INTO items_groups VALUES(88,5)");
+
+        Assert.True(new MarketplaceOfferStore(fixture.Source).ListFurni(new MarketplaceListing(88, 10, 7, 99, 100, "gld_stool2", 42, "1", DateTimeOffset.UtcNow, "0", 0, 0, 5)));
+
+        Assert.Equal(5, fixture.Connection.QuerySingle<int>("SELECT group_id FROM catalog_marketplace_offers WHERE furni_id=88"));
+    }
+
+    [RecyclerDatabaseFact]
+    public void CancellingAGroupFurniReturnsItWithItsGroup()
+    {
+        using var fixture = new Fixture();
+        fixture.Connection.Execute("UPDATE catalog_marketplace_offers SET group_id=5");
+
+        Assert.Equal(5, Assert.IsType<InventoryItem>(fixture.Cancel()).GroupId);
+        Assert.Equal(5, fixture.Connection.QuerySingle<int>("SELECT group_id FROM items_groups WHERE id=77"));
+    }
+
+    [RecyclerDatabaseFact]
+    public void BuyingAGroupFurniDeliversItWithItsGroup()
+    {
+        using var fixture = new Fixture();
+        fixture.Connection.Execute("UPDATE catalog_marketplace_offers SET group_id=5");
+
+        Assert.Equal(5, fixture.Buy().Offer!.Delivery.GroupId);
+        Assert.Equal(5, fixture.Connection.QuerySingle<int>("SELECT group_id FROM items_groups WHERE id=77"));
+    }
+
+    [RecyclerDatabaseFact]
+    public void AGroupFurniWhoseGroupIsGoneComesBackWithoutAGroup()
+    {
+        foreach (var buy in new[] { false, true }) {
+            using var fixture = new Fixture();
+            fixture.Connection.Execute("UPDATE catalog_marketplace_offers SET group_id=6");
+
+            var item = buy ? fixture.Buy().Offer!.Delivery : fixture.Cancel()!;
+
+            Assert.Equal(0, item.GroupId);
+            Assert.Equal(1, fixture.Connection.QuerySingle<int>("SELECT COUNT(*) FROM items WHERE id=77"));
+            Assert.Equal(0, fixture.Connection.QuerySingle<int>("SELECT COUNT(*) FROM items_groups"));
+        }
+    }
+
+    [RecyclerDatabaseFact]
+    public async Task ACancelledGroupFurniReachesTheInventoryWithItsGroupLook()
+    {
+        using var fixture = new Fixture();
+        fixture.Connection.Execute("UPDATE catalog_marketplace_offers SET group_id=5,limited_number=0,limited_stack=0,extra_data='0'");
+        var definition = new ItemDefinition { Id = 10, ItemName = "gld_stool2", SpriteId = 42, Type = ItemType.Floor, InteractionType = InteractionType.GuildItem };
+        var definitions = CatalogSnapshotTestSupport.Proxy<IItemDataManager>((method, _) => method == "get_Items"
+            ? new Dictionary<uint, ItemDefinition> { [10] = definition } : throw new InvalidOperationException(method));
+        var factory = CatalogSnapshotTestSupport.Proxy<IItemFactory>((method, _) => throw new InvalidOperationException(method));
+        var manager = new MarketplaceManager(fixture.Source, definitions, factory, TimeProvider.System, groups: GroupLook(5));
+        var owner = new Plus.HabboHotel.Users.Habbo { Id = 7, Inventory = new InventoryComponent { Furniture = new FurnitureInventoryComponent([], []) } };
+        var (client, sent) = HabbiconTestSupport.Client(owner);
+        owner.Client = client;
+
+        Assert.True(await manager.TryCancelOffer(owner, 1));
+
+        Assert.Equal(5, owner.Inventory.Furniture.GetItem(77)!.GroupId);
+        var added = new Plus.Communication.Flash.FlashIncomingPacket { Buffer = Assert.Single(sent, packet => packet.Header == Plus.Communication.Packets.Outgoing.ServerPacketHeader.FurniListAddComposer).Payload };
+        Assert.Equal(1, added.ReadInt());
+        Assert.Equal(["0", "5", "b01010s21084", "84de00", "9844e7"], GroupFurniInventoryTests.Entry.Read(added).Strings);
+    }
+
+    internal static Plus.HabboHotel.Groups.IGroupManager GroupLook(int groupId)
+    {
+        var group = new Plus.HabboHotel.Groups.Group(groupId, "group", "", "b01010s21084", 1, 7, null, 0, 19, 37, 0, false,
+            new Plus.HabboHotel.Groups.GroupMembershipSnapshot([7], [], []));
+
+        return CatalogSnapshotTestSupport.Proxy<Plus.HabboHotel.Groups.IGroupManager>((method, args) =>
+        {
+            switch (method) {
+                case "TryGetGroup":
+                    if ((int)args[0]! != groupId) {
+                        return false;
+                    }
+
+                    args[1] = group;
+
+                    return true;
+                case "GetColourCode":
+                    return (bool)args[1]! ? "84de00" : "9844e7";
+                default:
+                    throw new InvalidOperationException(method);
+            }
+        });
+    }
+
     private sealed class Database(string connectionString) : IDatabase
     {
         public bool IsConnected() => true;
@@ -311,6 +403,13 @@ public sealed class MarketplaceCancellationDatabaseTests
                 VALUES(1,'1',7,77,10,'hello',3,10,100,99,'2040-01-01 00:00:00');
                 """);
             Connection.Execute(File.ReadAllText(HabbiconPacketTests.Repo("Database/Migrations/136_MarketplaceSales.sql")));
+            Connection.Execute("""
+                CREATE TABLE `groups`(id INT UNSIGNED PRIMARY KEY) ENGINE=InnoDB; INSERT INTO `groups` VALUES(5);
+                CREATE TABLE items_groups(id INT UNSIGNED PRIMARY KEY,group_id INT UNSIGNED NOT NULL DEFAULT 0,
+                    FOREIGN KEY(group_id) REFERENCES `groups`(id) ON DELETE CASCADE,FOREIGN KEY(id) REFERENCES items(id) ON DELETE CASCADE) ENGINE=InnoDB;
+                """);
+            Connection.Execute(File.ReadAllText(HabbiconPacketTests.Repo("Database/Migrations/170_MarketplaceOfferGroup.sql")));
+            Connection.Execute(File.ReadAllText(HabbiconPacketTests.Repo("Database/Migrations/170_MarketplaceOfferGroup.sql")));
         }
 
         public MarketplacePurchaseResult Buy(IDatabase? source = null, int liveCredits = 1000, int buyerId = 8, int offerId = 1) => new MarketplacePurchaseStore(source ?? _database).Claim(new MarketplacePurchaseRequest(
@@ -322,7 +421,8 @@ public sealed class MarketplaceCancellationDatabaseTests
                 Definition = Definition,
                 ExtraData = FurniExtraData.Load(Definition, delivery.ExtraData, keepLegacy: true),
                 UniqueNumber = delivery.LimitedNumber,
-                UniqueSeries = delivery.LimitedStack
+                UniqueSeries = delivery.LimitedStack,
+                GroupId = delivery.GroupId
             }));
 
         public InventoryItem? Cancel(int owner = 7, IDatabase? source = null) => (source == null ? Store : new MarketplaceCancellationStore(source)).Cancel(owner, 1, _ => Definition, delivery => new Item
@@ -332,7 +432,8 @@ public sealed class MarketplaceCancellationDatabaseTests
             Definition = delivery.Definition,
             ExtraData = FurniExtraData.Load(delivery.Definition, delivery.ExtraData, keepLegacy: true),
             UniqueNumber = delivery.LimitedNumber,
-            UniqueSeries = delivery.LimitedStack
+            UniqueSeries = delivery.LimitedStack,
+            GroupId = delivery.GroupId
         }.ToInventoryItem()!);
 
         public void Dispose()

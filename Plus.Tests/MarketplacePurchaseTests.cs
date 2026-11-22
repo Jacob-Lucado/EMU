@@ -211,10 +211,34 @@ public class MarketplacePurchaseTests
         Assert.Empty(sent);
     }
 
+    [Fact]
+    public void BoughtGroupFurniReachesTheInventoryWithItsGroupLook()
+    {
+        var definition = Definition();
+        definition.InteractionType = InteractionType.GuildItem;
+        var store = new PreparingStore(new MarketplaceDelivery(77, 900, "0", 0, 0, definition, 5));
+        var buyer = Buyer(credits: 1000);
+        var (client, sent) = HabbiconTestSupport.Client(buyer);
+
+        Assert.Equal(MarketplacePurchaseOutcome.Bought, Service(store, new(), new(), groups: MarketplaceCancellationDatabaseTests.GroupLook(5)).Buy(client, 5));
+
+        Assert.Equal(5, buyer.Inventory!.Furniture.GetItem(77)!.GroupId);
+        var added = new FlashIncomingPacket { Buffer = Assert.Single(sent, message => message.Header == ServerPacketHeader.FurniListAddComposer).Payload };
+        Assert.Equal(1, added.ReadInt());
+        Assert.Equal(["0", "5", "b01010s21084", "84de00", "9844e7"], GroupFurniInventoryTests.Entry.Read(added).Strings);
+    }
+
+    private sealed class PreparingStore(MarketplaceDelivery delivery) : IMarketplacePurchaseStore
+    {
+        public MarketplacePurchaseResult Claim(MarketplacePurchaseRequest request) =>
+            new(null, new MarketplaceClaimedOffer(101, 55, request.Prepare(delivery), 899));
+    }
+
     private static BuyOfferEvent Buy(IMarketplacePurchaseStore store, Dictionary<int, int> averages, Dictionary<int, int> counts) =>
         new(Service(store, averages, counts));
 
-    private static MarketplacePurchaseService Service(IMarketplacePurchaseStore store, Dictionary<int, int> averages, Dictionary<int, int> counts, IMarketplaceFeePolicy? policy = null)
+    private static MarketplacePurchaseService Service(IMarketplacePurchaseStore store, Dictionary<int, int> averages, Dictionary<int, int> counts, IMarketplaceFeePolicy? policy = null,
+        Plus.HabboHotel.Groups.IGroupManager? groups = null)
     {
         var definitions = new Dictionary<uint, ItemDefinition> { [900] = Definition() };
         var items = CatalogSnapshotTestSupport.Proxy<IItemDataManager>((method, _) => method == "get_Items" ? definitions : throw new InvalidOperationException(method));
@@ -225,7 +249,7 @@ public class MarketplacePurchaseTests
             _ => throw new InvalidOperationException(method),
         });
 
-        return new MarketplacePurchaseService(store, items, marketplace, new FixedClock(Now), policy);
+        return new MarketplacePurchaseService(store, items, marketplace, new FixedClock(Now), policy, groups);
     }
 
     private static MarketplaceClaimedOffer Claim() => new(101, 55, new InventoryItem { Id = 77, OwnerId = 8, Definition = Definition(), ExtraData = FurniObjectData.Empty }, 899);

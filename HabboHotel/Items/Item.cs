@@ -921,11 +921,10 @@ public class Item
                                         //Remove the user from the square
                                         user.AllowOverride = false;
 
-                                        if (ItemTeleporterFinder.IsTeleLinked(Id, room, TravelStore())) {
+                                        var (teleId, roomId) = TravelStore().FindTravelDestination(Id, room.RoomId);
+
+                                        if (roomId != 0) {
                                             showTeleEffect = true;
-                                            // Woop! No more delay.
-                                            var teleId = TravelStore().FindLinkedTeleporter(Id);
-                                            var roomId = ItemTeleporterFinder.GetTeleRoomId(teleId, room, TravelStore());
 
                                             // Do we need to tele to the same room or gtf to another?
                                             if (roomId == RoomId) {

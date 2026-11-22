@@ -31,6 +31,8 @@ public partial class PlacedFurniRoomTests
         _client.GetHabbo().Access = UserAccess.Create([], [new(PermissionKeys.CommandBh, false)]);
         Assert.True(await commands.Parse(_client, ":bh 41"));
         Assert.Null(user.BuildHeight);
+        Assert.True(await commands.Parse(_client, ":bh 2.675"));
+        Assert.Equal(2.68, user.BuildHeight);
         Assert.True(await commands.Parse(_client, ":bh 2,5"));
         Assert.Equal(2.5, user.BuildHeight);
 

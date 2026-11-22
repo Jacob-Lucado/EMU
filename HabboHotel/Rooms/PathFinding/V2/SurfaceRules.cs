@@ -26,7 +26,7 @@ internal static class SurfaceRules
             return new(item.Top, NavFlags.Transit | NavFlags.GuildGate, SurfaceKind.GateBase, item.ItemId, item.GroupId, 2, item);
         }
 
-        var flags = item.WalkableAt(tile) || OpenGate(item) ? NavFlags.Transit : NavFlags.None;
+        var flags = item.WalkableAt(tile) || OpenGate(item) ? NavFlags.Transit : item.JumpAt(tile);
 
         if (item.Interaction == InteractionType.Roller && flags != NavFlags.None) {
             flags |= NavFlags.Roller;

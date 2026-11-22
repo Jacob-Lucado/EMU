@@ -8,6 +8,7 @@ public interface IGroupManager
 {
     ICollection<GroupBadgeParts> BadgeBases { get; }
     ICollection<GroupBadgeParts> BadgeSymbols { get; }
+    GroupBadgePartIds BadgePartIds { get; }
     ICollection<GroupColours> BadgeBaseColours { get; }
     ICollection<GroupColours> BadgeSymbolColours { get; }
     ICollection<GroupColours> BadgeBackColours { get; }

@@ -10,11 +10,17 @@ public sealed record NavItemRecord(uint ItemId, long Version, double Z, double H
     int Rotation, bool Removed, IReadOnlyList<int> Footprint,
     int X = 0, int Y = 0, int Length = 1, int Width = 1, WiredBoxType WiredType = WiredBoxType.None)
 {
-    private static readonly FrozenSet<string> HorseJumps = new[] { "obstacle_oxer", "obstacle_oxer2", "obstacle_oxer3" }.ToFrozenSet();
+    private static readonly FrozenSet<string> HorseJumps = new[] {
+        "obstacle_oxer", "obstacle_oxer2", "obstacle_oxer3", "obstacle_bush", "obstacle_fring", "obstacle_water", "obstacle_water2", "obstacle_water3"
+    }.ToFrozenSet();
 
     public double Top => Z + Height;
     public IReadOnlyList<int> BlockedTiles { get; init; } = [];
     public bool WalkableAt(int tile) => Walkable && !BlockedTiles.Contains(tile);
+
+    // The bar runs across the jump's length, so a rider jumps it moving along that length.
+    public NavFlags JumpAt(int tile) => !Walkable || !BlockedTiles.Contains(tile) ? NavFlags.None
+        : (Rotation % 2 == 1 ? (Rotation + 1) % 8 : Rotation) is 2 or 6 ? NavFlags.JumpAlongX : NavFlags.JumpAlongY;
     internal static bool StateRelevant(ItemDefinition definition) => definition.InteractionType is InteractionType.Gate or InteractionType.GuildGate
         || definition.AdjustableHeights is { Count: > 1 };
 

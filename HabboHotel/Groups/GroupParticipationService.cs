@@ -13,6 +13,7 @@ namespace Plus.HabboHotel.Groups;
 public interface IGroupParticipationService
 {
     Task Join(GameClient session, int groupId);
+    Task AcceptInvitation(GameClient session, int groupId);
     Task SetFavourite(GameClient session, int groupId);
     Task RemoveFavourite(GameClient session);
 }
@@ -20,7 +21,7 @@ public interface IGroupParticipationService
 // Lock order is account gate, then group lock, then the database rows. Each operation holds the gate until its packets are sent,
 // so two requests from one account publish in the same order their writes commit.
 public sealed class GroupParticipationService(IGroupManager groups, IGroupInfoSnapshotService groupInfo, IGameClientManager clients,
-    IGroupParticipationStore store, IAccountSessionGate accounts) : IGroupParticipationService
+    IGroupParticipationStore store, IAccountSessionGate accounts, IGroupInvitationStore? invitations = null, IGroupMembershipEvents? membership = null) : IGroupParticipationService
 {
     private const int MaxGroupsPerUser = 1500;
     private const string LimitMessage = "Oops, it appears that you've hit the group membership limit! You can only join upto 1,500 groups.";
@@ -42,7 +43,7 @@ public sealed class GroupParticipationService(IGroupManager groups, IGroupInfoSn
 
             var group = found;
 
-            if (group.IsMember(habbo.Id) || group.IsAdmin(habbo.Id) || group.HasRequest(habbo.Id) && group.Type == GroupType.Private) {
+            if (group.IsMember(habbo.Id) || group.IsAdmin(habbo.Id) || group.Type == GroupType.Private) {
                 return Task.CompletedTask;
             }
 
@@ -72,7 +73,49 @@ public sealed class GroupParticipationService(IGroupManager groups, IGroupInfoSn
             }
             else {
                 PublishMembership(session, group, habbo);
+                membership?.Changed(group.Id, habbo.Id, true);
             }
+        }
+
+        return Task.CompletedTask;
+    }
+
+    // The same publication as an open join; the stored invitation replaces the type and request checks.
+    public Task AcceptInvitation(GameClient session, int groupId)
+    {
+        var habbo = session.GetHabbo();
+        using var account = accounts.Enter(habbo.Id);
+
+        if (invitations == null || !groups.TryGetGroup(groupId, out var found)) {
+            return Task.CompletedTask;
+        }
+
+        lock (found) {
+            if (!IsCurrent(found)) {
+                return Task.CompletedTask;
+            }
+
+            if (!found.IsMember(habbo.Id) && groups.GetGroupsForUser(habbo.Id).Count >= MaxGroupsPerUser) {
+                session.Send(new BroadcastMessageAlertComposer(LimitMessage));
+
+                return Task.CompletedTask;
+            }
+
+            var outcome = invitations.Accept(habbo.Id, found.Id, MaxGroupsPerUser);
+
+            if (outcome == GroupJoinOutcome.LimitReached) {
+                session.Send(new BroadcastMessageAlertComposer(LimitMessage));
+
+                return Task.CompletedTask;
+            }
+
+            if (outcome != GroupJoinOutcome.Inserted) {
+                return Task.CompletedTask;
+            }
+
+            found.HandleRequest(habbo.Id, true);
+            PublishMembership(session, found, habbo);
+            membership?.Changed(found.Id, habbo.Id, true);
         }
 
         return Task.CompletedTask;

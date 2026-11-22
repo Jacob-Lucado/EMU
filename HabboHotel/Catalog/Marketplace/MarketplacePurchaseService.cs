@@ -4,6 +4,7 @@ using Plus.Communication.Packets.Outgoing.Inventory.Furni;
 using Plus.Communication.Packets.Outgoing.Inventory.Purse;
 using Plus.Communication.Packets.Outgoing.Marketplace;
 using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Groups;
 using Plus.HabboHotel.Items;
 using Plus.HabboHotel.Users;
 using Plus.HabboHotel.Users.Inventory.Furniture;
@@ -21,7 +22,7 @@ public interface IMarketplacePurchaseService
 }
 
 public sealed class MarketplacePurchaseService(IMarketplacePurchaseStore store, IItemDataManager items, IMarketplaceManager marketplace,
-    TimeProvider time, IMarketplaceFeePolicy? policy = null) : IMarketplacePurchaseService
+    TimeProvider time, IMarketplaceFeePolicy? policy = null, IGroupManager? groups = null) : IMarketplacePurchaseService
 {
 
     public MarketplacePurchaseOutcome Buy(GameClient session, int offerId)
@@ -72,7 +73,7 @@ public sealed class MarketplacePurchaseService(IMarketplacePurchaseStore store, 
                 session.Send(new CreditBalanceComposer(habbo.Credits));
                 session.Send(new FurniListNotificationComposer(claim.Delivery.Id, 1));
                 session.Send(new PurchaseOKComposer());
-                session.Send(new FurniListAddComposer(InventoryItemSnapshot.Capture(claim.Delivery)));
+                session.Send(new FurniListAddComposer(InventoryItemSnapshot.Capture(claim.Delivery, GuildFurnitureAppearance.Find(groups, claim.Delivery.GroupId))));
                 session.Send(new FurniListUpdateComposer());
                 outcome = MarketplacePurchaseOutcome.Bought;
             }
@@ -93,6 +94,7 @@ public sealed class MarketplacePurchaseService(IMarketplacePurchaseStore store, 
             ExtraData = FurniExtraData.Load(delivery.Definition, delivery.ExtraData, keepLegacy: true),
             UniqueNumber = delivery.LimitedNumber,
             UniqueSeries = delivery.LimitedStack,
+            GroupId = delivery.GroupId,
         };
 
         return item.ToInventoryItem() ?? throw new InvalidOperationException($"Furni {delivery.FurniId} could not be built for delivery; nothing was charged.");

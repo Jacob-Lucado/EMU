@@ -110,4 +110,27 @@ public sealed class MonsterPlantTests
         Assert.False(new MonsterPlant(1, 0, PlantedAt, grown.AddDays(1), false, false).CanBreedNow(grown));
         Assert.False(new MonsterPlant(1, 0, PlantedAt, grown, true, false).CanBreedNow(grown));
     }
+
+    [Fact]
+    public void BreedingUsesUpTheBreedButKeepsThePlantAlive()
+    {
+        var grown = PlantedAt.AddDays(2);
+        var plant = new MonsterPlant(1, 3, PlantedAt, grown.AddDays(1), true, true);
+
+        var bred = Assert.IsType<MonsterPlant>(plant.AfterBreeding(grown));
+
+        Assert.Equal((1, 3, PlantedAt, grown.AddDays(1), false, true),
+            (bred.PetId, bred.Rarity, bred.GrowthStartedAt, bred.WellbeingUntil, bred.CanBreed, bred.BreedingPermission));
+        Assert.False(bred.IsDead(grown));
+    }
+
+    [Fact]
+    public void APlantThatCannotBreedNowDoesNotBreed()
+    {
+        var grown = PlantedAt.AddDays(2);
+
+        Assert.Null(new MonsterPlant(1, 0, PlantedAt, grown.AddDays(1), true, false).AfterBreeding(grown.AddSeconds(-1)));
+        Assert.Null(new MonsterPlant(1, 0, PlantedAt, grown.AddDays(1), false, false).AfterBreeding(grown));
+        Assert.Null(new MonsterPlant(1, 0, PlantedAt, grown, true, false).AfterBreeding(grown));
+    }
 }

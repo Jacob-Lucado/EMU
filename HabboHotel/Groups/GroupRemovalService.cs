@@ -24,7 +24,8 @@ public sealed class GroupRemovalService(
     IGameClientManager _clients,
     IGroupInfoSnapshotService _groupInfo,
     IGroupRemovalStore _store,
-    IAccountSessionGate _sessions) : IGroupRemovalService
+    IAccountSessionGate _sessions,
+    IGroupMembershipEvents? _membership = null) : IGroupRemovalService
 {
     public Task Delete(GameClient session, int groupId)
     {
@@ -159,6 +160,7 @@ public sealed class GroupRemovalService(
 
                 if (group.IsMember(userId)) {
                     group.DeleteMember(userId);
+                    _membership?.Changed(group.Id, userId, false);
                 }
 
                 if (_roomManager.TryGetRoom(group.RoomId, out var homeRoom)) {
@@ -208,6 +210,7 @@ public sealed class GroupRemovalService(
 
                 if (group.IsMember(userId)) {
                     group.DeleteMember(userId);
+                    _membership?.Changed(group.Id, userId, false);
                 }
 
                 if (_roomManager.TryGetRoom(group.RoomId, out var room)) {

@@ -14,7 +14,10 @@ public class GroupParticipationDatabaseTests
         {
             var store = new GroupParticipationStore(new HabbiconDatabaseTests.TestDatabase(connectionString));
 
+            using var pending = new MySqlConnection(connectionString);
+            pending.Execute("INSERT INTO group_invitations (user_id, group_id) VALUES (7, 1)");
             Assert.Equal(GroupJoinOutcome.Inserted, store.Join(7, 1, false, 1500));
+            Assert.Equal(0, pending.ExecuteScalar<int>("SELECT COUNT(*) FROM group_invitations"));
             Assert.Equal(GroupJoinOutcome.AlreadyPresent, store.Join(7, 1, false, 1500));
 
             using var connection = new MySqlConnection(connectionString);
@@ -184,6 +187,7 @@ public class GroupParticipationDatabaseTests
                 connection.Execute(ExtractTable(dump, table));
             }
 
+            connection.Execute("CREATE TABLE group_invitations(user_id INT NOT NULL, group_id INT NOT NULL, PRIMARY KEY(group_id, user_id))");
             connection.Execute("ALTER TABLE user_stats RENAME TO user_statistics");
             connection.Execute("INSERT INTO users (id, username, auth_ticket) VALUES (7, 'member', ''), (8, 'no_stats', '')");
             connection.Execute("INSERT INTO user_statistics (id) VALUES (7)");

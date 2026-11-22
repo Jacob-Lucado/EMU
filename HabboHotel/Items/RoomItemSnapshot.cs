@@ -1,6 +1,7 @@
 using Plus.Utilities;
 using System.Collections.Immutable;
 using System.Globalization;
+using Plus.HabboHotel.Groups;
 using Plus.HabboHotel.Items.DataFormat;
 
 namespace Plus.HabboHotel.Items;
@@ -48,7 +49,27 @@ public static class FurnitureWireData
     };
 }
 
-public sealed record GuildFurnitureAppearance(int GroupId, string Badge, string Colour1, string Colour2);
+public sealed record GuildFurnitureAppearance(int GroupId, string Badge, string Colour1, string Colour2)
+{
+    public static bool IsGuildFurni(ItemDefinition definition) =>
+        definition.InteractionType is InteractionType.GuildItem or InteractionType.GuildGate or InteractionType.GuildForum;
+
+    public static GuildFurnitureAppearance? Find(IGroupManager? groups, int groupId)
+    {
+        if (groupId <= 0 || groups == null || !groups.TryGetGroup(groupId, out var group)) {
+            return null;
+        }
+
+        var look = group.Appearance;
+
+        return new(group.Id, look.Badge, groups.GetColourCode(look.Colour1, true), groups.GetColourCode(look.Colour2, false));
+    }
+
+    // The client reads [state, groupId, badge, colour1, colour2]; it draws the badge and colours and links the forum
+    // terminal to groupforum/<groupId>.
+    public FurnitureDataSnapshot Data(string state) =>
+        new FurnitureDataSnapshot.Strings([state, GroupId.ToString(CultureInfo.InvariantCulture), Badge, Colour1, Colour2]);
+}
 
 public sealed record FurnitureMetadata(bool Stackable, bool IsSeat, bool IsBed, bool Walkable, int Width, int Length);
 
@@ -81,9 +102,7 @@ public sealed record RoomItemSnapshot(
     }
 
     private static GuildFurnitureAppearance? FindGuild(Item item) =>
-        item.Definition.InteractionType is InteractionType.GuildItem or InteractionType.GuildGate or InteractionType.GuildForum
-            ? item.GetRoom()?.FindGuildAppearance(item.GroupId)
-            : null;
+        GuildFurnitureAppearance.IsGuildFurni(item.Definition) ? item.GetRoom()?.FindGuildAppearance(item.GroupId) : null;
 
     // Usage policy: 0 nobody, 1 room controllers, 2 everybody. Wired boxes are always used (their editor opened) by
     // those with rights, whatever states their furni definition declares.
@@ -93,14 +112,14 @@ public sealed record RoomItemSnapshot(
         InteractionType.VendingMachine or InteractionType.WfFloorSwitch1 or InteractionType.WfFloorSwitch2 => 2,
         InteractionType.Footballcounterred or InteractionType.Footballcounterblue or InteractionType.Footballcountergreen
             or InteractionType.Footballcounteryellow => 0,
-        InteractionType.Counter or InteractionType.Recolorable => 1,
+        InteractionType.Counter or InteractionType.Recolorable or InteractionType.GuildItem or InteractionType.GuildForum => 1,
         _ => definition.Modes > 1 ? 1 : 0
     };
 
     /// <summary>
-    /// Rollers, the game tiles, the pyramid, the blob, the box, three buttons and the plates have usage policy 0, whatever number of states they have.
+    /// Rollers, group gates, the game tiles, the pyramid, the blob, the box, three buttons and the plates have usage policy 0, whatever number of states they have.
     /// </summary>
-    internal static bool IsNeverUsed(ItemDefinition definition) => definition.InteractionType == InteractionType.Roller
+    internal static bool IsNeverUsed(ItemDefinition definition) => definition.InteractionType is InteractionType.Roller or InteractionType.GuildGate
         || definition.ItemName is "wf_tile1" or "wf_tile2" or "wf_pyramid" or "wf_box"
         or "wf_arrowplate" or "wf_arrowplate_8dir" or "wf_pressureplate" or "wf_ringplate" or "wf_blob" or "wf_blob2"
         or "wf_button" or "wf_button_red" or "wf_button_x";
@@ -136,10 +155,8 @@ public sealed record RoomItemSnapshot(
             }
         }
 
-        // The client reads StringArray [state, groupId, badge, colour1, colour2]; it draws the badge
-        // and colours and links the forum terminal to groupforum/<groupId>. Without its group the stored data stays.
-        FurnitureDataSnapshot? guildData = guild == null ? null
-            : new FurnitureDataSnapshot.Strings([legacy, guild.GroupId.ToString(CultureInfo.InvariantCulture), guild.Badge, guild.Colour1, guild.Colour2]);
+        // Without its group the stored data stays.
+        var guildData = guild?.Data(legacy);
         // A roller always shows state 1, whatever data it stores.
         var data = item.IsWallItem ? new FurnitureDataSnapshot.Empty() : type == InteractionType.Roller ? new FurnitureDataSnapshot.Legacy("1") : MagicTileHeight.IsMagicTile(type)
             ? new FurnitureDataSnapshot.Legacy(MagicTileHeight.ToWire(z).ToString(CultureInfo.InvariantCulture))

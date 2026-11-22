@@ -8,6 +8,7 @@ public interface IItemTravelStore
     uint FindOtherHopperRoom(uint roomId);
     uint FindHopper(uint roomId);
     uint FindLinkedTeleporter(uint itemId);
+    (uint ItemId, uint RoomId) FindTravelDestination(uint itemId, uint roomId) => default;
     bool SetLinkedTeleporter(uint itemId, uint roomId, uint targetId) => false;
     uint FindItemRoom(uint itemId);
     void RegisterHopper(uint itemId, uint roomId);
@@ -39,6 +40,26 @@ public sealed class ItemTravelStore(IDatabase database) : IItemTravelStore
             "SELECT tele_two_id FROM room_items_tele_links WHERE tele_one_id=@teleId LIMIT 1", new { teleId = itemId });
     }
 
+    public (uint ItemId, uint RoomId) FindTravelDestination(uint itemId, uint roomId)
+    {
+        using var connection = database.Connection();
+
+        return connection.QuerySingleOrDefault<(uint, uint)>("""
+            SELECT target.id, target.room_id
+            FROM items source
+            JOIN room_items_tele_links link ON link.tele_one_id = source.id
+            JOIN items target ON target.id = link.tele_two_id
+            JOIN furniture source_type ON source_type.id = source.base_item
+            JOIN furniture target_type ON target_type.id = target.base_item
+            WHERE source.id = @itemId AND source.room_id = @roomId AND source.room_id > 0
+              AND target.room_id > 0 AND source_type.interaction_type IN ('teleport', 'wired_room_linker')
+              AND target_type.interaction_type = source_type.interaction_type
+              AND (target.room_id = source.room_id OR EXISTS (
+                  SELECT 1 FROM room_items_tele_links partner
+                  WHERE partner.tele_one_id = target.id AND partner.tele_two_id = source.id))
+            """, new { itemId, roomId });
+    }
+
     public bool SetLinkedTeleporter(uint itemId, uint roomId, uint targetId)
     {
         if (itemId == 0 || roomId == 0 || targetId == 0) {
@@ -53,8 +74,16 @@ public sealed class ItemTravelStore(IDatabase database) : IItemTravelStore
 
         using var transaction = connection.BeginTransaction();
 
-        if (connection.QuerySingleOrDefault<uint>("SELECT id FROM items WHERE id=@itemId AND room_id=@roomId FOR UPDATE",
-            new { itemId, roomId }, transaction) == 0) {
+        var kinds = connection.Query<string>("""
+            SELECT (SELECT f.interaction_type FROM furniture f
+                    WHERE f.id = i.base_item AND f.interaction_type IN ('teleport', 'wired_room_linker'))
+            FROM items i
+            WHERE i.id IN (@itemId, @targetId) AND i.room_id = @roomId
+            ORDER BY i.id FOR UPDATE
+            """, new { itemId, targetId, roomId }, transaction).AsList();
+
+        if (kinds.Count != (itemId == targetId ? 1 : 2) || kinds[0] == null
+            || !string.Equals(kinds[0], kinds[^1], StringComparison.OrdinalIgnoreCase)) {
             return false;
         }
 

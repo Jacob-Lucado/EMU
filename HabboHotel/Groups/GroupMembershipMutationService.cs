@@ -47,7 +47,8 @@ public sealed class GroupMembershipMutationService(
     IGroupManager groups,
     IRoomManager rooms,
     IGroupMemberIdentityLookup identities,
-    IGroupMembershipMutationStore store) : IGroupMembershipMutationService
+    IGroupMembershipMutationStore store,
+    IGroupMembershipEvents? membership = null) : IGroupMembershipMutationService
 {
     public Task Accept(GameClient session, int groupId, int userId)
     {
@@ -76,6 +77,7 @@ public sealed class GroupMembershipMutationService(
             group.HandleRequest(userId, true);
             PublishController(group, userId);
             SendMemberUpdate(session, group, userId, 2, identity);
+            membership?.Changed(group.Id, userId, true);
 
             return Task.CompletedTask;
         }

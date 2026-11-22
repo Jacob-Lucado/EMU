@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using Plus.Communication.Packets.Outgoing.Inventory.Furni;
 using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Groups;
 using Plus.HabboHotel.Items;
 using Plus.HabboHotel.Items.DataFormat;
 
@@ -91,6 +92,7 @@ public class InventoryItem
     public bool IsWallItem => Definition.Type == ItemType.Wall;
     public ItemDefinition Definition { get; set; } = null!;
     public IFurniObjectData ExtraData { get; set; } = FurniObjectData.Empty;
+    public int GroupId { get; set; }
     // A Builders Club furni that left its room; it never enters an inventory.
     public bool IsBuildersClub { get; init; }
 
@@ -116,10 +118,10 @@ public class FurnitureInventoryComponent
 
     public IEnumerable<InventoryItem> AllItems => _floorItems.Values.Concat(_wallItems.Values);
 
-    public void SendInventory(GameClient session)
+    public void SendInventory(GameClient session, IGroupManager? groups)
     {
         const int itemsPerPage = 700;
-        var items = AllItems.Select(InventoryItemSnapshot.Capture).ToImmutableArray();
+        var items = AllItems.Select(item => InventoryItemSnapshot.Capture(item, GuildFurnitureAppearance.Find(groups, item.GroupId))).ToImmutableArray();
 
         if (items.IsEmpty) {
             session.Send(new FurniListComposer(items, 1, 1));

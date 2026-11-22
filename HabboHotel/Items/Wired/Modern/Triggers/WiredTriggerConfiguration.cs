@@ -34,7 +34,9 @@ public static class WiredTriggerConfiguration
         ["wf_trg_period_long"] = WiredEventKind.Periodic,
         ["wf_trg_room_initializes"] = WiredEventKind.RoomInitialized,
         ["wf_trg_receive_message"] = WiredEventKind.LinkMessage,
-        ["wf_trg_receive_dataframe"] = WiredEventKind.LinkDataframe
+        ["wf_trg_receive_dataframe"] = WiredEventKind.LinkDataframe,
+        [UnreleasedHabboFeatures.GroupMembershipTrigger] = WiredEventKind.GroupMembership,
+        [UnreleasedHabboFeatures.ClickContextMenuTrigger] = WiredEventKind.ContextMenu
     };
     /// <summary>The saved action 9 that no avatar action matches: the hotel stores it, but the client does not offer it.</summary>
     public const int UnofferedAction = 13;
@@ -196,6 +198,8 @@ public static class WiredTriggerConfiguration
             case "wf_trg_room_initializes":
             case "wf_trg_receive_message":
             case "wf_trg_receive_dataframe":
+            case UnreleasedHabboFeatures.GroupMembershipTrigger:
+            case UnreleasedHabboFeatures.ClickContextMenuTrigger:
             // The October triggers exist only as native editor records (WiredNativeAuxiliaryEditor.October); this is their empty default.
             case "wf_trg_game_starts":
             case "wf_trg_game_ends":

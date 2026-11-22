@@ -48,20 +48,20 @@ public sealed class TradeOfferServiceTests
     public void CurrentHeaderDispatchesTheSelectedIdsAndDropsAMalformedList()
     {
         var air = new RevisionsCache().InternalRevision;
-        var offered = Dispatch(OfferFrame(3764, 2, 4000000000u, 7u), air);
+        var offered = Dispatch(OfferFrame(423, 2, 4000000000u, 7u), air);
         Assert.Equal(new[] { "OfferItems 4000000000,7" }, offered.Calls);
         Assert.Equal(0, offered.Disconnects);
-        Assert.Equal(3764u, ClientPacketHeader.TradingOfferItemsEvent);
+        Assert.Equal(423u, ClientPacketHeader.TradingOfferItemsEvent);
 
-        var shortList = Dispatch(OfferFrame(3764, 2, 7u), air);
+        var shortList = Dispatch(OfferFrame(423, 2, 7u), air);
         Assert.Empty(shortList.Calls);
         Assert.Equal(0, shortList.Disconnects);
 
-        var trailing = Dispatch(OfferFrame(3764, 1, 11u, 12u), air);
+        var trailing = Dispatch(OfferFrame(423, 1, 11u, 12u), air);
         Assert.Empty(trailing.Calls);
         Assert.Equal(0, trailing.Disconnects);
 
-        var single = Dispatch(OfferFrame(3764, 1, 11u), air);
+        var single = Dispatch(OfferFrame(423, 1, 11u), air);
         Assert.Equal(new[] { "OfferItems 11" }, single.Calls);
         Assert.Equal(0, single.Disconnects);
     }
@@ -84,6 +84,44 @@ public sealed class TradeOfferServiceTests
         Assert.False(trade.Users[0].HasAccepted);
         Assert.Equal(new[] { ServerPacketHeader.TradingUpdateComposer }, alice.Sent);
         Assert.Equal(new[] { ServerPacketHeader.TradingUpdateComposer }, bob.Sent);
+    }
+
+    [Fact]
+    public void TradingGroupFurnitureShowsItsGroupInTheOfferAndTheRecipientsInventory()
+    {
+        using var f = new TradeConfirmationServiceTests.TradeFixture();
+        var alice = f.Join(1, 7);
+        var bob = f.Join(2, 8);
+        var trade = f.Start(alice, bob);
+        typeof(Plus.HabboHotel.Rooms.Room).GetField("_groups", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .SetValue(f.Room, GroupFurniInventoryTests.Groups(5));
+        var item = Floor(100, 11);
+        item.Definition.InteractionType = InteractionType.GuildItem;
+        item.GroupId = 5;
+        Stock(alice, item);
+
+        f.Trades.OfferItem(alice.Session, item.Id);
+
+        var offer = new FlashIncomingPacket { Buffer = bob.Packets.Single(packet => packet.Header == ServerPacketHeader.TradingUpdateComposer).Payload };
+        Assert.Equal(alice.Habbo.Id, offer.ReadInt());
+        Assert.Equal(1, offer.ReadInt());
+        offer.ReadUInt();
+        offer.ReadString();
+        offer.ReadUInt();
+        offer.ReadInt();
+        Assert.Equal(17, offer.ReadInt());
+        offer.ReadBool();
+        Assert.Equal(2, offer.ReadInt());
+        Assert.Equal(5, offer.ReadInt());
+        string[] expected = ["0", "5", "b01010s21084", "84de00", "9844e7"];
+        Assert.Equal(expected, Enumerable.Range(0, 5).Select(_ => offer.ReadString()));
+
+        Assert.True(trade.ProcessItems());
+        var added = new FlashIncomingPacket { Buffer = bob.Packets.Single(packet => packet.Header == ServerPacketHeader.FurniListAddComposer).Payload };
+        Assert.Equal(1, added.ReadInt());
+        var entry = GroupFurniInventoryTests.Entry.Read(added);
+        Assert.Equal(17, entry.Category);
+        Assert.Equal(expected, entry.Strings);
     }
 
     [Fact]

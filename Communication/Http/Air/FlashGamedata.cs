@@ -126,7 +126,14 @@ public sealed class FlashGamedata(IOptions<AirClientConfiguration> options, ICat
 
                 if (document != null && document.RootElement.TryGetProperty(section, out var types) &&
                     types.TryGetProperty("furnitype", out var entries) && entries.ValueKind == JsonValueKind.Array) {
-                    foreach (var entry in entries.EnumerateArray()) {
+                    IEnumerable<JsonElement> rows = entries.EnumerateArray();
+
+                    // AIR keeps the last floor entry for each classname and colour.
+                    if (section == "roomitemtypes" && furni!.BorrowedFloorProductCodes.Count > 0) {
+                        rows = rows.OrderByDescending(entry => furni.BorrowedFloorProductCodes.ContainsKey(entry.GetProperty("id").GetInt32()));
+                    }
+
+                    foreach (var entry in rows) {
                         WriteFurnitype(writer, entry);
                     }
                 }
@@ -208,7 +215,8 @@ public sealed class FlashGamedata(IOptions<AirClientConfiguration> options, ICat
             }
 
             foreach (var entry in entries.EnumerateArray()) {
-                var code = Text(entry, "classname");
+                var code = section == "roomitemtypes" && furni.BorrowedFloorProductCodes.TryGetValue(entry.GetProperty("id").GetInt32(), out var productCode)
+                    ? productCode : Text(entry, "classname");
 
                 if (code.Length > 0 && seen.Add(code)) {
                     yield return (code, Text(entry, "name"), Text(entry, "description"));

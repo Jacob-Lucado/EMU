@@ -30,6 +30,8 @@ internal sealed class CommitService(Room room, RoomNavigation navigation, Moveme
         state.PendingCount = 0;
         actor.SetStep = false;
 
+        var origin = state.CurrentRef;
+
         if (accepted > 0) {
             LandPending(actor, accepted, count);
 
@@ -40,6 +42,10 @@ internal sealed class CommitService(Room room, RoomNavigation navigation, Moveme
         }
 
         context.Claims.ReleaseBatch(actor);
+
+        if (origin is { SupportItemId: > 0 } previous && previous != state.CurrentRef) {
+            context.GuildGates.Leave(previous.SupportItemId);
+        }
 
         if (state.State != NavState.Active || state.LocationRevision != revision) {
             return accepted > 0;

@@ -63,6 +63,8 @@ public class Room
     // RoomCycle's task slot: 0 idle, else the kind of pass holding it.
     internal int CycleSlot;
     private object? _navigationSync;
+    private object? _monsterPlantSync;
+    internal object MonsterPlantSync => LazyInitializer.EnsureInitialized(ref _monsterPlantSync);
     internal object NavigationSync => LazyInitializer.EnsureInitialized(ref _navigationSync);
     // Only the entrant count and the idle close are decided under this lock, so a room tick may take it while it holds NavigationSync.
     private object? _entrySync;
@@ -97,11 +99,8 @@ public class Room
     }
 
 
-    // Guild furniture shows its group's badge and colours; null without the group (or a group manager, in tests).
-    internal GuildFurnitureAppearance? FindGuildAppearance(int groupId) =>
-        groupId > 0 && _groups != null && _groups.TryGetGroup(groupId, out var group)
-            ? new(group.Id, group.Badge, _groups.GetColourCode(group.Colour1, true), _groups.GetColourCode(group.Colour2, false))
-            : null;
+    // Guild furniture shows its group's badge and colours.
+    internal GuildFurnitureAppearance? FindGuildAppearance(int groupId) => GuildFurnitureAppearance.Find(_groups, groupId);
 
     /// <summary>The hotel's achievements, for wired boxes that progress them.</summary>
     internal IAchievementManager Achievements => _achievements;
@@ -959,7 +958,12 @@ public class Room
     }
 
     // Clients whose revision does not map the data composer get the full update instead; the mapping is checked before anything is sent to a client.
-    internal void SendObjectData(Item item, string data, bool batch) => SendObjectData(item, FurnitureWireData.ForState(item.ExtraData, data), batch);
+    internal void SendObjectData(Item item, string data, bool batch) => SendObjectData(item, StateData(item, data), batch);
+
+    // Group furni send their whole group data with every state.
+    private FurnitureDataSnapshot StateData(Item item, string state) =>
+        (GuildFurnitureAppearance.IsGuildFurni(item.Definition) ? FindGuildAppearance(item.GroupId)?.Data(state) : null)
+        ?? FurnitureWireData.ForState(item.ExtraData, state);
 
     internal void SendObjectData(Item item, FurnitureDataSnapshot wire, bool batch)
     {
@@ -1025,13 +1029,13 @@ public class Room
         }
     }
 
-    private static void SendObjectsData(IReadOnlyList<Item> items, GameClient[] clients)
+    private void SendObjectsData(IReadOnlyList<Item> items, GameClient[] clients)
     {
         if (items.Count == 0) {
             return;
         }
 
-        IServerPacket packet = new ObjectsDataUpdateComposer([.. items.Select(item => (item.Id, FurnitureWireData.ForState(item.ExtraData, item.LegacyDataString)))]);
+        IServerPacket packet = new ObjectsDataUpdateComposer([.. items.Select(item => (item.Id, StateData(item, item.LegacyDataString)))]);
 
         try {
             bool Maps(GameClient client, uint id) => client.Revision?.InternalIdToOutgoingIdMapping.ContainsKey(id) == true;

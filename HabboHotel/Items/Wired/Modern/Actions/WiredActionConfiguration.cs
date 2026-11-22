@@ -25,7 +25,7 @@ public static class WiredActionConfiguration
         }
 
         // The October effects only exist as native editor records; a fresh box opens on the compiled native defaults.
-        if (WiredOctoberActions.Names.Contains(name)) {
+        if (WiredOctoberActions.Names.Contains(name) || WiredGroupActions.Names.Contains(name)) {
             return new();
         }
 

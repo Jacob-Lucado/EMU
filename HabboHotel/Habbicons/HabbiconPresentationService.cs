@@ -64,7 +64,10 @@ public sealed class HabbiconPresentationService(IHabbiconService habbicons,
             operation();
         }
         catch (HabbiconRejected rejected) {
-            if (purchase) {
+            if (purchase && rejected.Error == HabbiconActionError.InsufficientCredits) {
+                session.Send(new PresentDeliverErrorComposer(true, false, 0));
+            }
+            else if (purchase) {
                 session.Send(new PurchaseErrorComposer((PurchaseError)rejected.Code));
             }
         }

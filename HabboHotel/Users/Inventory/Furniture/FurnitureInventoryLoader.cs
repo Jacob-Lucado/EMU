@@ -35,9 +35,10 @@ public sealed class FurnitureInventoryLoader(IDatabase database, IItemDataManage
                 OwnerId = (uint)userId,
                 Definition = definition,
                 ExtraData = FurniExtraData.Load(definition, row.ExtraData, keepLegacy: RecyclerBox.IsDefinition(definition) || Plus.HabboHotel.Rooms.Music.RoomMusicDefinition.IsDisc(definition)
-                    || definition.InteractionType is InteractionType.CameraPicture or InteractionType.Wallpaper or InteractionType.Floor or InteractionType.Landscape),
+                    || definition.InteractionType is InteractionType.CameraPicture or InteractionType.Wallpaper or InteractionType.Floor or InteractionType.Landscape, groupId: row.GroupId),
                 UniqueNumber = row.LimitedNumber,
-                UniqueSeries = row.LimitedStack
+                UniqueSeries = row.LimitedStack,
+                GroupId = row.GroupId
             });
         }
 

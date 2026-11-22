@@ -23,14 +23,17 @@ public class WiredModernContractsTests
     [Fact]
     public void RegistrySeparatesEngineCategoriesFromVoltEditorCodesAndCapabilities()
     {
-        Assert.Equal(204, WiredBoxRegistry.All.Count);
+        // Boxes Plus added for unreleased Habbo features come on top of the Habbo boxes.
+        int Unreleased(WiredBoxCategory? category = null) => WiredBoxRegistry.All.Count(box =>
+            box.ConfigurationReference == nameof(Plus.HabboHotel.Items.Wired.UnreleasedHabboFeatures) && (category == null || box.Category == category));
+        Assert.Equal(204 + Unreleased(), WiredBoxRegistry.All.Count);
         var categories = WiredBoxRegistry.All.GroupBy(box => box.Category).ToDictionary(group => group.Key, group => group.Count());
-        Assert.Equal(30, categories[WiredBoxCategory.Trigger]);
-        Assert.Equal(62, categories[WiredBoxCategory.Action]);
-        Assert.Equal(45, categories[WiredBoxCategory.Condition]);
-        Assert.Equal(20, categories[WiredBoxCategory.Selector]);
-        Assert.Equal(37, categories[WiredBoxCategory.Addon]);
-        Assert.Equal(10, categories[WiredBoxCategory.Variable]);
+        Assert.Equal(30 + Unreleased(WiredBoxCategory.Trigger), categories[WiredBoxCategory.Trigger]);
+        Assert.Equal(62 + Unreleased(WiredBoxCategory.Action), categories[WiredBoxCategory.Action]);
+        Assert.Equal(45 + Unreleased(WiredBoxCategory.Condition), categories[WiredBoxCategory.Condition]);
+        Assert.Equal(20 + Unreleased(WiredBoxCategory.Selector), categories[WiredBoxCategory.Selector]);
+        Assert.Equal(37 + Unreleased(WiredBoxCategory.Addon), categories[WiredBoxCategory.Addon]);
+        Assert.Equal(10 + Unreleased(WiredBoxCategory.Variable), categories[WiredBoxCategory.Variable]);
         Assert.All(WiredBoxRegistry.All, box => Assert.Equal(WiredBoxSupport.DescriptorOnly, box.Support));
         Assert.True(WiredBoxRegistry.TryGet("wf_act_send_signal", out var signal));
         Assert.Equal(30, signal.EditorCode);
@@ -89,7 +92,7 @@ public class WiredModernContractsTests
     public void NativeConfigurationComposersKeepTheirOwnHeaders()
     {
         Assert.NotEqual(ServerPacketHeader.TradingCompleteComposer, ServerPacketHeader.WiredClickSettingsComposer);
-        Assert.Equal(2251u, ServerPacketHeader.WiredClickSettingsComposer);
+        Assert.Equal(1376u, ServerPacketHeader.WiredClickSettingsComposer);
     }
 
     [Fact]

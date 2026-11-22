@@ -109,7 +109,7 @@ public class GroupManagementTests : IDisposable
         var group = NewGroup(hasForum: false);
         group.Badge = "b05114s06114";
         var (client, sent) = Client(Owner());
-        await new UpdateGroupBadgeEvent(Appearance(group)).Parse(client, Packet(group.Id, 6, 1, 1, 4, 2, 2, 4));
+        await new UpdateGroupBadgeEvent(Appearance(group)).Parse(client, Packet(group.Id, 6, 1, 1, 4, 22, 2, 4));
 
         Assert.Equal("b01014s02024", group.Badge);
         Assert.Contains("UPDATE `groups` SET `badge`", string.Join("\n", _database.Statements));
@@ -122,7 +122,7 @@ public class GroupManagementTests : IDisposable
         Assert.Equal(written, _database.Statements.Count);
 
         var (member, memberSent) = Client(new Habbo { Id = 2, Username = "Member2", Access = Rights() });
-        await new UpdateGroupBadgeEvent(Appearance(group)).Parse(member, Packet(group.Id, 6, 1, 1, 4, 2, 2, 4));
+        await new UpdateGroupBadgeEvent(Appearance(group)).Parse(member, Packet(group.Id, 6, 1, 1, 4, 22, 2, 4));
         Assert.Equal("b05114s06114", group.Badge);
         Assert.Empty(memberSent);
     }
@@ -476,6 +476,10 @@ public class GroupManagementTests : IDisposable
 
     private static IGroupManager GroupSource(Group group) => Proxy<IGroupManager>((method, args) =>
     {
+        if (method == "get_BadgePartIds") {
+            return GroupBadgeTestIds.Habbo;
+        }
+
         if (method != "TryGetGroup") {
             throw new InvalidOperationException(method);
         }

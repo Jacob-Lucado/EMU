@@ -2,7 +2,7 @@
 
 ## Build from source
 
-You need the .NET SDK 10.0.401 or a later patch (pinned in `global.json`).
+You need the .NET SDK 11.0.100 or a later patch (pinned in `global.json`).
 
 ```sh
 git clone https://github.com/plus-emulator/PlusEMU.git

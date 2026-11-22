@@ -46,7 +46,9 @@ public sealed class GroupCreationPresentationTests
             return "20";
         });
         var service = new GroupPresentationService(
-            CatalogSnapshotTestSupport.Proxy<IGroupManager>((_, _) => throw new NotSupportedException()),
+            CatalogSnapshotTestSupport.Proxy<IGroupManager>((method, _) => method == "get_BadgePartIds"
+                ? GroupBadgeTestIds.Habbo
+                : throw new NotSupportedException(method)),
             CatalogSnapshotTestSupport.Proxy<ICacheManager>((_, _) => throw new NotSupportedException()), loader, settings,
             CatalogSnapshotTestSupport.Proxy<IGroupInfoSnapshotService>((_, _) => throw new NotSupportedException()));
         var (client, sent) = HabbiconTestSupport.Client(new Habbo { Id = 7 });
@@ -56,6 +58,9 @@ public sealed class GroupCreationPresentationTests
         var payload = Assert.Single(sent).Payload;
         Assert.Equal(20, BinaryPrimitives.ReadInt32BigEndian(payload.AsSpan(0, 4)));
         Assert.Equal(2, BinaryPrimitives.ReadInt32BigEndian(payload.AsSpan(4, 4)));
+        Assert.Equal(
+            HabbiconTestSupport.Incoming(5, 5, 11, 4, 26, 11, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0).Buffer.ToArray(),
+            payload[^64..]);
     }
 
     [Fact]
@@ -64,7 +69,8 @@ public sealed class GroupCreationPresentationTests
         var room = new RoomData { Id = 2, Name = "Alpha" };
         var source = new List<RoomData> { room };
         var presentation = new GroupCreationPresentation(20,
-            source.Select(value => new GroupCreationRoom(value.Id, value.Name)).ToImmutableArray());
+            source.Select(value => new GroupCreationRoom(value.Id, value.Name)).ToImmutableArray(),
+            [new(5, 11, 4), new(26, 11, 4), default, default, default]);
         var composer = new GroupCreationWindowComposer(presentation);
         var before = new HabbiconTestSupport.RecordingPacket();
         composer.Compose(before);
@@ -75,7 +81,7 @@ public sealed class GroupCreationPresentationTests
         var after = new HabbiconTestSupport.RecordingPacket();
         composer.Compose(after);
 
-        Assert.Equal(new object[] { 20, 1, 2u, "Alpha", false, 5, 5, 11, 4, 6, 11, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, before.Writes);
+        Assert.Equal(new object[] { 20, 1, 2u, "Alpha", false, 5, 5, 11, 4, 26, 11, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, before.Writes);
         Assert.Equal(before.Writes, after.Writes);
     }
 

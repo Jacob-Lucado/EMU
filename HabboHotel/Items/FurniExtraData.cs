@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using Plus.HabboHotel.Items.DataFormat;
+using Plus.HabboHotel.Rooms.AI.MonsterPlants;
 using Plus.HabboHotel.Users.Inventory.Furniture;
 
 namespace Plus.HabboHotel.Items;
@@ -156,9 +157,17 @@ internal static class FurniExtraData
             || EmbeddedImageKey.IsMatch(pair.Key) || EmbeddedImageKey.IsMatch(pair.Value));
     }
 
-    public static IFurniObjectData Load(ItemDefinition definition, string stored, bool keepLegacy)
+    public static IFurniObjectData Load(ItemDefinition definition, string stored, bool keepLegacy, int groupId = 0)
     {
         stored ??= "";
+
+        if (definition.InteractionType is InteractionType.GuildItem or InteractionType.GuildGate or InteractionType.GuildForum) {
+            // Older purchases stored the group id as the state. Keep it when it is also a valid state.
+            var invalidGroupState = groupId > 0 && groupId >= Math.Max(1, definition.Modes)
+                && stored == groupId.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+            return new LegacyDataFormat { Data = stored.Length == 0 || invalidGroupState ? "0" : stored };
+        }
 
         if (definition.Type == ItemType.Floor && HighscoreDataFormat.TryDefinition(definition.ItemName, out var scoreType, out var clearType)) {
             var board = new HighscoreDataFormat { ScoreType = scoreType, ClearType = clearType };
@@ -176,6 +185,10 @@ internal static class FurniExtraData
             }
 
             return board;
+        }
+
+        if (definition.SpecialType == (int)FurniCategory.MonsterplantSeed && MonsterPlantSeedRarity.Load(stored) is { } seed) {
+            return seed;
         }
 
         // Every firing flips a box's legacy state between "1" and "0", and a box that never fired rests at "0". A box keeps legacy data in the

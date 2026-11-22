@@ -1,3 +1,4 @@
+using Plus.Communication.Packets.Outgoing.Rooms.Avatar;
 using Plus.HabboHotel.Items.Wired.Runtime;
 using Plus.Utilities;
 
@@ -117,6 +118,10 @@ internal sealed class AnnounceService(Room room, RoomNavigation navigation, Move
             state.PendingZ[state.PendingCount] = target.Z;
             state.Pending[state.PendingCount++] = landing.Support ?? surface;
             from = target;
+
+            if (profile.Rider && purpose == StepPurpose.Transit && (navigation.Grid.Flags[target.Slot] & MovementRules.JumpBar) != 0) {
+                break;
+            }
         }
 
         return from;
@@ -326,6 +331,46 @@ internal sealed class AnnounceService(Room room, RoomNavigation navigation, Move
             }
         }
     }
+    private const int RideJumpExpression = 10;
+
+    private readonly List<(RoomUser Rider, RoomUser Horse)> _jumps = [];
+
+    internal void EndJumps()
+    {
+        foreach (var (rider, horse) in _jumps) {
+            horse.RemoveStatus("jmp");
+            horse.UpdateNeeded = true;
+
+            if (ReferenceEquals(room.GetRoomUserManager().GetRoomUserByVirtualId(rider.VirtualId), rider)) {
+                room.SendPacket(new ActionComposer(rider.VirtualId, 0));
+            }
+        }
+
+        _jumps.Clear();
+    }
+
+    private void AnnounceJump(RoomUser rider, RoomUser horse)
+    {
+        var state = rider.Movement;
+        var grid = navigation.Grid;
+
+        var last = state.PendingCount - 1;
+
+        if (last < 0 || !rider.HasStatus("mv") || state.PendingPurpose[last] != StepPurpose.Transit) {
+            return;
+        }
+
+        var slot = grid.SlotOf(state.Pending[last]);
+
+        if (slot < 0 || (grid.Flags[slot] & MovementRules.JumpBar) == 0) {
+            return;
+        }
+
+        horse.SetStatus("jmp");
+        _jumps.Add((rider, horse));
+        room.SendPacket(new ActionComposer(rider.VirtualId, RideJumpExpression));
+    }
+
     public void SynchronizeHorse(RoomUser actor)
     {
         if (!actor.RidingHorse || actor.IsBot) {
@@ -354,6 +399,8 @@ internal sealed class AnnounceService(Room room, RoomNavigation navigation, Move
             horse.SetStep = false;
             horse.IsWalking = false;
         }
+
+        AnnounceJump(actor, horse);
 
         // The horse's status follows its rider's, not every tick.
         horse.UpdateNeeded |= actor.UpdateNeeded;

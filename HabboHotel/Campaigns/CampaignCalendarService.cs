@@ -9,6 +9,7 @@ using Plus.Communication.Packets.Outgoing.Inventory.Purse;
 using Plus.Communication.Packets.Outgoing.Notifications;
 using Plus.HabboHotel.Badges;
 using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Groups;
 using Plus.HabboHotel.Items;
 using Plus.HabboHotel.Permissions;
 using Plus.HabboHotel.Users.Authentication;
@@ -18,7 +19,7 @@ using Plus.HabboHotel.Users.Inventory.Furniture;
 namespace Plus.HabboHotel.Campaigns
 {
     public sealed class CampaignCalendarService(ICampaignCalendarStore store, IItemDataManager items, IBadgeManager badges,
-        IAccessControl permissions, IAccountSessionGate sessions, TimeProvider clock, ILogger<CampaignCalendarService> logger) : ICampaignCalendarService
+        IAccessControl permissions, IAccountSessionGate sessions, TimeProvider clock, ILogger<CampaignCalendarService> logger, IGroupManager? groups = null) : ICampaignCalendarService
     {
         public void Present(GameClient session)
         {
@@ -193,7 +194,7 @@ namespace Plus.HabboHotel.Campaigns
             }
 
             if (grant.ItemId != 0) {
-                inventory.Furniture.SendInventory(session);
+                inventory.Furniture.SendInventory(session, groups);
             }
 
             var product = reward.ProductName.Replace("%credits%", reward.Credits.ToString(CultureInfo.InvariantCulture))

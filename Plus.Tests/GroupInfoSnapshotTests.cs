@@ -19,7 +19,7 @@ namespace Plus.Tests;
 public class GroupInfoSnapshotTests : IDisposable
 {
     // SHA-256 of the 120 pre-migration GroupInfoComposer payloads (type x viewer x newWindow x forum x adminOnlyDeco).
-    private const string BaselineSha256 = "b50ca1fc5454747df4f934099fbf05d22151c9b004328873e8f0c0c17797426c";
+    private const string BaselineSha256 = "96fa677aa7e8916372c09fe40690bc7e38001506b36af1f73bab88b2cfd053de";
 
     private static readonly FieldInfo DatabaseField = typeof(PlusEnvironment).GetField("_database", BindingFlags.Static | BindingFlags.NonPublic)!;
     private static readonly FieldInfo GameField = typeof(PlusEnvironment).GetField("_game", BindingFlags.Static | BindingFlags.NonPublic)!;
@@ -128,6 +128,52 @@ public class GroupInfoSnapshotTests : IDisposable
         return string.Join("|", packet.Writes.Select(write => $"{write.GetType().Name}:{write}"));
     }
 
+    [Theory]
+    [InlineData(7, 1)]
+    [InlineData(4, 1)]
+    [InlineData(3, 1)]
+    [InlineData(5, 2)]
+    [InlineData(9, 0)]
+    public void TheOwnerIsShownAsAMember(int viewer, int status)
+    {
+        var packet = new HabbiconTestSupport.RecordingPacket();
+        new GroupInfoComposer(Service(_clients, _ => null).Capture(NewGroup(type: 0, forum: false, adminOnly: 0), viewer)).Compose(packet);
+
+        Assert.Equal(status, packet.Writes[8]);
+    }
+
+    [Fact]
+    public void OwnerWithAPendingRequestStillHasMemberStatus()
+    {
+        var group = NewGroup(type: 1, forum: false, adminOnly: 0);
+        group.PublishJoin(group.CreatorId);
+        Assert.True(group.HasRequest(group.CreatorId));
+
+        var packet = new HabbiconTestSupport.RecordingPacket();
+        new GroupInfoComposer(Service(_clients, _ => null).Capture(group, group.CreatorId)).Compose(packet);
+
+        Assert.Equal(1, packet.Writes[8]);
+    }
+
+    [Fact]
+    public void TheViewersFavouriteGroupIsMarked()
+    {
+        _clients[3].GetHabbo().HabboStats = new HabboStats(0, 0, 0, 0, 0, 0, 0, 0, 9, "");
+        _clients[4].GetHabbo().HabboStats = new HabboStats(0, 0, 0, 0, 0, 0, 0, 0, 12, "");
+        var service = Service(_clients, _ => null);
+        var group = NewGroup(type: 0, forum: false, adminOnly: 0);
+
+        Assert.Equal(new object[] { true, false, false }, new[] { 3, 4, 9 }.Select(viewer => Favourite(service.Capture(group, viewer))));
+    }
+
+    private static object Favourite(GroupInfoSnapshot snapshot)
+    {
+        var packet = new HabbiconTestSupport.RecordingPacket();
+        new GroupInfoComposer(snapshot).Compose(packet);
+
+        return packet.Writes[10];
+    }
+
     [Fact]
     public void MissingRoomIsNamedNoRoomFound()
     {
@@ -137,14 +183,14 @@ public class GroupInfoSnapshotTests : IDisposable
     }
 
     [Fact]
-    public void CreationDatePreservesWireFormatAndUnknownPolicy()
+    public void CreationDateHasTwoDigitDayAndMonthAndUnknownPolicy()
     {
         var group = NewGroup(type: 0, forum: false, adminOnly: 0);
         group.CreatedAt = null;
-        Assert.Equal("1-1-1970", Service(_clients, _ => null).Capture(group, 9).CreatedOn);
+        Assert.Equal("01-01-1970", Service(_clients, _ => null).Capture(group, 9).CreatedOn);
 
         group.CreatedAt = new DateTimeOffset(2040, 1, 2, 3, 4, 5, TimeSpan.Zero).AddTicks(1_234_560);
-        Assert.Equal("2-1-2040", Service(_clients, _ => null).Capture(group, 9).CreatedOn);
+        Assert.Equal("02-01-2040", Service(_clients, _ => null).Capture(group, 9).CreatedOn);
     }
 
     private static IRoomManager UnloadedRooms() => Proxy<IRoomManager>((method, args) =>

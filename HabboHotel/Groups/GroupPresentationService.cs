@@ -27,7 +27,7 @@ public sealed record GroupMembersPresentation(
     int RequestType,
     string Search);
 
-public sealed record BadgePartPresentation(int Id, string AssetOne, string AssetTwo);
+public sealed record BadgePartPresentation(int EditorId, int CodeId, string AssetOne, string AssetTwo);
 
 public sealed record BadgeColourPresentation(int Id, string Colour);
 
@@ -40,7 +40,7 @@ public sealed record BadgeEditorPresentation(
 
 public sealed record GroupCreationRoom(uint Id, string Name);
 
-public sealed record GroupCreationPresentation(int Price, ImmutableArray<GroupCreationRoom> Rooms);
+public sealed record GroupCreationPresentation(int Price, ImmutableArray<GroupCreationRoom> Rooms, ImmutableArray<GroupBadgePiece> BadgePieces);
 
 [Singleton]
 public interface IGroupPresentationService
@@ -156,7 +156,9 @@ public sealed class GroupPresentationService(IGroupManager groups, ICacheManager
             .Select(room => new GroupCreationRoom(room.Id, room.Name))
             .ToImmutableArray();
         var price = Convert.ToInt32(settings.TryGetValue("catalog.group.purchase.cost"));
-        session.Send(new GroupCreationWindowComposer(new GroupCreationPresentation(price, availableRooms)));
+        GroupManagementSnapshotService.TryParseBadge(BadgePartUtility.DefaultBadge, out var defaultBadge);
+        session.Send(new GroupCreationWindowComposer(new GroupCreationPresentation(price, availableRooms,
+            groups.BadgePartIds.ToEditorIds(defaultBadge))));
     }
 
     private List<CachedUser> ResolveUsers(Group group, int requestType)
@@ -188,7 +190,7 @@ public sealed class GroupPresentationService(IGroupManager groups, ICacheManager
         user.Look);
 
     private static BadgePartPresentation CapturePart(GroupBadgeParts part) =>
-        new(part.Id, part.AssetOne, part.AssetTwo);
+        new(part.EditorId, part.Id, part.AssetOne, part.AssetTwo);
 
     private static BadgeColourPresentation CaptureColour(GroupColours colour) =>
         new(colour.Id, colour.Colour);

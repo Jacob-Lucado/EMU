@@ -160,12 +160,33 @@ public sealed class CatalogGiftPurchaseServiceTests
         Assert.DoesNotContain(context.SenderPackets, packet => packet.Header == ServerPacketHeader.PurchaseErrorComposer);
     }
 
-    private static CatalogGiftPurchaseRequest Request(string recipient = "recipient") =>
-        new(1, 2, "", recipient, "hello", 3, 4, 5, true);
+    [Theory]
+    [InlineData(InteractionType.GuildItem, "631490")]
+    [InlineData(InteractionType.GuildItem, "")]
+    [InlineData(InteractionType.GuildGate, "631490")]
+    [InlineData(InteractionType.GuildForum, "631490")]
+    public async Task GroupFurniCannotBeGifted(InteractionType groupFurni, string groupId)
+    {
+        var context = CreateContext(contentType: groupFurni);
+
+        await context.Service.Purchase(context.SenderClient, Request(extraData: groupId));
+
+        var refusal = Assert.Single(context.SenderPackets);
+        Assert.Equal(ServerPacketHeader.PurchaseErrorComposer, refusal.Header);
+        Assert.Equal(0, new Plus.Communication.Flash.FlashIncomingPacket { Buffer = refusal.Payload }.ReadInt());
+        Assert.Equal(0, context.Rewards.Charges);
+        Assert.Equal(0, context.Store.Creates);
+        Assert.Equal(0, context.Clients.Lookups);
+        Assert.Equal(100, context.Sender.Credits);
+        Assert.Empty(context.RecipientPackets);
+    }
+
+    private static CatalogGiftPurchaseRequest Request(string recipient = "recipient", string extraData = "") =>
+        new(1, 2, extraData, recipient, "hello", 3, 4, 5, true);
 
     private static Context CreateContext(bool enabled = true, bool missingRecipient = false,
         bool recipientIsSender = false, bool recipientAllowsGifts = true, bool storeFails = false, string attachedBadge = "",
-        bool club = false, IPlannedShutdown? plannedShutdown = null)
+        bool club = false, IPlannedShutdown? plannedShutdown = null, InteractionType contentType = InteractionType.None)
     {
         var content = new ItemDefinition
         {
@@ -173,7 +194,7 @@ public sealed class CatalogGiftPurchaseServiceTests
             ItemName = "chair",
             ProductType = "s",
             Type = ItemType.Floor,
-            InteractionType = InteractionType.None,
+            InteractionType = contentType,
             AllowGift = true
         };
         var present = new ItemDefinition

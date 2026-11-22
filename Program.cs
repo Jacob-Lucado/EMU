@@ -30,6 +30,10 @@ public static class Program
 
     public static async Task Main(string[] args)
     {
+        if (args is ["--check-runtime"]) {
+            return;
+        }
+
         if (args is ["--generate-rsa-key", .. var keyArgs]) {
             Environment.Exit(GenerateRsaKey(keyArgs));
 
@@ -69,6 +73,7 @@ public static class Program
         services.AddConfiguration<EncryptionConfiguration>(configuration.GetSection("Encryption"));
         services.AddConfiguration<AirClientConfiguration>(configuration.GetSection("AirClient"));
         services.AddConfiguration<LoginThrottleConfiguration>(configuration.GetSection("LoginThrottle"));
+        services.AddConfiguration<ConnectionCheckConfiguration>(configuration.GetSection("ConnectionCheck"));
 
         // Dependency Injection
         services.AddDefaultRules(typeof(Program).Assembly);

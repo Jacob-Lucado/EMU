@@ -21,8 +21,10 @@ public sealed class PetRespectService(IAchievementManager achievements, IQuestMa
         var stats = habbo.HabboStats;
 
         if (ReferenceEquals(habbo.CurrentRoom, room) && room.GetRoomUserManager().TryGetPet(petId, out var plantUser)
-            && plantUser.PetData is { Plant: { } plant } plantPet && plantUser.RoomId == room.Id) {
-            Treat(room, session, plantUser, plantPet, plant);
+            && plantUser.PetData is { Plant: not null } plantPet && plantUser.RoomId == room.Id) {
+            lock (room.MonsterPlantSync) {
+                Treat(room, session, plantUser, plantPet, plantPet.Plant!);
+            }
 
             return;
         }

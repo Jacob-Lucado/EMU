@@ -34,6 +34,7 @@ public partial class PlacedFurniRoomTests
             pet.Energy = 120;
             pet.Experience = 0;
             ai.OnUserSay(owner, "horse wag tail");
+            DrainPetCommands();
         }
 
         var lines = ChatLines();
@@ -50,6 +51,7 @@ public partial class PlacedFurniRoomTests
         _client.Packets.Clear();
 
         ChatBot(petUser, 2).OnUserSay(owner, "horse down");
+        DrainPetCommands();
 
         Assert.Equal("puz", petUser.Statusses.GetValueOrDefault("gst"));
         var line = Assert.Single(ChatLines());
@@ -65,6 +67,7 @@ public partial class PlacedFurniRoomTests
         _client.Packets.Clear();
 
         ChatBot(petUser, 44).OnUserSay(owner, "horse wag tail");
+        DrainPetCommands();
 
         Assert.Equal(17_605, pet.Experience);
         Assert.Empty(ChatLines());
@@ -81,6 +84,7 @@ public partial class PlacedFurniRoomTests
         _client.Packets.Clear();
 
         ai.OnUserSay(owner, "horse down");
+        DrainPetCommands();
 
         Assert.Equal("puz", petUser.Statusses.GetValueOrDefault("gst"));
         Assert.Empty(ChatLines());

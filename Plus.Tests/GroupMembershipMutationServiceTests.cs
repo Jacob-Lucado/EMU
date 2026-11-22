@@ -224,6 +224,7 @@ public sealed class GroupMembershipMutationServiceTests
             var database = new ProbeDatabase(new MySqlConnectionStringBuilder(root) { Database = schema }.ConnectionString);
 
             using (var connection = database.Connection()) {
+                connection.Execute("CREATE TABLE group_invitations(user_id INT NOT NULL, group_id INT NOT NULL, PRIMARY KEY(group_id, user_id)); INSERT INTO group_invitations VALUES(8,9)");
                 connection.Execute("CREATE TABLE group_memberships(user_id INT NOT NULL,group_id INT NOT NULL,`rank` INT NOT NULL DEFAULT 0,PRIMARY KEY(user_id,group_id)); CREATE TABLE group_requests(user_id INT NOT NULL,group_id INT NOT NULL,PRIMARY KEY(user_id,group_id)); CREATE TABLE groups(id INT PRIMARY KEY,`state` ENUM('0','1','2') NOT NULL,admindeco BOOL NOT NULL,forum_enabled BOOL NOT NULL); INSERT INTO groups VALUES(9,'1',0,0); INSERT INTO group_requests VALUES(8,9),(11,9),(12,9),(13,9),(14,10)");
             }
 
@@ -232,6 +233,7 @@ public sealed class GroupMembershipMutationServiceTests
             Assert.True(store.SetAdmin(9, 8, true));
 
             using (var verify = database.Connection()) {
+                Assert.Equal(0, verify.ExecuteScalar<int>("SELECT COUNT(*) FROM group_invitations"));
                 Assert.Equal(1, verify.ExecuteScalar<int>("SELECT `rank` FROM group_memberships WHERE user_id=8 AND group_id=9"));
             }
 

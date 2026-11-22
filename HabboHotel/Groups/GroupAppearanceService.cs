@@ -51,7 +51,7 @@ public sealed class GroupAppearanceService(
 
     public Task UpdateBadge(GameClient session, int groupId, ImmutableArray<GroupBadgePartRequest> parts)
     {
-        if (!TryGetOwnedGroup(session, groupId, out var group) || !TryBuildBadge(parts, out var badge)) {
+        if (!TryGetOwnedGroup(session, groupId, out var group) || !TryBuildBadge(groups.BadgePartIds, parts, out var badge)) {
             return Task.CompletedTask;
         }
 
@@ -78,8 +78,7 @@ public sealed class GroupAppearanceService(
                 return Task.CompletedTask;
             }
 
-            group.Colour1 = request.MainColour;
-            group.Colour2 = request.SecondaryColour;
+            group.SetColours(request.MainColour, request.SecondaryColour);
             SendGroupInfo(session, group);
             PublishGuildItems(session, group.Id);
         }
@@ -103,7 +102,7 @@ public sealed class GroupAppearanceService(
     private void SendGroupInfo(GameClient session, Group group) =>
         session.Send(new GroupInfoComposer(groupInfo.Capture(group, session.GetHabbo().Id)));
 
-    private static bool TryBuildBadge(ImmutableArray<GroupBadgePartRequest> parts, out string badge)
+    private static bool TryBuildBadge(GroupBadgePartIds ids, ImmutableArray<GroupBadgePartRequest> parts, out string badge)
     {
         badge = string.Empty;
 
@@ -113,14 +112,19 @@ public sealed class GroupAppearanceService(
 
         for (var i = 0; i < parts.Length; i++) {
             var part = parts[i];
+
+            if (!ids.TryGetCodeId(i == 0, part.Symbol, out var codeId)) {
+                return false;
+            }
+
             badge += BadgePartUtility.WorkBadgeParts(i == 0,
-                part.Symbol.ToString(CultureInfo.InvariantCulture),
+                codeId.ToString(CultureInfo.InvariantCulture),
                 part.Colour.ToString(CultureInfo.InvariantCulture),
                 part.Position.ToString(CultureInfo.InvariantCulture));
         }
 
         if (string.IsNullOrWhiteSpace(badge)) {
-            badge = "b05114s06114";
+            badge = BadgePartUtility.DefaultBadge;
         }
 
         return true;

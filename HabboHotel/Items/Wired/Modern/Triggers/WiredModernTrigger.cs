@@ -142,6 +142,9 @@ public class WiredModernTrigger : WiredModernBox, IWiredClickTrigger
             "wf_trg_recv_signal" => context.Signal != null && (deferItems || Items().Any(item => item.Id == unchecked((uint)evt.Code))),
             "wf_trg_game_starts" or "wf_trg_game_ends" => true,
             "wf_trg_room_initializes" => true,
+            UnreleasedHabboFeatures.GroupMembershipTrigger => evt.Actor != null && WiredGroupActions.MatchesMembership(context, config),
+            UnreleasedHabboFeatures.ClickContextMenuTrigger => evt.Actor != null && evt.TargetUser != null && config.Text.Length > 0
+                && evt.Message == config.Text,
             "wf_trg_receive_message" or "wf_trg_receive_dataframe" => evt.Link != null && evt.EventItem is { } endpoint
                 && (!afterSelectors && config.FurniSources.GetValueOrDefault("endpoints") == WiredSources.Selector
                     || Furni(context, config, "endpoints").Any(item => item.Id == endpoint.Id)) && (name == "wf_trg_receive_message" || CaptureDataframe(context, config)),

@@ -16,7 +16,11 @@ public sealed record MonsterPlantSeedling(string Name, MonsterPlantLook Look, in
 [Singleton]
 public interface IMonsterPlantGenetics
 {
-    MonsterPlantSeedling Roll(ItemDefinition seed);
+    /// <summary>Rolls a look. A seed with a rarity grows into a plant of exactly that rarity.</summary>
+    MonsterPlantSeedling Roll(ItemDefinition seed, int? rarity);
+
+    /// <summary>The rarity of the seed two plants breed.</summary>
+    int BreedRarity(int first, int second);
 }
 
 [Singleton]
@@ -47,7 +51,7 @@ public sealed class MonsterPlantSeedService(IMonsterPlantStore store, IMonsterPl
                 return true;
             }
 
-            var seedling = genetics.Roll(item.Definition);
+            var seedling = genetics.Roll(item.Definition, MonsterPlantSeedRarity.Of(item.ExtraData));
             var pet = store.Plant(new(item.Id, item.Definition.Id, habbo.Id, habbo.Username, room.RoomId,
                 item.GetX, item.GetY, item.GetZ, seedling.Name, seedling.Look, seedling.Rarity, clock.GetUtcNow()));
 

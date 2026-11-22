@@ -143,6 +143,32 @@ public sealed class CatalogFurnidataTests
         Assert.Matches("^\"[0-9a-f]{40}\"$", file.ETag);
     }
 
+    [Theory]
+    [InlineData("wf_act_invite_to_group", "wf_test_26secret3")]
+    [InlineData("wf_act_remove_from_group", "wf_test_26secret4")]
+    [InlineData("wf_trg_group_membership", "wf_test_26secret5")]
+    [InlineData("wf_trg_click_context_menu", "wf_test_26secret6")]
+    [InlineData("wf_xtra_context_menu_item", "wf_test_26secret7")]
+    public void AnUnreleasedBoxKeepsItsOwnIdNameAndOfferButLoadsThePlaceholderLook(string box, string placeholder)
+    {
+        var placeholderEntry = new FurnidataEntry { Id = 19512, Classname = placeholder, Name = placeholder + " name" };
+        var boxEntry = new FurnidataEntry { Id = 9000000, Classname = box, Name = "Plus box name" };
+
+        var file = CatalogFurnidata.Generate([placeholderEntry, boxEntry], [Page(1, -1, Offer(7, (Floor(box), 1)))]);
+        var entries = JsonNode.Parse(file.Content)!["roomitemtypes"]!["furnitype"]!.AsArray().OfType<JsonObject>().ToArray();
+
+        var boxJson = entries.Single(entry => (int)entry["id"]! == 9000000);
+        Assert.Equal(placeholder, (string)boxJson["classname"]!);
+        Assert.Equal("Plus box name", (string)boxJson["name"]!);
+        Assert.Equal(7, (int)boxJson["offerid"]!);
+        Assert.True((bool)boxJson["buyout"]!);
+
+        var placeholderJson = entries.Single(entry => (int)entry["id"]! == 19512);
+        Assert.Equal(placeholder, (string)placeholderJson["classname"]!);
+        Assert.Equal(placeholder + " name", (string)placeholderJson["name"]!);
+        Assert.Equal(-1, (int)placeholderJson["offerid"]!);
+    }
+
 
     [Fact]
     public void DefinitionsCompareWithoutCatalogFieldsOrFieldOrder()

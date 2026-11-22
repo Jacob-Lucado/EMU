@@ -27,6 +27,27 @@ public static class UnreleasedHabboFeatures
     public const int LeftGroup = 1;
     public const string GroupNotFoundError = "This group does not exist.";
     public const string GroupNotOwnedError = "You can only pick a group you own.";
+
+    // Wired context menu.
+    public const uint GetWiredContextMenuEvent = 10300;
+    public const uint WiredContextMenuClickEvent = 10301;
+    public const uint WiredContextMenuComposer = 10300;
+    public const string ContextMenuItemAddon = "wf_xtra_context_menu_item";
+    public const int ContextMenuItemCode = 9000;
+    public const string ClickContextMenuTrigger = "wf_trg_click_context_menu";
+    public const int ClickContextMenuCode = 9001;
+    public const int ContextMenuEditorContext = 900;
+    public const int ContextMenuButtonIdLength = 32;
+    public const int ContextMenuButtonTextLength = 64;
+    public const int ContextMenuConditions = 3;
+    public const int Everyone = 0;
+    public const int EveryoneExceptViewer = 1;
+    public const int OnlyViewer = 2;
+    public const int AllPets = 0;
+    public const int ViewerPets = 1;
+    public const int ContextMenuExists = 6;
+    public const int ContextMenuNotExists = 7;
+    public const string ContextMenuVariableError = "Pick a user variable of this room.";
 }
 
 /// <summary>The answer of a <c>GroupInvitationReply</c>.</summary>
@@ -35,4 +56,11 @@ public enum GroupInvitationAnswer
     Accept = 0,
     Reject = 1,
     DecideLater = 2
+}
+
+/// <summary>What a context menu packet is about.</summary>
+public enum WiredContextMenuTarget
+{
+    RoomUnit = 0,
+    FloorFurni = 1
 }

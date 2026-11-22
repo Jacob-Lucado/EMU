@@ -93,6 +93,12 @@ public sealed class WiredConfigurationService(
                 return;
             }
 
+            if (descriptor.CanonicalName == UnreleasedHabboFeatures.ContextMenuItemAddon && !ContextMenuVariablesExist(room, requested)) {
+                session.Send(new WiredValidationErrorComposer(UnreleasedHabboFeatures.ContextMenuVariableError));
+
+                return;
+            }
+
             bool CanModify() => habbo.CurrentRoom == room && room.GetWired().Settings.CanModify(session);
             var native = requested with { NativeCode = descriptor.EditorCode };
 
@@ -259,6 +265,21 @@ public sealed class WiredConfigurationService(
         }
 
         return room.GetWired().GroupMembership is { } groups ? groups.SaveRefusal(editorId, groupId, mustOwn) : UnreleasedHabboFeatures.GroupNotFoundError;
+    }
+
+    // Each condition in use reads a user variable of this room.
+    private static bool ContextMenuVariablesExist(Rooms.Room room, WiredNativeEditorConfiguration native)
+    {
+        var p = native.OwnedIntParams;
+
+        if (p.Length != Modern.Addons.WiredContextMenuRule.IntCount || native.VariableIds.Length != Modern.Addons.WiredContextMenuRule.VariableCount) {
+            return true;
+        }
+
+        var used = Enumerable.Range(0, Math.Clamp(p[6], 0, UnreleasedHabboFeatures.ContextMenuConditions))
+            .Concat(Enumerable.Range(UnreleasedHabboFeatures.ContextMenuConditions, Math.Clamp(p[7], 0, UnreleasedHabboFeatures.ContextMenuConditions)));
+
+        return used.All(index => room.GetWired().Variables.Module.TryResolveCatalogId(native.VariableIds[index], Variables.WiredVariableTarget.User, out _));
     }
 
     // The filtered Show Message text is what is stored and returned on reopen, and the save still succeeds.

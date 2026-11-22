@@ -90,7 +90,8 @@ public partial class WiredComponent
             box = new WiredSelectorBox(_room, item, descriptor, _selectorState, _groups,
                 context => WiredSelectorVariableBridge.Create(context, Variables.Module));
         }
-        else if (descriptor.Category == WiredBoxCategory.Addon && WiredOctoberAddonBox.Names.Contains(descriptor.CanonicalName)) {
+        else if (descriptor.Category == WiredBoxCategory.Addon && (WiredOctoberAddonBox.Names.Contains(descriptor.CanonicalName)
+                     || descriptor.CanonicalName == UnreleasedHabboFeatures.ContextMenuItemAddon)) {
             box = new WiredOctoberAddonBox(_room, item, descriptor);
         }
         else if (descriptor.Category == WiredBoxCategory.Addon && WiredAddonModule.Names.Contains(descriptor.CanonicalName)) {

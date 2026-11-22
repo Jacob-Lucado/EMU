@@ -515,6 +515,9 @@ public static class ClientPacketHeader
     public const uint WiredLinkGetConnectionsEvent = 620;
     public const uint GetWiredContractContentsEvent = 361;
     public const uint UpdateWiredContractEvent = 1431;
+    // The wired context menu of a room unit.
+    public const uint GetWiredContextMenuEvent = UnreleasedHabboFeatures.GetWiredContextMenuEvent;
+    public const uint WiredContextMenuClickEvent = UnreleasedHabboFeatures.WiredContextMenuClickEvent;
     // Wired monitor. The monitor tab sends both requests together.
     public const uint GetWiredRoomStatsEvent = 3451;
     public const uint GetWiredErrorLogsEvent = 3666;

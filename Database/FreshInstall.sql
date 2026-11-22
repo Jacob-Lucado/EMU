@@ -32867,7 +32867,9 @@ INSERT INTO `catalog_offer_products` VALUES
 (1900000388,0,'furni',1000009234,NULL,NULL,NULL,NULL,NULL,1,''),
 (1900000389,0,'furni',1000012480,NULL,NULL,NULL,NULL,NULL,1,''),
 (1900000390,0,'furni',1000012481,NULL,NULL,NULL,NULL,NULL,1,''),
-(1900000391,0,'furni',1000012482,NULL,NULL,NULL,NULL,NULL,1,'');
+(1900000391,0,'furni',1000012482,NULL,NULL,NULL,NULL,NULL,1,''),
+(1900000392,0,'furni',1000012484,NULL,NULL,NULL,NULL,NULL,1,''),
+(1900000393,0,'furni',1000012483,NULL,NULL,NULL,NULL,NULL,1,'');
 /*!40000 ALTER TABLE `catalog_offer_products` ENABLE KEYS */;
 UNLOCK TABLES;
 COMMIT;
@@ -52201,7 +52203,9 @@ INSERT INTO `catalog_offers` VALUES
 (1900000388,'clothing_nftshiba',25,0,0,0,1,1,''),
 (1900000389,'wf_act_invite_to_group',7,0,0,0,1,1,''),
 (1900000390,'wf_act_remove_from_group',7,0,0,0,1,1,''),
-(1900000391,'wf_trg_group_membership',5,0,0,0,1,1,'');
+(1900000391,'wf_trg_group_membership',5,0,0,0,1,1,''),
+(1900000392,'wf_xtra_context_menu_item',5,0,0,0,1,1,''),
+(1900000393,'wf_trg_click_context_menu',5,0,0,0,1,1,'');
 /*!40000 ALTER TABLE `catalog_offers` ENABLE KEYS */;
 UNLOCK TABLES;
 COMMIT;
@@ -82147,7 +82151,11 @@ INSERT INTO `catalog_page_offers` VALUES
 (2124187,1900000390,42),
 (2129308,1900000390,42),
 (2124186,1900000391,21),
-(2129307,1900000391,21);
+(2129307,1900000391,21),
+(2124190,1900000392,13),
+(2129311,1900000392,13),
+(2124186,1900000393,22),
+(2129307,1900000393,22);
 /*!40000 ALTER TABLE `catalog_page_offers` ENABLE KEYS */;
 UNLOCK TABLES;
 COMMIT;
@@ -103842,7 +103850,9 @@ INSERT INTO `furniture` VALUES
 (1000012479,'wf_test_26secret7','wf_test_26secret7 name','s',1,1,0.1,1,0,0,19516,1,1,1,1,1,'default',0,1,'0','0',0,0,0,0,1,76189,'wired',0,1,1,NULL,'wf_test_26secret7 name','wf_test_26secret7 desc',NULL,0,NULL,1,0,0,0,1,0.1,'wired',NULL,0,1,1,19516,'wf_test_26secret7'),
 (1000012480,'wf_act_invite_to_group','WIRED Effect: Invite to Group','s',1,1,0.1,1,0,0,19512,1,1,1,1,1,'wired_effect',0,1,'0','0',0,0,0,0,0,76189,'wired',0,1,1,NULL,'WIRED Effect: Invite to Group','Invites the user to one of your groups',NULL,0,NULL,1,0,0,0,1,0.1,'wired',NULL,0,1,1,NULL,NULL),
 (1000012481,'wf_act_remove_from_group','WIRED Effect: Remove from Group','s',1,1,0.1,1,0,0,19513,1,1,1,1,1,'wired_effect',0,1,'0','0',0,0,0,0,0,76189,'wired',0,1,1,NULL,'WIRED Effect: Remove from Group','Removes the user from one of your groups',NULL,0,NULL,1,0,0,0,1,0.1,'wired',NULL,0,1,1,NULL,NULL),
-(1000012482,'wf_trg_group_membership','WIRED Trigger: Group Membership Changed','s',1,1,0.1,1,0,0,19514,1,1,1,1,1,'wired_trigger',0,1,'0','0',0,0,0,0,0,76189,'wired',0,1,1,NULL,'WIRED Trigger: Group Membership Changed','Triggers when a user joins or leaves a group',NULL,0,NULL,1,0,0,0,1,0.1,'wired',NULL,0,1,1,NULL,NULL);
+(1000012482,'wf_trg_group_membership','WIRED Trigger: Group Membership Changed','s',1,1,0.1,1,0,0,19514,1,1,1,1,1,'wired_trigger',0,1,'0','0',0,0,0,0,0,76189,'wired',0,1,1,NULL,'WIRED Trigger: Group Membership Changed','Triggers when a user joins or leaves a group',NULL,0,NULL,1,0,0,0,1,0.1,'wired',NULL,0,1,1,NULL,NULL),
+(1000012483,'wf_trg_click_context_menu','WIRED Trigger: User Clicks Context Menu','s',1,1,0.1,1,0,0,19515,1,1,1,1,1,'wired_trigger',0,1,'0','0',0,0,0,0,0,76189,'wired',0,1,1,NULL,'WIRED Trigger: User Clicks Context Menu','Triggers when a user clicks a context menu button',NULL,0,NULL,1,0,0,0,1,0.1,'wired',NULL,0,1,1,NULL,NULL),
+(1000012484,'wf_xtra_context_menu_item','WIRED Add-on: Context Menu Item','s',1,1,0.1,1,0,0,19516,1,1,1,1,1,'wired_addon',0,1,'0','0',0,0,0,0,0,76189,'wired',0,1,1,NULL,'WIRED Add-on: Context Menu Item','Adds a button to the context menu of users',NULL,0,NULL,1,0,0,0,1,0.1,'wired',NULL,0,1,1,NULL,NULL);
 /*!40000 ALTER TABLE `furniture` ENABLE KEYS */;
 UNLOCK TABLES;
 COMMIT;

@@ -511,6 +511,9 @@ public static class ServerPacketHeader
     public const uint WiredContractContentsComposer = 3988;
     public const uint WiredContractUpdateResultComposer = 2316;
 
+    // Answers GetWiredContextMenu.
+    public const uint WiredContextMenuComposer = UnreleasedHabboFeatures.WiredContextMenuComposer;
+
     // Wired monitor.
     public const uint WiredRoomStatsComposer = 1345;
     public const uint WiredErrorLogsComposer = 1426;

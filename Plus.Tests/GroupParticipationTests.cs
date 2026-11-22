@@ -583,6 +583,7 @@ public class GroupParticipationTests
 
             return Task.CompletedTask;
         }
+        public Task AcceptInvitation(GameClient session, int groupId) => Task.CompletedTask;
         public Task SetFavourite(GameClient session, int groupId)
         {
             Favourites.Add(new object[] { groupId });

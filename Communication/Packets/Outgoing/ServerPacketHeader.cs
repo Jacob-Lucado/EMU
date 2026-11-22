@@ -1,3 +1,5 @@
+using Plus.HabboHotel.Items.Wired;
+
 namespace Plus.Communication.Packets.Outgoing;
 
 public static class ServerPacketHeader
@@ -225,6 +227,7 @@ public static class ServerPacketHeader
     public const uint GroupConfirmRemoveMemberComposer = 65505;
     public const uint GroupDeactivatedComposer = 2185;
     public const uint RefreshFavouriteGroupComposer = 58;
+    public const uint GroupInvitationComposer = UnreleasedHabboFeatures.GroupInvitationComposer;
 
     // Group Forums
     public const uint ForumsListDataComposer = 3860;

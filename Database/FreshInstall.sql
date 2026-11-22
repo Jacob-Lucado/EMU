@@ -1351,6 +1351,26 @@ CREATE TABLE `group_forums` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
+-- Table structure for table `group_invitations`
+--
+
+DROP TABLE IF EXISTS `group_invitations`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `group_invitations` (
+  `group_id` int(11) unsigned NOT NULL,
+  `user_id` int(11) NOT NULL,
+  `inviter_id` int(11) NOT NULL,
+  `room_id` int(10) unsigned NOT NULL DEFAULT 0,
+  `created_at` datetime(6) NOT NULL,
+  PRIMARY KEY (`group_id`,`user_id`),
+  KEY `user_id` (`user_id`),
+  CONSTRAINT `fk_group_invitations_group_id` FOREIGN KEY (`group_id`) REFERENCES `groups` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_group_invitations_user_id` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- Table structure for table `group_memberships`
 --
 

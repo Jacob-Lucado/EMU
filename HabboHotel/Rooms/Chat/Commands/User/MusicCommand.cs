@@ -1,3 +1,4 @@
+using Plus.Communication.Packets.Outgoing.Rooms.Chat;
 using Plus.Communication.Packets.Outgoing.Rooms.Session;
 using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Rooms.Music;
@@ -25,7 +26,7 @@ internal class MusicCommand : IChatCommand
         if (text.Equals("stop", StringComparison.OrdinalIgnoreCase) || text.Equals("off", StringComparison.OrdinalIgnoreCase)) {
             room.Stream = null;
             room.SendPacket(new RoomStreamComposer(null));
-            session.SendWhisper("The room music is off.");
+            Announce(session, room, $"{Describe(session, room)} turned the room music off.");
 
             return;
         }
@@ -40,6 +41,26 @@ internal class MusicCommand : IChatCommand
 
         room.Stream = stream;
         room.SendPacket(new RoomStreamComposer(stream));
-        session.SendWhisper(stream.Kind == "soundcloud" ? "Done! Playing that SoundCloud link for everyone in the room." : "Done! Playing that stream for everyone in the room.");
+        Announce(session, room, $"{Describe(session, room)} started {(stream.Kind == "soundcloud" ? "a SoundCloud track" : "a music stream")} for the room.");
+    }
+
+    private static string Describe(GameClient session, Room room) =>
+        $"{session.GetHabbo().Username} ({(room.CheckRights(session, true) ? "room owner" : "has room rights")})";
+
+    private static void Announce(GameClient session, Room room, string message)
+    {
+        var speaker = room.GetRoomUserManager().GetRoomUserByHabbo(session.GetHabbo().Username);
+
+        if (speaker == null) {
+            return;
+        }
+
+        foreach (var user in room.GetRoomUserManager().GetRoomUsers()) {
+            if (user.IsBot || user.GetClient()?.GetHabbo() is not { ReceiveWhispers: true }) {
+                continue;
+            }
+
+            user.GetClient().Send(new WhisperComposer(speaker.VirtualId, message, 0, speaker.LastBubble, user.VirtualId));
+        }
     }
 }

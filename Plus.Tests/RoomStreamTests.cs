@@ -87,4 +87,15 @@ public class RoomStreamTests
 
         Assert.Equal(7, BinaryPrimitives.ReadInt32BigEndian(memory.ToArray()[6..]));
     }
+
+    [Fact]
+    public void TheStreamPacketEndsWithTheSongTokenAndTheNumberWaiting()
+    {
+        using var memory = PlusMemoryStream.GetStream();
+        new RoomStreamComposer(42, null, 9, 3).Compose(new FlashOutgoingPacket(memory));
+        var bytes = memory.ToArray();
+
+        Assert.Equal(9, BinaryPrimitives.ReadInt32BigEndian(bytes[^8..]));
+        Assert.Equal(3, BinaryPrimitives.ReadInt32BigEndian(bytes[^4..]));
+    }
 }

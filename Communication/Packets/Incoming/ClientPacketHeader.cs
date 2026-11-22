@@ -454,6 +454,7 @@ public static class ClientPacketHeader
     public const uint UnseenResetCategoryEvent = 65428;
     public const uint UnseenResetItemsEvent = 65459;
     public const uint SendMessengerMessageEvent = 4902;
+    public const uint RoomStreamEndedEvent = 6200;
     // Camera internal IDs; wire IDs are revision-specific.
     public const uint InitCameraEvent = 2149;
     public const uint PhotoCompetitionEvent = 1161;

@@ -53,8 +53,23 @@ public class Room
     private DateTimeOffset? _timerRestartAt;
     public bool MDisposed;
     public MoodlightData MoodlightData;
-    // The web audio the room plays. It lasts until the room unloads.
-    public Plus.HabboHotel.Rooms.Music.RoomStream? Stream { get; set; }
+    // The web audio the room plays and the songs waiting after it. They last until the room unloads.
+    private Plus.HabboHotel.Rooms.Music.RoomPlaylist? _playlist;
+
+    public Plus.HabboHotel.Rooms.Music.RoomPlaylist Playlist => LazyInitializer.EnsureInitialized(ref _playlist);
+
+    public Plus.HabboHotel.Rooms.Music.RoomStream? Stream
+    {
+        get => Playlist.Current;
+        set
+        {
+            if (value == null) {
+                Playlist.Stop();
+            } else {
+                Playlist.Play(value, DateTimeOffset.UtcNow);
+            }
+        }
+    }
 
     public Dictionary<int, DateTimeOffset> MutedUsers;
 

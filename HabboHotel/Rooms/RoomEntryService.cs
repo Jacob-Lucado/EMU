@@ -61,9 +61,7 @@ public sealed class RoomEntryService(IQuestManager quests, TimeProvider clock, I
 
         session.Send(new Plus.Communication.Packets.Outgoing.Rooms.Session.RaidProtectionCapabilityComposer(room.RoomId, room.OwnerId == habbo.Id));
 
-        if (room.Stream is { } stream) {
-            session.Send(new Plus.Communication.Packets.Outgoing.Rooms.Session.RoomStreamComposer(room.RoomId, stream));
-        }
+        Plus.HabboHotel.Rooms.Music.RoomMusic.SendTo(session, room);
 
         var now = clock.GetUtcNow();
 

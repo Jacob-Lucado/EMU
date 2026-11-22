@@ -379,7 +379,14 @@ public partial class PlacedFurniRoomTests
             {
                 var result = new DataTable();
                 result.Columns.Add("value", typeof(uint));
-                result.Rows.Add(command.Contains("room_items_tele_links", StringComparison.Ordinal) ? linkedId : targetRoom);
+
+                if (command.Contains("room_items_tele_links", StringComparison.Ordinal)) {
+                    result.Columns.Add("room_id", typeof(uint));
+                    result.Rows.Add(linkedId, targetRoom);
+                }
+                else {
+                    result.Rows.Add(targetRoom);
+                }
 
                 return result;
             }),

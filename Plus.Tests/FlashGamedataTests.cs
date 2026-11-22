@@ -97,6 +97,24 @@ public sealed class FlashGamedataTests : IAsyncLifetime
     }
 
     [Fact]
+    public void BorrowedFloorLooksKeepTheOriginalClassLookupAndBothProductCodes()
+    {
+        var file = CatalogFurnidata.Generate([
+            new FurnidataEntry { Id = 19512, Classname = "wf_test_26secret3", Name = "Placeholder" },
+            new FurnidataEntry { Id = 9000000, Classname = "wf_act_invite_to_group", Name = "Invite" }
+        ], []);
+        var files = new FlashGamedata(Options.Create(new AirClientConfiguration()), new FixedFurnidata(file)).Current("");
+        var xml = XElement.Load(new MemoryStream(files.ByRoute(FlashGamedata.FurnidataRoute)!.Content));
+        var pair = xml.Descendants("furnitype").Where(row => (string?)row.Attribute("classname") == "wf_test_26secret3");
+        Assert.Equal(["9000000", "19512"], pair.Select(row => (string?)row.Attribute("id")));
+
+        var products = XElement.Load(new MemoryStream(files.ByRoute(FlashGamedata.ProductdataRoute)!.Content))
+            .Elements("product").ToDictionary(row => (string)row.Attribute("code")!, row => (string)row.Element("name")!);
+        Assert.Equal("Invite", products["wf_act_invite_to_group"]);
+        Assert.Equal("Placeholder", products["wf_test_26secret3"]);
+    }
+
+    [Fact]
     public async Task FurnidataIsTheXmlTheClientParses()
     {
         await Start(new AirClientConfiguration { UrlPrefix = "https://hotel.example" });

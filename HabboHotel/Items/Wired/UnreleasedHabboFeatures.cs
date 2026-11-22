@@ -48,6 +48,17 @@ public static class UnreleasedHabboFeatures
     public const int ContextMenuExists = 6;
     public const int ContextMenuNotExists = 7;
     public const string ContextMenuVariableError = "Pick a user variable of this room.";
+
+    // Each box has its own sprite id (migration 174, from 9000000) and draws the look of a Habbo placeholder furni:
+    // its furnidata entry names the placeholder's classname, so clients load that asset.
+    public static readonly IReadOnlyDictionary<string, string> BorrowedLooks = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        [InviteToGroupAction] = "wf_test_26secret3",
+        [RemoveFromGroupAction] = "wf_test_26secret4",
+        [GroupMembershipTrigger] = "wf_test_26secret5",
+        [ClickContextMenuTrigger] = "wf_test_26secret6",
+        [ContextMenuItemAddon] = "wf_test_26secret7"
+    };
 }
 
 /// <summary>The answer of a <c>GroupInvitationReply</c>.</summary>

@@ -4,11 +4,15 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Plus.Database;
 using Plus.HabboHotel.Items;
+using Plus.HabboHotel.Items.Wired;
 
 namespace Plus.HabboHotel.Catalog;
 
 // The generated FurnitureData.json and its entity tag (a quoted SHA-1 of the content).
-public sealed record CatalogFurnidataFile(byte[] Content, string ETag);
+public sealed record CatalogFurnidataFile(byte[] Content, string ETag)
+{
+    public IReadOnlyDictionary<int, string> BorrowedFloorProductCodes { get; init; } = new Dictionary<int, string>();
+}
 
 public interface ICatalogFurnidata
 {
@@ -64,9 +68,10 @@ public sealed class CatalogFurnidata(IDatabase database, ICatalogManager catalog
             [FurnidataEntry.WallSection] = new JsonObject { ["furnitype"] = wall }
         };
         Overlay(root, pages);
+        var productCodes = BorrowLooks(floor);
         var content = JsonSerializer.SerializeToUtf8Bytes(root, Compact);
 
-        return new(content, $"\"{Convert.ToHexStringLower(SHA1.HashData(content))}\"");
+        return new(content, $"\"{Convert.ToHexStringLower(SHA1.HashData(content))}\"") { BorrowedFloorProductCodes = productCodes };
     }
 
     // Sets offerid to the offer that sells the entry's furni (-1 when none does) and buyout to whether that offer
@@ -95,6 +100,22 @@ public sealed class CatalogFurnidata(IDatabase database, ICatalogManager catalog
                 entry["bcofferid"] = buildersClubOffer?.Id ?? -1;
             }
         }
+    }
+
+    // A box Habbo has not shipped keeps its own id, name and offer, but names the placeholder furni whose look it borrows.
+    private static Dictionary<int, string> BorrowLooks(JsonArray floor)
+    {
+        var productCodes = new Dictionary<int, string>();
+
+        foreach (var entry in floor.OfType<JsonObject>()) {
+            if (entry["classname"] is JsonValue value && value.TryGetValue<string>(out var classname)
+                && UnreleasedHabboFeatures.BorrowedLooks.TryGetValue(classname, out var look)) {
+                productCodes[(int)entry["id"]!] = classname;
+                entry["classname"] = look;
+            }
+        }
+
+        return productCodes;
     }
 
     // Per furni, the offer furnidata names, from pages a player without permissions finds in the catalog index:

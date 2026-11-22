@@ -1,0 +1,4 @@
+-- The group and context menu wired boxes of migrations 172 and 173 get their own sprite ids (9000000 to 9000004) and
+-- furnidata rows with their own names, so every client names them. The furnidata still loads the look of the placeholder
+-- furni wf_test_26secret3 to 7 (UnreleasedHabboFeatures.BorrowedLooks). The placeholder rows do not change.
+-- Idempotent: reruns end in the same state.

@@ -76,6 +76,26 @@ public sealed class WiredBoxFurnidataMigrationTests
     }
 
     [RoomComponentDatabaseFact]
+    public void CustomSpritesRemainExclusiveWhenBoxesAreMigrated()
+    {
+        WithHotel(withBoxes: true, connection =>
+        {
+            connection.Execute("""
+                INSERT INTO furniture (item_name, public_name, sprite_id, interaction_type, has_furnidata)
+                    VALUES ('custom_chair', 'Custom chair', 9000002, 'default', 1),
+                           ('custom_alias', 'Custom alias', 9000003, 'default', 0)
+                """);
+            var migration = File.ReadAllText(HabbiconPacketTests.Repo(Migration));
+            connection.Execute(migration);
+            var rows = BoxRows(connection);
+            Assert.Equal(7, rows.Select(row => row.Item2).Distinct().Count());
+            Assert.Contains(rows, row => row.Item1 == "custom_chair" && row.Item2 == 9000002);
+            connection.Execute(migration);
+            Assert.Equal(rows, BoxRows(connection));
+        });
+    }
+
+    [RoomComponentDatabaseFact]
     public void ARerunChangesNothing()
     {
         WithHotel(withBoxes: true, connection =>

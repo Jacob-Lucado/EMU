@@ -1,3 +1,8 @@
+using System.Buffers.Binary;
+using System.Text;
+using Plus.Communication.Flash;
+using Plus.Communication.Packets.Outgoing.Rooms.Session;
+using Plus.HabboHotel.GameClients;
 using Plus.HabboHotel.Rooms.Music;
 using Xunit;
 
@@ -37,4 +42,24 @@ public class RoomStreamTests
 
     [Fact]
     public void ALongLinkIsRefused() => Assert.Null(RoomStream.Parse("https://example.com/" + new string('a', 600), "Jacob"));
+
+    [Fact]
+    public void TheStreamPacketNamesTheRoomItBelongsTo()
+    {
+        using var memory = PlusMemoryStream.GetStream();
+        new RoomStreamComposer(42, RoomStream.Parse("https://soundcloud.com/artist/song", "Jacob")).Compose(new FlashOutgoingPacket(memory));
+        var body = memory.ToArray()[6..];
+
+        Assert.Equal(42, BinaryPrimitives.ReadInt32BigEndian(body));
+        Assert.Contains("soundcloud", Encoding.UTF8.GetString(body[4..]));
+    }
+
+    [Fact]
+    public void AStopPacketStillNamesTheRoom()
+    {
+        using var memory = PlusMemoryStream.GetStream();
+        new RoomStreamComposer(7, null).Compose(new FlashOutgoingPacket(memory));
+
+        Assert.Equal(7, BinaryPrimitives.ReadInt32BigEndian(memory.ToArray()[6..]));
+    }
 }

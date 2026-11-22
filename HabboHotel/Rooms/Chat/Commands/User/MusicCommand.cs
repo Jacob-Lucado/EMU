@@ -25,7 +25,7 @@ internal class MusicCommand : IChatCommand
 
         if (text.Equals("stop", StringComparison.OrdinalIgnoreCase) || text.Equals("off", StringComparison.OrdinalIgnoreCase)) {
             room.Stream = null;
-            room.SendPacket(new RoomStreamComposer(null));
+            room.SendPacket(new RoomStreamComposer(room.RoomId, null));
             Announce(session, room, $"{Describe(session, room)} turned the room music off.");
 
             return;
@@ -40,7 +40,7 @@ internal class MusicCommand : IChatCommand
         }
 
         room.Stream = stream;
-        room.SendPacket(new RoomStreamComposer(stream));
+        room.SendPacket(new RoomStreamComposer(room.RoomId, stream));
         Announce(session, room, $"{Describe(session, room)} started {(stream.Kind == "soundcloud" ? "a SoundCloud track" : "a music stream")} for the room.");
     }
 

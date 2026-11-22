@@ -40,6 +40,31 @@ public class RoomStreamTests
         Assert.True(stream == null || stream.Kind == "stream" && !link.Contains("soundcloud.com/"));
     }
 
+    [Theory]
+    [InlineData("https://www.youtube.com/watch?v=dQw4w9WgXcQ")]
+    [InlineData("https://youtu.be/dQw4w9WgXcQ?t=10")]
+    [InlineData("https://music.youtube.com/watch?v=dQw4w9WgXcQ&list=abc")]
+    [InlineData("https://www.youtube.com/shorts/dQw4w9WgXcQ")]
+    public void AYouTubeLinkBecomesAVideoWithACleanLink(string link)
+    {
+        var stream = RoomStream.Parse(link, "Jacob");
+
+        Assert.NotNull(stream);
+        Assert.Equal("youtube", stream.Kind);
+        Assert.Equal("https://www.youtube.com/watch?v=dQw4w9WgXcQ", stream.Url);
+    }
+
+    [Theory]
+    [InlineData("https://www.youtube.com/@somechannel")]
+    [InlineData("https://www.youtube.com/watch?v=short")]
+    [InlineData("https://notyoutube.com/watch?v=dQw4w9WgXcQ")]
+    public void OtherYouTubeLinksAreNotVideos(string link)
+    {
+        var stream = RoomStream.Parse(link, "Jacob");
+
+        Assert.True(stream == null || stream.Kind != "youtube");
+    }
+
     [Fact]
     public void ALongLinkIsRefused() => Assert.Null(RoomStream.Parse("https://example.com/" + new string('a', 600), "Jacob"));
 

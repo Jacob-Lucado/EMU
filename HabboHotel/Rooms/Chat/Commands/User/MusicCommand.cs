@@ -9,9 +9,9 @@ internal class MusicCommand : IChatCommand
 {
     public string Key => "music";
 
-    public string Parameters => "%stream or soundcloud link%";
+    public string Parameters => "%stream, soundcloud or youtube link%";
 
-    public string Description => "Play a web audio stream or a SoundCloud link for everyone in the room. Use :music stop to turn it off.";
+    public string Description => "Play a web audio stream, a SoundCloud link or a YouTube video for everyone in the room. Use :music stop to turn it off.";
 
     public void Execute(GameClient session, Room room, string[] parameters)
     {
@@ -34,14 +34,14 @@ internal class MusicCommand : IChatCommand
         var stream = RoomStream.Parse(text, session.GetHabbo().Username);
 
         if (stream == null) {
-            session.SendWhisper("Paste a link that starts with https://, like :music https://soundcloud.com/artist/song. Use :music stop to turn it off.");
+            session.SendWhisper("Paste a link that starts with https://, like :music https://soundcloud.com/artist/song or a YouTube link. Use :music stop to turn it off.");
 
             return;
         }
 
         room.Stream = stream;
         room.SendPacket(new RoomStreamComposer(room.RoomId, stream));
-        Announce(session, room, $"{Describe(session, room)} started {(stream.Kind == "soundcloud" ? "a SoundCloud track" : "a music stream")} for the room.");
+        Announce(session, room, $"{Describe(session, room)} started {(stream.Kind switch { "soundcloud" => "a SoundCloud track", "youtube" => "a YouTube video", _ => "a music stream" })} for the room.");
     }
 
     private static string Describe(GameClient session, Room room) =>

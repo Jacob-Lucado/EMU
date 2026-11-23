@@ -9,9 +9,9 @@ internal class MusicCommand(IRoomStreamLog log) : IChatCommand
 {
     public string Key => "music";
 
-    public string Parameters => "%link% | add %link% | skip | queue | clear | stop | suggest %link% | approve | decline | suggestions";
+    public string Parameters => "%link% | add %link% | skip | queue | clear | stop | suggest %link% | approve | decline | suggestions | top";
 
-    public string Description => "Play a web audio stream, a SoundCloud link or a YouTube video for everyone in the room. Use :music add to line songs up, :music skip for the next one and :music stop to turn it off. Anyone can use :music suggest to offer a song.";
+    public string Description => "Play a web audio stream, a SoundCloud link or a YouTube video for everyone in the room. Use :music add to line songs up, :music skip for the next one and :music stop to turn it off. Anyone can use :music suggest to offer a song and :music top to see the week's favorites.";
 
     public void Execute(GameClient session, Room room, string[] parameters)
     {
@@ -21,6 +21,12 @@ internal class MusicCommand(IRoomStreamLog log) : IChatCommand
 
         if (text.Equals("suggest", StringComparison.OrdinalIgnoreCase)) {
             Suggest(session, room, parameters.Length > 1 ? parameters[1] : "");
+
+            return;
+        }
+
+        if (text.Equals("top", StringComparison.OrdinalIgnoreCase)) {
+            ShowTop(session);
 
             return;
         }
@@ -93,6 +99,23 @@ internal class MusicCommand(IRoomStreamLog log) : IChatCommand
         log.Record(room.RoomId, stream);
         RoomMusic.Broadcast(room);
         Announce(session, room, $"{Describe(session, room)} started {Kind(stream)} for the room.");
+    }
+
+    private void ShowTop(GameClient session)
+    {
+        var top = log.Top(5);
+
+        if (top.Count == 0) {
+            session.SendWhisper("No songs have been played this week.");
+
+            return;
+        }
+
+        session.SendWhisper("Top songs this week:");
+
+        for (var i = 0; i < top.Count; i++) {
+            session.SendWhisper($"{i + 1}. {top[i].Url} ({top[i].Plays} plays)");
+        }
     }
 
     private static void Suggest(GameClient session, Room room, string text)

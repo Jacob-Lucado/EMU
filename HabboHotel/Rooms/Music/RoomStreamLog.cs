@@ -11,7 +11,7 @@ public interface IRoomStreamLog
     IReadOnlyList<TopSong> Top(int count);
 }
 
-public sealed record TopSong(string Url, int Plays);
+public sealed record TopSong(string Url, long Plays);
 
 public sealed class RoomStreamLog(IDatabase database, ILogger<RoomStreamLog> logger) : IRoomStreamLog
 {

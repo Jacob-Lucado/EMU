@@ -9,12 +9,12 @@ internal class RollCommand : IChatCommand
 
     public string Parameters => "%sides%";
 
-    public string Description => "Roll a dice for everyone in the room. Add a number for other dice, like :roll 20.";
+    public string Description => "Roll a dice for everyone in the room. Add a number for other dice, like :roll 20, or roll several at once, like :roll 3d6.";
 
     public void Execute(GameClient session, Room room, string[] parameters)
     {
-        if (!RoomDice.TryParseSides(parameters.Length > 0 ? parameters[0] : null, out var sides)) {
-            session.SendWhisper($"Pick a dice between 2 and {RoomDice.MaxSides} sides, like :roll 20.");
+        if (!RoomDice.TryParse(parameters.Length > 0 ? parameters[0] : null, out var count, out var sides)) {
+            session.SendWhisper($"Pick a dice between 2 and {RoomDice.MaxSides} sides, like :roll 20, or up to {RoomDice.MaxCount} dice like :roll 2d6.");
 
             return;
         }
@@ -25,7 +25,7 @@ internal class RollCommand : IChatCommand
             return;
         }
 
-        var message = RoomDice.Roll(sides, Random.Shared);
+        var message = RoomDice.Roll(count, sides, Random.Shared);
         room.SendChat(receiver => new ChatComposer(user.VirtualId, message, 0, user.LastBubble, receiver));
     }
 }

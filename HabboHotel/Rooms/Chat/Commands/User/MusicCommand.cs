@@ -5,7 +5,7 @@ using Plus.HabboHotel.Rooms.Music;
 
 namespace Plus.HabboHotel.Rooms.Chat.Commands.User;
 
-internal class MusicCommand : IChatCommand
+internal class MusicCommand(IRoomStreamLog log) : IChatCommand
 {
     public string Key => "music";
 
@@ -46,6 +46,7 @@ internal class MusicCommand : IChatCommand
                 }
 
                 playlist.Skip(now);
+                RecordCurrent(room);
                 RoomMusic.Broadcast(room);
                 Announce(session, room, playlist.Current == null
                     ? $"{Describe(session, room)} skipped the last song, so the music is off."
@@ -89,6 +90,7 @@ internal class MusicCommand : IChatCommand
         }
 
         playlist.Play(stream, now);
+        log.Record(room.RoomId, stream);
         RoomMusic.Broadcast(room);
         Announce(session, room, $"{Describe(session, room)} started {Kind(stream)} for the room.");
     }
@@ -119,7 +121,7 @@ internal class MusicCommand : IChatCommand
         NotifyRights(session, room, $"{session.GetHabbo().Username} suggests {Kind(stream)}. Type :music approve {session.GetHabbo().Username} to play it or :music decline {session.GetHabbo().Username} to skip it.");
     }
 
-    private static void Approve(GameClient session, Room room, string name, DateTimeOffset now)
+    private void Approve(GameClient session, Room room, string name, DateTimeOffset now)
     {
         var stream = room.Playlist.TakeSuggestion(name);
 
@@ -134,6 +136,10 @@ internal class MusicCommand : IChatCommand
             session.SendWhisper($"The song line is full ({RoomPlaylist.MaxQueued} songs). Use :music skip or :music clear first.");
 
             return;
+        }
+
+        if (startedNow) {
+            log.Record(room.RoomId, stream);
         }
 
         RoomMusic.Broadcast(room);
@@ -183,7 +189,14 @@ internal class MusicCommand : IChatCommand
         }
     }
 
-    private static void Add(GameClient session, Room room, string text, DateTimeOffset now)
+    private void RecordCurrent(Room room)
+    {
+        if (room.Playlist.Current is { } current) {
+            log.Record(room.RoomId, current);
+        }
+    }
+
+    private void Add(GameClient session, Room room, string text, DateTimeOffset now)
     {
         var stream = RoomStream.Parse(text, session.GetHabbo().Username);
 
@@ -197,6 +210,10 @@ internal class MusicCommand : IChatCommand
             session.SendWhisper($"The song line is full ({RoomPlaylist.MaxQueued} songs). Use :music skip or :music clear.");
 
             return;
+        }
+
+        if (startedNow) {
+            log.Record(room.RoomId, stream);
         }
 
         RoomMusic.Broadcast(room);

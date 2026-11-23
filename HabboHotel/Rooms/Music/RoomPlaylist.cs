@@ -4,12 +4,14 @@ namespace Plus.HabboHotel.Rooms.Music;
 public sealed class RoomPlaylist
 {
     public const int MaxQueued = 20;
+    public const int MaxSuggestions = 10;
 
     // A client cannot end a song before it has had time to start playing.
     private static readonly TimeSpan MinimumPlayTime = TimeSpan.FromSeconds(5);
 
     private readonly object _lock = new();
     private readonly List<RoomStream> _queue = [];
+    private readonly List<RoomStream> _suggestions = [];
     private DateTimeOffset _startedAt;
 
     public RoomStream? Current { get; private set; }
@@ -33,6 +35,58 @@ public sealed class RoomPlaylist
             lock (_lock) {
                 return [.. _queue];
             }
+        }
+    }
+
+    public IReadOnlyList<RoomStream> Suggestions
+    {
+        get
+        {
+            lock (_lock) {
+                return [.. _suggestions];
+            }
+        }
+    }
+
+    // Keeps a song someone without rights suggested. A person has one suggestion at a time, so a new one replaces the old one.
+    public bool Suggest(RoomStream stream)
+    {
+        lock (_lock) {
+            var replaced = _suggestions.RemoveAll(s => string.Equals(s.SetBy, stream.SetBy, StringComparison.OrdinalIgnoreCase)) > 0;
+
+            if (!replaced && _suggestions.Count >= MaxSuggestions) {
+                return false;
+            }
+
+            _suggestions.Add(stream);
+
+            return true;
+        }
+    }
+
+    // Takes a suggestion out of the list: the one from the named person, or the oldest when no name is given.
+    public RoomStream? TakeSuggestion(string? by)
+    {
+        lock (_lock) {
+            var index = string.IsNullOrWhiteSpace(by)
+                ? (_suggestions.Count > 0 ? 0 : -1)
+                : _suggestions.FindIndex(s => string.Equals(s.SetBy, by.Trim(), StringComparison.OrdinalIgnoreCase));
+
+            if (index < 0) {
+                return null;
+            }
+
+            var found = _suggestions[index];
+            _suggestions.RemoveAt(index);
+
+            return found;
+        }
+    }
+
+    public void ClearSuggestions()
+    {
+        lock (_lock) {
+            _suggestions.Clear();
         }
     }
 

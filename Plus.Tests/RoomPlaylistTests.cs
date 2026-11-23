@@ -112,4 +112,55 @@ public class RoomPlaylistTests
         Assert.NotNull(playlist.Current);
         Assert.Equal(0, playlist.Queued);
     }
+
+    [Fact]
+    public void ASuggestionIsKeptUntilItIsTaken()
+    {
+        var playlist = new RoomPlaylist();
+
+        Assert.True(playlist.Suggest(Song("one") with { SetBy = "Anna" }));
+        Assert.True(playlist.Suggest(Song("two") with { SetBy = "Ben" }));
+
+        Assert.Equal("Anna", playlist.TakeSuggestion(null)?.SetBy);
+        Assert.Equal("Ben", playlist.TakeSuggestion("ben")?.SetBy);
+        Assert.Null(playlist.TakeSuggestion(null));
+    }
+
+    [Fact]
+    public void ANewSuggestionFromTheSamePersonReplacesTheOldOne()
+    {
+        var playlist = new RoomPlaylist();
+        playlist.Suggest(Song("one") with { SetBy = "Anna" });
+        playlist.Suggest(Song("two") with { SetBy = "anna" });
+
+        Assert.Single(playlist.Suggestions);
+        Assert.Equal("https://soundcloud.com/a/two", playlist.Suggestions[0].Url);
+    }
+
+    [Fact]
+    public void TheSuggestionListHoldsAtMostTenPeople()
+    {
+        var playlist = new RoomPlaylist();
+
+        for (var i = 0; i < RoomPlaylist.MaxSuggestions; i++) {
+            Assert.True(playlist.Suggest(Song($"s{i}") with { SetBy = $"User{i}" }));
+        }
+
+        Assert.False(playlist.Suggest(Song("extra") with { SetBy = "Late" }));
+        Assert.True(playlist.Suggest(Song("again") with { SetBy = "User3" }));
+    }
+
+    [Fact]
+    public void ClearingSuggestionsLeavesTheLineAlone()
+    {
+        var playlist = new RoomPlaylist();
+        playlist.Play(Song("now"), Start);
+        playlist.Add(Song("next"), Start, out _);
+        playlist.Suggest(Song("idea") with { SetBy = "Anna" });
+
+        playlist.ClearSuggestions();
+
+        Assert.Empty(playlist.Suggestions);
+        Assert.Equal(1, playlist.Queued);
+    }
 }

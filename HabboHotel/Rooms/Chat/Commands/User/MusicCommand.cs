@@ -9,21 +9,27 @@ internal class MusicCommand : IChatCommand
 {
     public string Key => "music";
 
-    public string Parameters => "%link% | add %link% | skip | queue | clear | stop";
+    public string Parameters => "%link% | add %link% | skip | queue | clear | stop | suggest %link% | approve | decline | suggestions";
 
-    public string Description => "Play a web audio stream, a SoundCloud link or a YouTube video for everyone in the room. Use :music add to line songs up, :music skip for the next one and :music stop to turn it off.";
+    public string Description => "Play a web audio stream, a SoundCloud link or a YouTube video for everyone in the room. Use :music add to line songs up, :music skip for the next one and :music stop to turn it off. Anyone can use :music suggest to offer a song.";
 
     public void Execute(GameClient session, Room room, string[] parameters)
     {
-        if (!room.CheckRights(session)) {
-            session.SendWhisper("Only people with rights in this room can change the music.");
+        var text = parameters.Length > 0 ? parameters[0] : "";
+        var playlist = room.Playlist;
+        var now = DateTimeOffset.UtcNow;
+
+        if (text.Equals("suggest", StringComparison.OrdinalIgnoreCase)) {
+            Suggest(session, room, parameters.Length > 1 ? parameters[1] : "");
 
             return;
         }
 
-        var text = parameters.Length > 0 ? parameters[0] : "";
-        var playlist = room.Playlist;
-        var now = DateTimeOffset.UtcNow;
+        if (!room.CheckRights(session)) {
+            session.SendWhisper("Only people with rights in this room can change the music. You can offer a song with :music suggest <link>.");
+
+            return;
+        }
 
         switch (text.ToLowerInvariant()) {
             case "stop" or "off":
@@ -56,6 +62,18 @@ internal class MusicCommand : IChatCommand
                 ShowQueue(session, playlist);
 
                 return;
+            case "suggestions":
+                ShowSuggestions(session, playlist);
+
+                return;
+            case "approve":
+                Approve(session, room, parameters.Length > 1 ? parameters[1] : "", now);
+
+                return;
+            case "decline":
+                Decline(session, playlist, parameters.Length > 1 ? parameters[1] : "");
+
+                return;
             case "add" or "queue-add":
                 Add(session, room, parameters.Length > 1 ? parameters[1] : "", now);
 
@@ -73,6 +91,96 @@ internal class MusicCommand : IChatCommand
         playlist.Play(stream, now);
         RoomMusic.Broadcast(room);
         Announce(session, room, $"{Describe(session, room)} started {Kind(stream)} for the room.");
+    }
+
+    private static void Suggest(GameClient session, Room room, string text)
+    {
+        var stream = RoomStream.Parse(text, session.GetHabbo().Username);
+
+        if (stream == null) {
+            session.SendWhisper("Paste a link that starts with https://, like :music suggest https://soundcloud.com/artist/song");
+
+            return;
+        }
+
+        if (room.CheckRights(session)) {
+            session.SendWhisper("You have rights here, so add it yourself with :music add <link>.");
+
+            return;
+        }
+
+        if (!room.Playlist.Suggest(stream)) {
+            session.SendWhisper("There are too many suggestions waiting. Try again in a bit.");
+
+            return;
+        }
+
+        session.SendWhisper("Your song was sent to the people who can change the music here.");
+        NotifyRights(session, room, $"{session.GetHabbo().Username} suggests {Kind(stream)}. Type :music approve {session.GetHabbo().Username} to play it or :music decline {session.GetHabbo().Username} to skip it.");
+    }
+
+    private static void Approve(GameClient session, Room room, string name, DateTimeOffset now)
+    {
+        var stream = room.Playlist.TakeSuggestion(name);
+
+        if (stream == null) {
+            session.SendWhisper(string.IsNullOrWhiteSpace(name) ? "No suggestions are waiting." : $"{name} has no suggestion waiting.");
+
+            return;
+        }
+
+        if (!room.Playlist.Add(stream, now, out var startedNow)) {
+            room.Playlist.Suggest(stream);
+            session.SendWhisper($"The song line is full ({RoomPlaylist.MaxQueued} songs). Use :music skip or :music clear first.");
+
+            return;
+        }
+
+        RoomMusic.Broadcast(room);
+        Announce(session, room, startedNow
+            ? $"{Describe(session, room)} approved {stream.SetBy}'s suggestion, and it is playing now."
+            : $"{Describe(session, room)} approved {stream.SetBy}'s suggestion ({room.Playlist.Queued} waiting).");
+    }
+
+    private static void Decline(GameClient session, RoomPlaylist playlist, string name)
+    {
+        if (name.Equals("all", StringComparison.OrdinalIgnoreCase)) {
+            playlist.ClearSuggestions();
+            session.SendWhisper("All suggestions were removed.");
+
+            return;
+        }
+
+        var stream = playlist.TakeSuggestion(name);
+
+        session.SendWhisper(stream == null
+            ? (string.IsNullOrWhiteSpace(name) ? "No suggestions are waiting." : $"{name} has no suggestion waiting.")
+            : $"Removed {stream.SetBy}'s suggestion.");
+    }
+
+    private static void ShowSuggestions(GameClient session, RoomPlaylist playlist)
+    {
+        var suggestions = playlist.Suggestions;
+        session.SendWhisper(suggestions.Count == 0
+            ? "No suggestions are waiting."
+            : $"Suggestions: {string.Join("  ", suggestions.Select(s => $"{s.SetBy}: {s.Url}"))}. Use :music approve <name> or :music decline <name>.");
+    }
+
+    private static void NotifyRights(GameClient from, Room room, string message)
+    {
+        var speaker = room.GetRoomUserManager().GetRoomUserByHabbo(from.GetHabbo().Username);
+
+        if (speaker == null) {
+            return;
+        }
+
+        foreach (var user in room.GetRoomUserManager().GetRoomUsers()) {
+            if (user.IsBot || user.GetClient() is not { } client || client.GetHabbo() is not { ReceiveWhispers: true } || !room.CheckRights(client)) {
+                continue;
+            }
+
+            client.Send(new WhisperComposer(speaker.VirtualId, message, 0, speaker.LastBubble, user.VirtualId));
+        }
     }
 
     private static void Add(GameClient session, Room room, string text, DateTimeOffset now)

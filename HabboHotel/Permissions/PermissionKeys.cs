@@ -26,6 +26,7 @@ public static class PermissionKeys
     public const string CommandBh = "command.bh";
     public const string CommandBubble = "command.bubble";
     public const string CommandCarry = "command.carry";
+    public const string CommandCoin = "command.coin";
     public const string CommandConvertcredits = "command.convertcredits";
     public const string CommandWordquiz = "command.wordquiz";
     public const string CommandCoords = "command.coords";
@@ -82,6 +83,7 @@ public static class PermissionKeys
     public const string CommandPull = "command.pull";
     public const string CommandPush = "command.push";
     public const string CommandRegenmaps = "command.regenmaps";
+    public const string CommandRoll = "command.roll";
     public const string CommandRoom = "command.room";
     public const string CommandRoomalert = "command.roomalert";
     public const string CommandRoombadge = "command.roombadge";

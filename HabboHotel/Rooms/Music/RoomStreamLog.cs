@@ -9,9 +9,13 @@ public interface IRoomStreamLog
     void Record(uint roomId, RoomStream stream);
 
     IReadOnlyList<TopSong> Top(int count);
+
+    IReadOnlyList<RecentSong> Recent(uint roomId, int count);
 }
 
 public sealed record TopSong(string Url, long Plays);
+
+public sealed record RecentSong(string Url, string SetBy);
 
 public sealed class RoomStreamLog(IDatabase database, ILogger<RoomStreamLog> logger) : IRoomStreamLog
 {
@@ -35,6 +39,19 @@ public sealed class RoomStreamLog(IDatabase database, ILogger<RoomStreamLog> log
             return connection.Query<TopSong>("SELECT url AS Url, COUNT(*) AS Plays FROM room_stream_plays WHERE played_at >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 7 DAY) GROUP BY url ORDER BY Plays DESC, url LIMIT @count", new { count }).ToList();
         } catch (Exception exception) {
             logger.LogWarning(exception, "Could not read the top songs.");
+
+            return [];
+        }
+    }
+
+    public IReadOnlyList<RecentSong> Recent(uint roomId, int count)
+    {
+        try {
+            using var connection = database.Connection();
+
+            return connection.Query<RecentSong>("SELECT url AS Url, set_by AS SetBy FROM room_stream_plays WHERE room_id = @roomId ORDER BY id DESC LIMIT @count", new { roomId, count }).ToList();
+        } catch (Exception exception) {
+            logger.LogWarning(exception, "Could not read the recent songs.");
 
             return [];
         }

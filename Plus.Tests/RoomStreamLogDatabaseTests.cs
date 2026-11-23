@@ -77,6 +77,11 @@ public sealed class RoomStreamLogDatabaseTests : IDisposable
         Assert.Equal(2, top.Count);
         Assert.Equal(new TopSong("https://youtu.be/a", 2), top[0]);
         Assert.DoesNotContain(log.Top(10), song => song.Url.EndsWith("old"));
+
+        var recent = log.Recent(2, 5);
+
+        Assert.Equal([new RecentSong("https://example.com/b.mp3", "Bob"), new RecentSong("https://youtu.be/a", "Bob")], recent);
+        Assert.Empty(log.Recent(99, 5));
     }
 
     [Fact]

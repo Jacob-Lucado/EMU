@@ -9,9 +9,9 @@ internal class MusicCommand(IRoomStreamLog log) : IChatCommand
 {
     public string Key => "music";
 
-    public string Parameters => "%link% | add %link% | skip | queue | clear | stop | suggest %link% | approve | decline | suggestions | top";
+    public string Parameters => "%link% | add %link% | skip | queue | clear | stop | suggest %link% | approve | decline | suggestions | top | history";
 
-    public string Description => "Play a web audio stream, a SoundCloud link or a YouTube video for everyone in the room. Use :music add to line songs up, :music skip for the next one and :music stop to turn it off. Anyone can use :music suggest to offer a song and :music top to see the week's favorites.";
+    public string Description => "Play a web audio stream, a SoundCloud link or a YouTube video for everyone in the room. Use :music add to line songs up, :music skip for the next one and :music stop to turn it off. Anyone can use :music suggest to offer a song and :music top or :music history to see what has played.";
 
     public void Execute(GameClient session, Room room, string[] parameters)
     {
@@ -27,6 +27,12 @@ internal class MusicCommand(IRoomStreamLog log) : IChatCommand
 
         if (text.Equals("top", StringComparison.OrdinalIgnoreCase)) {
             ShowTop(session);
+
+            return;
+        }
+
+        if (text.Equals("history", StringComparison.OrdinalIgnoreCase)) {
+            ShowHistory(session, room);
 
             return;
         }
@@ -99,6 +105,23 @@ internal class MusicCommand(IRoomStreamLog log) : IChatCommand
         log.Record(room.RoomId, stream);
         RoomMusic.Broadcast(room);
         Announce(session, room, $"{Describe(session, room)} started {Kind(stream)} for the room.");
+    }
+
+    private void ShowHistory(GameClient session, Room room)
+    {
+        var recent = log.Recent(room.RoomId, 5);
+
+        if (recent.Count == 0) {
+            session.SendWhisper("No songs have been played in this room yet.");
+
+            return;
+        }
+
+        session.SendWhisper("Played in this room, newest first:");
+
+        foreach (var song in recent) {
+            session.SendWhisper($"{song.Url} (by {song.SetBy})");
+        }
     }
 
     private void ShowTop(GameClient session)

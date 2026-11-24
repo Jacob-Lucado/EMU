@@ -59,6 +59,7 @@ public static class PermissionKeys
     public const string CommandGoto = "command.goto";
     public const string CommandHa = "command.ha";
     public const string CommandHal = "command.hal";
+    public const string CommandHighfive = "command.highfive";
     public const string CommandHidewired = "command.hidewired";
     public const string CommandHug = "command.hug";
     public const string CommandIgnorewhispers = "command.ignorewhispers";
@@ -83,6 +84,7 @@ public static class PermissionKeys
     public const string CommandPet = "command.pet";
     public const string CommandPickall = "command.pickall";
     public const string CommandPickallbc = "command.pickallbc";
+    public const string CommandPoke = "command.poke";
     public const string CommandPull = "command.pull";
     public const string CommandPush = "command.push";
     public const string CommandRegenmaps = "command.regenmaps";

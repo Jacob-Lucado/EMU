@@ -13,4 +13,8 @@ public static class RoomSocial
     public static string EightBall(Random random) => $"*shakes the magic 8 ball: {EightBallAnswers[random.Next(EightBallAnswers.Length)]}*";
 
     public static string Hug(string username) => $"*hugs {username}*";
+
+    public static string HighFive(string username) => $"*high fives {username}*";
+
+    public static string Poke(string username) => $"*pokes {username}*";
 }

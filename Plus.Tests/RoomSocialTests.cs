@@ -26,4 +26,11 @@ public class RoomSocialTests
     {
         Assert.Equal("*hugs Alice*", RoomSocial.Hug("Alice"));
     }
+
+    [Fact]
+    public void HighFiveAndPokeNameTheUser()
+    {
+        Assert.Equal("*high fives Alice*", RoomSocial.HighFive("Alice"));
+        Assert.Equal("*pokes Alice*", RoomSocial.Poke("Alice"));
+    }
 }

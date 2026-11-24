@@ -19,6 +19,7 @@ public static class PermissionKeys
     public const string ChatReportUnlimited = "chat.report.unlimited";
     public const string ChatStyleStaff = "chat.style.staff";
     public const string CommandAbout = "command.about";
+    public const string CommandAfk = "command.afk";
     public const string CommandAlert = "command.alert";
     public const string CommandAllaroundme = "command.allaroundme";
     public const string CommandAlleyesonme = "command.alleyesonme";
@@ -41,6 +42,7 @@ public static class PermissionKeys
     public const string CommandEha = "command.eha";
     public const string CommandEjectall = "command.ejectall";
     public const string CommandEmptyitems = "command.emptyitems";
+    public const string CommandEightball = "command.8ball";
     public const string CommandEnable = "command.enable";
     public const string CommandFaceless = "command.faceless";
     public const string CommandFastwalk = "command.fastwalk";
@@ -58,6 +60,7 @@ public static class PermissionKeys
     public const string CommandHa = "command.ha";
     public const string CommandHal = "command.hal";
     public const string CommandHidewired = "command.hidewired";
+    public const string CommandHug = "command.hug";
     public const string CommandIgnorewhispers = "command.ignorewhispers";
     public const string CommandIpban = "command.ipban";
     public const string CommandKick = "command.kick";

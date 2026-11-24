@@ -16,5 +16,16 @@ public static class RoomSocial
 
     public static string HighFive(string username) => $"*high fives {username}*";
 
+    public const int MaxOptionLength = 40;
+
+    public static string? Pick(string text, Random random)
+    {
+        var options = text.Split('|', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .Select(option => option.Length > MaxOptionLength ? option[..MaxOptionLength] : option)
+            .ToArray();
+
+        return options.Length < 2 ? null : $"*picks: {options[random.Next(options.Length)]}*";
+    }
+
     public static string Poke(string username) => $"*pokes {username}*";
 }

@@ -33,4 +33,22 @@ public class RoomSocialTests
         Assert.Equal("*high fives Alice*", RoomSocial.HighFive("Alice"));
         Assert.Equal("*pokes Alice*", RoomSocial.Poke("Alice"));
     }
+
+    [Fact]
+    public void PickChoosesOneOfTheOptions()
+    {
+        var random = new Random(3);
+        var seen = Enumerable.Range(0, 200).Select(_ => RoomSocial.Pick("pizza | tacos | sushi", random)).ToHashSet();
+
+        Assert.Equal(new[] { "*picks: pizza*", "*picks: sushi*", "*picks: tacos*" }, seen.OrderBy(x => x).ToArray());
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("pizza")]
+    [InlineData("pizza |  | ")]
+    public void PickNeedsTwoOptions(string text)
+    {
+        Assert.Null(RoomSocial.Pick(text, new Random(1)));
+    }
 }

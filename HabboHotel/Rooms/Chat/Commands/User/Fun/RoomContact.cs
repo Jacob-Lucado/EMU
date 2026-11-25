@@ -16,12 +16,12 @@ public static class RoomContact
 
     public static bool IsAdjacent(int x1, int y1, int x2, int y2) => Math.Abs(x1 - x2) <= 1 && Math.Abs(y1 - y2) <= 1;
 
-    internal static bool TryResolve(GameClient session, Room room, Habbo target, string verb, out RoomUser self, out RoomUser other)
+    internal static bool TryResolve(GameClient session, Room room, Habbo target, string verb, out RoomUser self, out RoomUser other, bool needsPush = true)
     {
         self = null!;
         other = null!;
 
-        if (!room.PushEnabled && !session.GetHabbo().Access.Can(PermissionKeys.RoomOverrideCustomConfig)) {
+        if (needsPush && !room.PushEnabled && !session.GetHabbo().Access.Can(PermissionKeys.RoomOverrideCustomConfig)) {
             session.SendWhisper("The room owner has turned off pushing, so you cannot do that here.");
 
             return false;

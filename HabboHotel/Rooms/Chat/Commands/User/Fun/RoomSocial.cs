@@ -29,5 +29,17 @@ public static class RoomSocial
         return options.Length < 2 ? null : $"*picks: {options[random.Next(options.Length)]}*";
     }
 
+    public static readonly (int Id, string Name)[] Treats =
+    [
+        (1, "a cup of tea"), (2, "a juice"), (3, "a carrot"), (4, "an ice cream"), (5, "a glass of milk"), (6, "a blackcurrant drink")
+    ];
+
+    public static (int Id, string Message) Treat(string username, Random random)
+    {
+        var treat = Treats[random.Next(Treats.Length)];
+
+        return (treat.Id, $"*hands {username} {treat.Name}*");
+    }
+
     public static string Poke(string username) => $"*pokes {username}*";
 }

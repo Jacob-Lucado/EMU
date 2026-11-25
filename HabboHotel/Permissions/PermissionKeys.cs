@@ -118,6 +118,7 @@ public static class PermissionKeys
     public const string CommandTv = "command.tv";
     public const string CommandSpin = "command.spin";
     public const string CommandTurnaround = "command.turnaround";
+    public const string CommandTreat = "command.treat";
     public const string CommandTurn = "command.turn";
     public const string CommandUnfreeze = "command.unfreeze";
     public const string CommandUnload = "command.unload";

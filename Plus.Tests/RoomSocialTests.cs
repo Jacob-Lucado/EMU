@@ -80,4 +80,16 @@ public class RoomSocialTests
     {
         Assert.Equal(expected, RoomContact.TurnBy(rotation, steps));
     }
+
+    [Fact]
+    public void TreatHandsOverAKnownItem()
+    {
+        var random = new Random(5);
+
+        for (var i = 0; i < 50; i++) {
+            var (id, message) = RoomSocial.Treat("Alice", random);
+
+            Assert.Contains(RoomSocial.Treats, treat => treat.Id == id && message == $"*hands Alice {treat.Name}*");
+        }
+    }
 }

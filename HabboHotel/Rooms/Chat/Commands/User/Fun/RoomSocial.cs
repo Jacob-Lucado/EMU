@@ -41,5 +41,11 @@ public static class RoomSocial
         return (treat.Id, $"*hands {username} {treat.Name}*");
     }
 
+    public const int StealOdds = 2;
+
+    public static bool StealSucceeds(Random random) => random.Next(StealOdds) == 0;
+
+    public static string Steal(string username, bool success) => success ? $"*snatches the hand item from {username}*" : $"*tries to snatch from {username} but fails*";
+
     public static string Poke(string username) => $"*pokes {username}*";
 }

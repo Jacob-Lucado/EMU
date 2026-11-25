@@ -92,4 +92,16 @@ public class RoomSocialTests
             Assert.Contains(RoomSocial.Treats, treat => treat.Id == id && message == $"*hands Alice {treat.Name}*");
         }
     }
+
+    [Fact]
+    public void StealSometimesSucceedsAndSometimesFails()
+    {
+        var random = new Random(11);
+        var results = Enumerable.Range(0, 200).Select(_ => RoomSocial.StealSucceeds(random)).ToList();
+
+        Assert.Contains(true, results);
+        Assert.Contains(false, results);
+        Assert.Equal("*snatches the hand item from Alice*", RoomSocial.Steal("Alice", true));
+        Assert.Equal("*tries to snatch from Alice but fails*", RoomSocial.Steal("Alice", false));
+    }
 }

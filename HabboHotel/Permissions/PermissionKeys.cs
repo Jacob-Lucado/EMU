@@ -51,6 +51,7 @@ public static class PermissionKeys
     public const string CommandFollow = "command.follow";
     public const string CommandForcedEffects = "command.forced_effects";
     public const string CommandForcesit = "command.forcesit";
+    public const string CommandFistbump = "command.fistbump";
     public const string CommandFreeze = "command.freeze";
     public const string CommandGive = "command.give";
     public const string CommandGivebadge = "command.givebadge";

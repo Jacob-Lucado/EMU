@@ -14,6 +14,8 @@ public static class RoomSocial
 
     public static string Hug(string username) => $"*hugs {username}*";
 
+    public static string FistBump(string username) => $"*fist bumps {username}*";
+
     public static string HighFive(string username) => $"*high fives {username}*";
 
     public const int MaxOptionLength = 40;

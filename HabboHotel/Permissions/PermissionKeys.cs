@@ -116,6 +116,8 @@ public static class PermissionKeys
     public const string CommandTeleport = "command.teleport";
     public const string CommandTradeban = "command.tradeban";
     public const string CommandTv = "command.tv";
+    public const string CommandSpin = "command.spin";
+    public const string CommandTurnaround = "command.turnaround";
     public const string CommandTurn = "command.turn";
     public const string CommandUnfreeze = "command.unfreeze";
     public const string CommandUnload = "command.unload";

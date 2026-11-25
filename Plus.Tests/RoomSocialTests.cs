@@ -71,4 +71,13 @@ public class RoomSocialTests
         Assert.True(RoomContact.IsAdjacent(3, 3, 3, 3));
         Assert.False(RoomContact.IsAdjacent(3, 3, 5, 3));
     }
+
+    [Theory]
+    [InlineData(0, 4, 4)]
+    [InlineData(6, 2, 0)]
+    [InlineData(7, 2, 1)]
+    public void TurnByWrapsAroundTheCompass(int rotation, int steps, int expected)
+    {
+        Assert.Equal(expected, RoomContact.TurnBy(rotation, steps));
+    }
 }

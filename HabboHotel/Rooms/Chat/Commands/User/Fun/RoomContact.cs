@@ -12,6 +12,8 @@ public static class RoomContact
 
     public static (int X, int Y) Step(int rotation) => Steps[((rotation % 8) + 8) % 8];
 
+    public static int TurnBy(int rotation, int steps) => ((rotation + steps) % 8 + 8) % 8;
+
     public static bool IsAdjacent(int x1, int y1, int x2, int y2) => Math.Abs(x1 - x2) <= 1 && Math.Abs(y1 - y2) <= 1;
 
     internal static bool TryResolve(GameClient session, Room room, Habbo target, string verb, out RoomUser self, out RoomUser other)

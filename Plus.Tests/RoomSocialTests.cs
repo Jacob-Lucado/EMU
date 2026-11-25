@@ -52,4 +52,23 @@ public class RoomSocialTests
     {
         Assert.Null(RoomSocial.Pick(text, new Random(1)));
     }
+
+    [Theory]
+    [InlineData(0, 0, -1)]
+    [InlineData(2, 1, 0)]
+    [InlineData(4, 0, 1)]
+    [InlineData(6, -1, 0)]
+    [InlineData(7, -1, -1)]
+    public void StepFollowsTheFacingDirection(int rotation, int x, int y)
+    {
+        Assert.Equal((x, y), RoomContact.Step(rotation));
+    }
+
+    [Fact]
+    public void OnlyNeighbouringTilesAreAdjacent()
+    {
+        Assert.True(RoomContact.IsAdjacent(3, 3, 4, 4));
+        Assert.True(RoomContact.IsAdjacent(3, 3, 3, 3));
+        Assert.False(RoomContact.IsAdjacent(3, 3, 5, 3));
+    }
 }

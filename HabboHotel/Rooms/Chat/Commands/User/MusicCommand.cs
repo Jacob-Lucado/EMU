@@ -5,7 +5,7 @@ using Plus.HabboHotel.Rooms.Music;
 
 namespace Plus.HabboHotel.Rooms.Chat.Commands.User;
 
-internal class MusicCommand(IRoomStreamLog log) : IChatCommand
+internal class MusicCommand(IRoomStreamLog log, IRoomStreamModeration moderation) : IChatCommand
 {
     public string Key => "music";
 
@@ -15,6 +15,12 @@ internal class MusicCommand(IRoomStreamLog log) : IChatCommand
 
     public void Execute(GameClient session, Room room, string[] parameters)
     {
+        if (moderation.IsRestricted(session.GetHabbo().Id)) {
+            session.SendWhisper("You lost the :music command for playing banned music. A moderator can lift this.");
+
+            return;
+        }
+
         var text = parameters.Length > 0 ? parameters[0] : "";
         var playlist = room.Playlist;
         var now = DateTimeOffset.UtcNow;
@@ -101,6 +107,10 @@ internal class MusicCommand(IRoomStreamLog log) : IChatCommand
             return;
         }
 
+        if (Banned(session, stream)) {
+            return;
+        }
+
         playlist.Play(stream, now);
         log.Record(room.RoomId, stream);
         RoomMusic.Broadcast(room);
@@ -141,13 +151,17 @@ internal class MusicCommand(IRoomStreamLog log) : IChatCommand
         }
     }
 
-    private static void Suggest(GameClient session, Room room, string text)
+    private void Suggest(GameClient session, Room room, string text)
     {
         var stream = RoomStream.Parse(text, session.GetHabbo().Username);
 
         if (stream == null) {
             session.SendWhisper("Paste a link that starts with https://, like :music suggest https://soundcloud.com/artist/song");
 
+            return;
+        }
+
+        if (Banned(session, stream)) {
             return;
         }
 
@@ -235,6 +249,18 @@ internal class MusicCommand(IRoomStreamLog log) : IChatCommand
         }
     }
 
+    private bool Banned(GameClient session, RoomStream stream)
+    {
+        if (!moderation.IsBanned(stream)) {
+            return false;
+        }
+
+        session.SendWhisper("That song is banned here.");
+        MusicPenalty.Apply(moderation, session.GetHabbo().Id, session);
+
+        return true;
+    }
+
     private void RecordCurrent(Room room)
     {
         if (room.Playlist.Current is { } current) {
@@ -249,6 +275,10 @@ internal class MusicCommand(IRoomStreamLog log) : IChatCommand
         if (stream == null) {
             session.SendWhisper("Paste a link that starts with https://, like :music add https://soundcloud.com/artist/song");
 
+            return;
+        }
+
+        if (Banned(session, stream)) {
             return;
         }
 

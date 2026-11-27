@@ -142,6 +142,24 @@ public sealed class RoomPlaylist
         }
     }
 
+    // Takes out every song, waiting or suggested, that the match accepts, and moves on when the current song matches.
+    public IReadOnlyList<RoomStream> Remove(Func<RoomStream, bool> match, DateTimeOffset now)
+    {
+        lock (_lock) {
+            var removed = _queue.Where(match).Concat(_suggestions.Where(match)).ToList();
+
+            _queue.RemoveAll(new Predicate<RoomStream>(match));
+            _suggestions.RemoveAll(new Predicate<RoomStream>(match));
+
+            if (Current != null && match(Current)) {
+                removed.Add(Current);
+                Advance(now);
+            }
+
+            return removed;
+        }
+    }
+
     public void ClearQueue()
     {
         lock (_lock) {

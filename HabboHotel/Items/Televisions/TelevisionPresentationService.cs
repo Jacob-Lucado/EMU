@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using Plus.Communication.Packets.Outgoing.Rooms.Furni.YouTubeTelevisions;
 using Plus.HabboHotel.GameClients;
+using Plus.HabboHotel.Items.VideoScreens;
 
 namespace Plus.HabboHotel.Items.Televisions;
 
@@ -11,7 +12,7 @@ public interface ITelevisionPresentationService
     void ShowVideoInformation(GameClient session, int itemId, string videoId);
 }
 
-public sealed class TelevisionPresentationService(ITelevisionManager televisions) : ITelevisionPresentationService
+public sealed class TelevisionPresentationService(ITelevisionManager televisions, IVideoScreens? videoScreens = null) : ITelevisionPresentationService
 {
     public void ShowVideoInformation(GameClient session, int itemId, string videoId)
     {
@@ -42,6 +43,14 @@ public sealed class TelevisionPresentationService(ITelevisionManager televisions
     public void ShowPlaylist(GameClient session, int itemId)
     {
         if (!session.GetHabbo().InRoom) {
+            return;
+        }
+
+        // A Video Screen has no playlist. It only needs to know what it shows.
+        if (videoScreens != null && session.GetHabbo().CurrentRoom!.GetRoomItemHandler().GetItem((uint)BuildersClubItemIds.FromWire(itemId)) is { } screen
+            && screen.Definition.ItemName == Plus.HabboHotel.Items.VideoScreens.VideoScreens.ItemName) {
+            session.Send(new GetYouTubeVideoComposer((int)screen.Id, videoScreens.Get(screen.Id)));
+
             return;
         }
 

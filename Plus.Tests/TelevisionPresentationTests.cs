@@ -137,12 +137,23 @@ public class TelevisionPresentationTests
     {
         var presentation = new RecordingPresentation();
         var (client, sent) = HabbiconTestSupport.Client(new Habbo { Id = 7 });
-        var packet = HabbiconTestSupport.Incoming(42, 99);
+        var packet = HabbiconTestSupport.Incoming(42, 1);
         await new YouTubeGetNextVideo(presentation).Parse(client, packet);
         Assert.False(packet.HasDataRemaining());
         Assert.Equal(new[] { 42 }, presentation.Next);
         Assert.Empty(presentation.Shown);
         Assert.Empty(sent);
+    }
+
+    [Theory]
+    [InlineData(2)]
+    [InlineData(3)]
+    public async Task PauseAndContinueDoNotChangeTheVideo(int command)
+    {
+        var presentation = new RecordingPresentation();
+        var (client, _) = HabbiconTestSupport.Client(new Habbo { Id = 7 });
+        await new YouTubeGetNextVideo(presentation).Parse(client, HabbiconTestSupport.Incoming(42, command));
+        Assert.Empty(presentation.Next);
     }
 
     [Fact]

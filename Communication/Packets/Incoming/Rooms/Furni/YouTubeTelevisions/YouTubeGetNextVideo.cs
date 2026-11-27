@@ -8,8 +8,12 @@ internal class YouTubeGetNextVideo(ITelevisionPresentationService televisions) :
     public Task Parse(GameClient session, IIncomingPacket packet)
     {
         var itemId = packet.ReadInt();
-        packet.ReadInt(); // next
-        televisions.ShowNextVideo(session, itemId);
+        var command = packet.ReadInt();
+
+        // 0 is previous and 1 is next. Pause and continue (2 and 3) must not change the video.
+        if (command is 0 or 1) {
+            televisions.ShowNextVideo(session, itemId);
+        }
 
         return Task.CompletedTask;
     }

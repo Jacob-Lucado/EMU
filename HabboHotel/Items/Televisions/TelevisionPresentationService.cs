@@ -74,8 +74,8 @@ public sealed class TelevisionPresentationService(ITelevisionManager televisions
         var candidates = televisions.Televisions.Values.ToList();
         var screen = VideoScreenOf(session, itemId);
 
-        // A Video Screen opens on its own video, or on none when it follows the room music or is off.
-        var first = screen != null ? videoScreens!.Get(screen.Id) is { Length: 11 } own ? own : ""
+        // A Video Screen reports what it shows: its video, "@music" or nothing.
+        var first = screen != null ? videoScreens!.Get(screen.Id)
             : televisions.NowShowing.TryGetValue(itemId, out var chosen) ? chosen : candidates[Random.Shared.Next(candidates.Count)].YouTubeId;
         session.Send(new GetYouTubeVideoComposer(screen != null ? (int)screen.Id : itemId, first));
         session.Send(new GetYouTubePlaylistComposer(itemId, playlist));

@@ -27,7 +27,7 @@ internal partial class TvCommand : IChatCommand
 
     public string Parameters => "%youtube link% | music | off";
 
-    public string Description => "Play a YouTube video on every TV and Video Screen in the room. On Video Screens, :tv music shows the room music and :tv off clears them.";
+    public string Description => "Play a YouTube video on every TV and Video Screen in the room and add it to the playlist. On Video Screens, :tv music shows the room music and :tv off clears them.";
 
     public void Execute(GameClient session, Room room, string[] parameters)
     {
@@ -77,18 +77,7 @@ internal partial class TvCommand : IChatCommand
             return;
         }
 
-        var title = $"Added by {session.GetHabbo().Username}";
-
-        if (title.Length > 50) {
-            title = title[..50];
-        }
-
-        // The video also joins the TV playlist, so it shows up when someone opens a screen.
-        using (var connection = _database.Connection()) {
-            connection.Execute("INSERT INTO items_youtube (youtube_id, title, description, enabled) SELECT @videoId, @title, @description, 1 FROM DUAL " +
-                "WHERE NOT EXISTS (SELECT 1 FROM items_youtube WHERE youtube_id = @videoId)",
-                new { videoId, title, description = $"https://youtu.be/{videoId}" });
-        }
+        AddToPlaylist(_database, videoId, session.GetHabbo().Username);
 
         _televisions.Init();
 
@@ -114,6 +103,21 @@ internal partial class TvCommand : IChatCommand
         }
 
         session.SendWhisper($"Done! It's set on {string.Join(" and ", parts)} in this room.");
+    }
+
+    // The video joins the TV playlist, so it shows up when someone opens a screen.
+    internal static void AddToPlaylist(IDatabase database, string videoId, string username)
+    {
+        var title = $"Added by {username}";
+
+        if (title.Length > 50) {
+            title = title[..50];
+        }
+
+        using var connection = database.Connection();
+        connection.Execute("INSERT INTO items_youtube (youtube_id, title, description, enabled) SELECT @videoId, @title, @description, 1 FROM DUAL " +
+            "WHERE NOT EXISTS (SELECT 1 FROM items_youtube WHERE youtube_id = @videoId)",
+            new { videoId, title, description = $"https://youtu.be/{videoId}" });
     }
 
     // The command word is already gone when the command runs: the link is the first parameter.

@@ -1,0 +1,1 @@
+ALTER TABLE items_youtube MODIFY title VARCHAR(120) NOT NULL DEFAULT '';

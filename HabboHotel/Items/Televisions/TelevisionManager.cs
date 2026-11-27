@@ -27,7 +27,14 @@ public class TelevisionManager : ITelevisionManager, IStartable
     public ICollection<TelevisionItem> TelevisionList => Televisions.Values;
 
     public int StartOrder => 20;
-    public Task Start() => LoadAsync();
+    public async Task Start()
+    {
+        await LoadAsync();
+        _ = Task.Run(async () => {
+            await NameOldEntries();
+            await LoadAsync();
+        });
+    }
     public void Init() => LoadAsync().GetAwaiter().GetResult();
 
     private async Task LoadAsync()
@@ -45,6 +52,22 @@ public class TelevisionManager : ITelevisionManager, IStartable
         }
 
         _logger.LogInformation("Television Items -> LOADED");
+    }
+
+    // Older playlist entries are titled "Added by <name>"; give them the real video title.
+    private async Task NameOldEntries()
+    {
+        foreach (var video in Televisions.Values.Where(video => video.Title.StartsWith("Added by ")).ToList()) {
+            var title = await VideoTitles.Fetch(video.YouTubeId);
+
+            if (title == null) {
+                continue;
+            }
+
+            using var connection = _database.Connection();
+            await connection.ExecuteAsync("UPDATE `items_youtube` SET `title` = @title, `description` = @description WHERE `id` = @id",
+                new { title, description = video.Title, id = video.Id });
+        }
     }
 
     private sealed record TelevisionRow(int Id, string YoutubeId, string Title, string Description, bool Enabled);

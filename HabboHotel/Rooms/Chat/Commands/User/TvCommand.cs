@@ -108,16 +108,12 @@ internal partial class TvCommand : IChatCommand
     // The video joins the TV playlist, so it shows up when someone opens a screen.
     internal static void AddToPlaylist(IDatabase database, string videoId, string username)
     {
-        var title = $"Added by {username}";
-
-        if (title.Length > 50) {
-            title = title[..50];
-        }
+        var title = VideoTitles.Fetch(videoId).GetAwaiter().GetResult() ?? $"Video {videoId}";
 
         using var connection = database.Connection();
         connection.Execute("INSERT INTO items_youtube (youtube_id, title, description, enabled) SELECT @videoId, @title, @description, 1 FROM DUAL " +
             "WHERE NOT EXISTS (SELECT 1 FROM items_youtube WHERE youtube_id = @videoId)",
-            new { videoId, title, description = $"https://youtu.be/{videoId}" });
+            new { videoId, title, description = $"Added by {username}" });
     }
 
     // The command word is already gone when the command runs: the link is the first parameter.

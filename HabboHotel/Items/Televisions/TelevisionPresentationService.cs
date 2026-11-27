@@ -16,6 +16,14 @@ public sealed class TelevisionPresentationService(ITelevisionManager televisions
 {
     public void ShowVideoInformation(GameClient session, int itemId, string videoId)
     {
+        if (VideoScreenOf(session, itemId) is { } screen) {
+            if (televisions.TelevisionList.Any(video => video.YouTubeId == videoId)) {
+                ShowOnScreen(session, screen, videoId);
+            }
+
+            return;
+        }
+
         var matches = televisions.TelevisionList.Where(video => video.YouTubeId == videoId)
             .Select(video => video.YouTubeId).ToImmutableArray();
 
@@ -37,20 +45,20 @@ public sealed class TelevisionPresentationService(ITelevisionManager televisions
         }
 
         var candidates = televisions.Televisions.Values.ToList();
-        session.Send(new GetYouTubeVideoComposer(itemId, candidates[Random.Shared.Next(candidates.Count)].YouTubeId));
+        var next = candidates[Random.Shared.Next(candidates.Count)].YouTubeId;
+
+        if (VideoScreenOf(session, itemId) is { } screen) {
+            ShowOnScreen(session, screen, next);
+
+            return;
+        }
+
+        session.Send(new GetYouTubeVideoComposer(itemId, next));
     }
 
     public void ShowPlaylist(GameClient session, int itemId)
     {
         if (!session.GetHabbo().InRoom) {
-            return;
-        }
-
-        // A Video Screen has no playlist. It only needs to know what it shows.
-        if (videoScreens != null && session.GetHabbo().CurrentRoom!.GetRoomItemHandler().GetItem((uint)BuildersClubItemIds.FromWire(itemId)) is { } screen
-            && screen.Definition.ItemName == Plus.HabboHotel.Items.VideoScreens.VideoScreens.ItemName) {
-            session.Send(new GetYouTubeVideoComposer((int)screen.Id, videoScreens.Get(screen.Id)));
-
             return;
         }
 
@@ -64,8 +72,25 @@ public sealed class TelevisionPresentationService(ITelevisionManager televisions
 
         // The TV's own video is shown first, or a random one, then the whole playlist, as the client expects.
         var candidates = televisions.Televisions.Values.ToList();
-        var first = televisions.NowShowing.TryGetValue(itemId, out var chosen) ? chosen : candidates[Random.Shared.Next(candidates.Count)].YouTubeId;
-        session.Send(new GetYouTubeVideoComposer(itemId, first));
+        var screen = VideoScreenOf(session, itemId);
+
+        // A Video Screen opens on its own video, or on none when it follows the room music or is off.
+        var first = screen != null ? videoScreens!.Get(screen.Id) is { Length: 11 } own ? own : ""
+            : televisions.NowShowing.TryGetValue(itemId, out var chosen) ? chosen : candidates[Random.Shared.Next(candidates.Count)].YouTubeId;
+        session.Send(new GetYouTubeVideoComposer(screen != null ? (int)screen.Id : itemId, first));
         session.Send(new GetYouTubePlaylistComposer(itemId, playlist));
+    }
+
+    public Item? VideoScreenOf(GameClient session, int itemId) =>
+        videoScreens != null && session.GetHabbo().CurrentRoom?.GetRoomItemHandler().GetItem((uint)BuildersClubItemIds.FromWire(itemId)) is { } item
+        && item.Definition.ItemName == Plus.HabboHotel.Items.VideoScreens.VideoScreens.ItemName
+            ? item
+            : null;
+
+    // Choosing a video on a Video Screen changes it for everyone in the room.
+    public void ShowOnScreen(GameClient session, Item screen, string videoId)
+    {
+        videoScreens!.Set(screen.Id, videoId);
+        session.GetHabbo().CurrentRoom?.SendPacket(new GetYouTubeVideoComposer((int)screen.Id, videoId));
     }
 }
